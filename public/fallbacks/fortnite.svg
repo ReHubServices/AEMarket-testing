@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" fill="none">
+  <rect width="1280" height="720" fill="#0E1117"/>
+  <rect x="32" y="32" width="1216" height="656" rx="36" fill="url(#a)" stroke="#3B4354" stroke-width="2"/>
+  <circle cx="1030" cy="160" r="190" fill="#6D7FE6" fill-opacity="0.22"/>
+  <circle cx="220" cy="620" r="180" fill="#5EA9FF" fill-opacity="0.18"/>
+  <rect x="120" y="516" width="340" height="62" rx="16" fill="#EAF1FF"/>
+  <text x="142" y="558" fill="#0E1117" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">FORTNITE</text>
+  <text x="120" y="146" fill="#DCE6FF" font-size="64" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AE VERIFIED</text>
+  <text x="120" y="210" fill="#B7C7EE" font-size="34" font-family="Segoe UI, Arial, sans-serif">Account Listing</text>
+  <defs>
+    <linearGradient id="a" x1="64" y1="48" x2="1248" y2="688" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C2538"/>
+      <stop offset="1" stop-color="#111726"/>
+    </linearGradient>
+  </defs>
+</svg>

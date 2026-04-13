@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { X, Star } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarketListing, PublicViewer } from "@/lib/types";
+import { getListingImage, getPresetListingImage } from "@/lib/listing-images";
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -33,6 +34,7 @@ export function ProductDetailModal({
   if (!listing) {
     return null;
   }
+  const specs = Array.isArray(listing.specs) ? listing.specs : [];
 
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/65 p-3 backdrop-blur-md md:items-center md:p-6">
@@ -47,7 +49,15 @@ export function ProductDetailModal({
           </button>
 
           <div className="h-72 md:h-full">
-            <img src={listing.imageUrl} alt={listing.title} className="h-full w-full object-cover" />
+            <img
+              src={getListingImage(listing)}
+              alt={listing.title}
+              className="h-full w-full object-cover"
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = getPresetListingImage(listing);
+              }}
+            />
           </div>
 
           <div className="space-y-6 p-6 md:p-8">
@@ -66,19 +76,25 @@ export function ProductDetailModal({
               )}
               {!descriptionLoading && !descriptionError && (
                 <p className="whitespace-pre-wrap break-words text-sm leading-6 text-zinc-300">
-                  {listing.description || "No description provided for this listing."}
+                  {listing.description || "Listing details are being synchronized."}
                 </p>
+              )}
+              {!descriptionLoading && !descriptionError && specs.length > 0 && (
+                <div className="grid gap-2 rounded-2xl border border-white/15 bg-black/30 p-3">
+                  {specs.slice(0, 14).map((spec, index) => (
+                    <div
+                      key={`${spec.label}-${spec.value}-${index}`}
+                      className="grid grid-cols-[140px_1fr] gap-3 text-xs md:text-sm"
+                    >
+                      <p className="text-zinc-400">{spec.label}</p>
+                      <p className="break-words text-zinc-200">{spec.value}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
             <div className="space-y-3 rounded-2xl border border-white/15 bg-black/30 p-4 text-sm">
-              <div className="flex items-center justify-between text-zinc-300">
-                <span>Rating</span>
-                <span className="inline-flex items-center gap-1 text-white">
-                  <Star size={14} className="fill-white text-white" />
-                  {listing.rating.toFixed(2)}
-                </span>
-              </div>
               <div className="flex items-center justify-between text-zinc-300">
                 <span>Price</span>
                 <span className="font-[var(--font-space-grotesk)] text-xl font-bold text-white">

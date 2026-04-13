@@ -2,7 +2,7 @@
 import { getLztAccessToken } from "@/lib/lzt-auth";
 import { applyMarkup } from "@/lib/pricing";
 import { readStore } from "@/lib/store";
-import { MarketListing } from "@/lib/types";
+import { MarketListing, MarketListingSpec } from "@/lib/types";
 
 export type SearchSort = "relevance" | "price_asc" | "price_desc" | "newest";
 
@@ -14,6 +14,8 @@ export type SearchOptions = {
 
 const translationCache = new Map<string, string>();
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
+const BLOCKED_MARKET_LINK_PATTERN =
+  /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
 
 function getLztBaseUrl() {
   const raw = (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim();
@@ -96,6 +98,60 @@ function extractText(value: unknown, fallback = ""): string {
   return fallback;
 }
 
+function findTextDeep(
+  value: unknown,
+  keys: string[],
+  maxDepth = 4
+): string {
+  const targetKeys = new Set(keys.map((key) => key.toLowerCase()));
+  const visited = new Set<unknown>();
+
+  function walk(node: unknown, depth: number): string {
+    if (!node || depth > maxDepth) {
+      return "";
+    }
+    if (typeof node !== "object") {
+      return "";
+    }
+    if (visited.has(node)) {
+      return "";
+    }
+    visited.add(node);
+
+    if (Array.isArray(node)) {
+      for (const entry of node) {
+        const hit = walk(entry, depth + 1);
+        if (hit) {
+          return hit;
+        }
+      }
+      return "";
+    }
+
+    const record = node as Record<string, unknown>;
+    for (const [key, field] of Object.entries(record)) {
+      if (targetKeys.has(key.toLowerCase())) {
+        const extracted = extractText(field, "");
+        if (extracted) {
+          return extracted;
+        }
+      }
+    }
+    for (const field of Object.values(record)) {
+      if (!field || typeof field !== "object") {
+        continue;
+      }
+      const hit = walk(field, depth + 1);
+      if (hit) {
+        return hit;
+      }
+    }
+    return "";
+  }
+
+  return walk(value, 0);
+}
+
 function extractNumber(value: unknown): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0;
@@ -154,7 +210,7 @@ function extractItems(data: unknown): Record<string, unknown>[] {
 }
 
 function mapRawListing(item: Record<string, unknown>): MarketListing {
-  const source = unwrapListingNode(item);
+  const source = buildListingSource(item);
   const basePrice = extractNumber(
     source.price ?? source.amount ?? source.price_rub ?? source.currency_price ?? source.cost
   );
@@ -164,9 +220,12 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
     "Untitled listing"
   );
   const imageUrl = extractImageUrl(source);
-  const game = extractText(source.game ?? source.category_name ?? source.category, "Game Account");
-  const category = extractText(source.category ?? source.platform, "Account");
-  const description = extractDescription(source) || "No description provided for this listing.";
+  const game = resolveGameLabel(source);
+  const category = resolveCategoryLabel(source, game);
+  const specs = extractSpecs(source);
+  const description =
+    extractDescription(source) ||
+    (specs.length > 0 ? "Structured details are available below." : "Details available in listing");
 
   return {
     id,
@@ -179,11 +238,12 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
     category,
     seller: "Verified Seller",
     rating: extractNumber(source.rating ?? 4.7),
-    description
+    description,
+    specs
   };
 }
 
-function unwrapListingNode(item: Record<string, unknown>) {
+function buildListingSource(item: Record<string, unknown>) {
   const nestedCandidates = [
     item.item,
     item.account,
@@ -193,10 +253,236 @@ function unwrapListingNode(item: Record<string, unknown>) {
   ];
   for (const candidate of nestedCandidates) {
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
-      return candidate as Record<string, unknown>;
+      return {
+        ...item,
+        ...(candidate as Record<string, unknown>)
+      };
     }
   }
   return item;
+}
+
+function normalizeLabel(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function inferVertical(source: Record<string, unknown>) {
+  const text = [
+    extractText(source.game, ""),
+    extractText(source.category, ""),
+    extractText(source.category_name, ""),
+    extractText(source.platform, ""),
+    extractText(source.title, ""),
+    extractText(source.description, "")
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const socialKeywords = [
+    "instagram",
+    "tiktok",
+    "telegram",
+    "discord",
+    "youtube",
+    "facebook",
+    "twitter",
+    "social",
+    "snapchat",
+    "x.com",
+    "инстаграм",
+    "тикток",
+    "телеграм",
+    "дискорд",
+    "ютуб",
+    "фейсбук",
+    "твиттер",
+    "соц",
+    "снапчат"
+  ];
+
+  for (const keyword of socialKeywords) {
+    if (text.includes(keyword)) {
+      return "social";
+    }
+  }
+
+  return "gaming";
+}
+
+function isGenericCategory(value: string) {
+  const normalized = normalizeLabel(value);
+  return (
+    !normalized ||
+    normalized === "account" ||
+    normalized === "accounts" ||
+    normalized === "game account" ||
+    normalized === "listing" ||
+    normalized === "item"
+  );
+}
+
+function resolveGameLabel(source: Record<string, unknown>) {
+  const raw = extractText(source.game ?? source.category_name ?? source.platform ?? source.category, "");
+  if (!isGenericCategory(raw)) {
+    return raw;
+  }
+  return inferVertical(source) === "social" ? "Social Media" : "Gaming";
+}
+
+function resolveCategoryLabel(source: Record<string, unknown>, game: string) {
+  const raw = extractText(source.category ?? source.platform ?? source.category_name, "");
+  if (!isGenericCategory(raw)) {
+    return raw;
+  }
+  if (normalizeLabel(game) === "social media") {
+    return "Social Account";
+  }
+  if (normalizeLabel(game) === "gaming") {
+    return "Game Account";
+  }
+  return "Digital Account";
+}
+
+function normalizeImageUrl(value: string) {
+  const raw = value.trim();
+  if (!raw) {
+    return "";
+  }
+  if (raw.startsWith("data:image/")) {
+    return raw;
+  }
+  if (raw.startsWith("//")) {
+    return `https:${raw}`;
+  }
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw.startsWith("http://") ? `https://${raw.slice(7)}` : raw;
+  }
+  if (raw.startsWith("/")) {
+    return `${getLztBaseUrl()}${raw}`;
+  }
+  return "";
+}
+
+function extractImageUrlFromText(value: string) {
+  const text = value.trim();
+  if (!text) {
+    return "";
+  }
+
+  const bbCodeMatch = text.match(/\[img(?:=[^\]]*)?\]\s*([^\s\]]+)\s*\[\/img\]/i);
+  if (bbCodeMatch?.[1]) {
+    const normalized = normalizeImageUrl(bbCodeMatch[1]);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  const markdownMatch = text.match(/!\[[^\]]*]\(([^)\s]+)\)/i);
+  if (markdownMatch?.[1]) {
+    const normalized = normalizeImageUrl(markdownMatch[1]);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  const urlMatches = text.match(/(?:https?:\/\/|\/\/)[^\s"'<>)\]]+/gi) ?? [];
+  for (const url of urlMatches) {
+    const normalized = normalizeImageUrl(url);
+    if (!normalized) {
+      continue;
+    }
+    const lower = normalized.toLowerCase();
+    if (
+      lower.includes(".jpg") ||
+      lower.includes(".jpeg") ||
+      lower.includes(".png") ||
+      lower.includes(".webp") ||
+      lower.includes(".gif") ||
+      lower.includes(".bmp") ||
+      lower.includes(".avif")
+    ) {
+      return normalized;
+    }
+  }
+
+  return "";
+}
+
+function pickImageFromUnknown(value: unknown): string {
+  if (typeof value === "string") {
+    const fromText = extractImageUrlFromText(value);
+    if (fromText) {
+      return fromText;
+    }
+    const normalized = normalizeImageUrl(value);
+    return normalized;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = pickImageFromUnknown(entry);
+      if (found) {
+        return found;
+      }
+    }
+    return "";
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  const directKeys = [
+    "url",
+    "src",
+    "image",
+    "image_url",
+    "imageUrl",
+    "preview",
+    "preview_url",
+    "thumbnail",
+    "thumbnail_url",
+    "photo",
+    "avatar",
+    "cover",
+    "original",
+    "file",
+    "path",
+    "link"
+  ];
+
+  for (const key of directKeys) {
+    if (key in record) {
+      const found = pickImageFromUnknown(record[key]);
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  for (const [key, entry] of Object.entries(record)) {
+    const lower = key.toLowerCase();
+    if (
+      lower.includes("image") ||
+      lower.includes("img") ||
+      lower.includes("photo") ||
+      lower.includes("preview") ||
+      lower.includes("cover") ||
+      lower.includes("thumb") ||
+      lower.includes("avatar") ||
+      lower.includes("attachment") ||
+      lower.includes("media") ||
+      lower.includes("gallery")
+    ) {
+      const found = pickImageFromUnknown(entry);
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  return "";
 }
 
 function extractImageUrl(item: Record<string, unknown>) {
@@ -215,39 +501,116 @@ function extractImageUrl(item: Record<string, unknown>) {
     item.icon
   ];
   for (const candidate of directCandidates) {
-    const url = extractText(candidate, "");
-    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/")) {
-      return url;
+    const found = pickImageFromUnknown(candidate);
+    if (found) {
+      return found;
     }
   }
 
-  const arrayCandidates = [item.photos, item.images, item.media, item.gallery];
+  const arrayCandidates = [
+    item.photos,
+    item.images,
+    item.media,
+    item.gallery,
+    item.attachments,
+    item.first_post,
+    item.firstPost,
+    item.post
+  ];
   for (const candidate of arrayCandidates) {
-    if (Array.isArray(candidate) && candidate.length > 0) {
-      for (const entry of candidate) {
-        const url = extractText(entry, "");
-        if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/")) {
-          return url;
-        }
-        if (entry && typeof entry === "object") {
-          const record = entry as Record<string, unknown>;
-          const nestedUrl = extractText(
-            record.url ?? record.src ?? record.image ?? record.preview,
-            ""
-          );
-          if (
-            nestedUrl.startsWith("http://") ||
-            nestedUrl.startsWith("https://") ||
-            nestedUrl.startsWith("/")
-          ) {
-            return nestedUrl;
-          }
-        }
-      }
+    const found = pickImageFromUnknown(candidate);
+    if (found) {
+      return found;
+    }
+  }
+
+  const textCandidates = [
+    item.description,
+    item.short_description,
+    item.item_description,
+    item.full_description,
+    item.description_html,
+    item.descriptionHtml,
+    item.post,
+    item.post_body,
+    item.postBody,
+    item.first_post,
+    item.firstPost,
+    item.content,
+    item.body,
+    item.message,
+    item.text_html,
+    item.text
+  ];
+  for (const candidate of textCandidates) {
+    const found = pickImageFromUnknown(candidate);
+    if (found) {
+      return found;
     }
   }
 
   return DEFAULT_LISTING_IMAGE;
+}
+
+function collectStrings(value: unknown, target: string[], depth = 0) {
+  if (depth > 4 || value == null) {
+    return;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) {
+      target.push(trimmed);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectStrings(entry, target, depth + 1);
+    }
+    return;
+  }
+  if (typeof value === "object") {
+    for (const entry of Object.values(value as Record<string, unknown>)) {
+      collectStrings(entry, target, depth + 1);
+    }
+  }
+}
+
+function hasBlockedMarketplaceLink(item: Record<string, unknown>) {
+  const texts: string[] = [];
+  const candidates = [
+    item.description,
+    item.short_description,
+    item.item_description,
+    item.full_description,
+    item.description_html,
+    item.descriptionHtml,
+    item.post,
+    item.post_body,
+    item.postBody,
+    item.first_post,
+    item.firstPost,
+    item.content,
+    item.body,
+    item.message,
+    item.text_html,
+    item.text,
+    item.about,
+    item.note,
+    item.params,
+    item.parameters,
+    item.attributes,
+    item.props,
+    item.characteristics,
+    item.details,
+    item.extra,
+    item.fields
+  ];
+  for (const candidate of candidates) {
+    collectStrings(candidate, texts);
+  }
+
+  return texts.some((text) => BLOCKED_MARKET_LINK_PATTERN.test(text));
 }
 
 function extractCurrency(item: Record<string, unknown>) {
@@ -264,11 +627,189 @@ function extractCurrency(item: Record<string, unknown>) {
   return currencyRaw.toUpperCase();
 }
 
+function cleanSpecText(value: string) {
+  return stripHtml(value).replace(/\s+/g, " ").trim();
+}
+
+function buildSpec(label: string, value: string): MarketListingSpec | null {
+  const cleanLabel = cleanSpecText(label).replace(/[:\-\s]+$/, "");
+  const cleanValue = cleanSpecText(value);
+  if (!cleanValue) {
+    return null;
+  }
+
+  const normalizedLabel = cleanLabel || "Detail";
+  const blockedLabels = new Set(["description", "text", "message", "note"]);
+  if (blockedLabels.has(normalizedLabel.toLowerCase())) {
+    return null;
+  }
+
+  return {
+    label: normalizedLabel.slice(0, 72),
+    value: cleanValue.slice(0, 260)
+  };
+}
+
+function parseInlineSpec(value: string): MarketListingSpec | null {
+  const text = cleanSpecText(value);
+  if (!text) {
+    return null;
+  }
+  const parts = text.split(":");
+  if (parts.length < 2) {
+    return null;
+  }
+  const label = parts.shift() ?? "";
+  const rest = parts.join(":");
+  return buildSpec(label, rest);
+}
+
+function pushSpec(target: MarketListingSpec[], spec: MarketListingSpec | null) {
+  if (!spec) {
+    return;
+  }
+  const key = `${spec.label.toLowerCase()}::${spec.value.toLowerCase()}`;
+  const exists = target.some(
+    (entry) => `${entry.label.toLowerCase()}::${entry.value.toLowerCase()}` === key
+  );
+  if (!exists) {
+    target.push(spec);
+  }
+}
+
+function extractSpecsFromObject(source: Record<string, unknown>, output: MarketListingSpec[]) {
+  const label = extractText(
+    source.title ?? source.name ?? source.label ?? source.key ?? source.param,
+    ""
+  );
+  const value = extractText(
+    source.value ??
+      source.text ??
+      source.description ??
+      source.display_value ??
+      source.displayValue ??
+      source.val ??
+      source.amount,
+    ""
+  );
+
+  if (label || value) {
+    if (!label && value.includes(":")) {
+      pushSpec(output, parseInlineSpec(value));
+    } else {
+      pushSpec(output, buildSpec(label, value));
+    }
+    return;
+  }
+
+  for (const [key, raw] of Object.entries(source)) {
+    if (raw == null || typeof raw === "object") {
+      continue;
+    }
+    const text = extractText(raw, "");
+    if (!text) {
+      continue;
+    }
+    pushSpec(output, buildSpec(key, text));
+  }
+}
+
+function extractSpecs(item: Record<string, unknown>) {
+  const specs: MarketListingSpec[] = [];
+
+  const candidates = [
+    item.params,
+    item.parameters,
+    item.attributes,
+    item.props,
+    item.characteristics,
+    item.details,
+    item.extra,
+    item.fields,
+    item.features
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate) {
+        if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+          extractSpecsFromObject(entry as Record<string, unknown>, specs);
+        } else {
+          const raw = extractText(entry, "");
+          if (raw) {
+            pushSpec(specs, parseInlineSpec(raw));
+          }
+        }
+      }
+      continue;
+    }
+
+    if (typeof candidate === "object") {
+      extractSpecsFromObject(candidate as Record<string, unknown>, specs);
+      const record = candidate as Record<string, unknown>;
+      for (const [key, value] of Object.entries(record)) {
+        if (value == null || typeof value === "object") {
+          continue;
+        }
+        const text = extractText(value, "");
+        if (!text) {
+          continue;
+        }
+        pushSpec(specs, buildSpec(key, text));
+      }
+    }
+  }
+
+  const directSpecKeys = [
+    "rank",
+    "level",
+    "agents",
+    "gun_buddies",
+    "gunbuddies",
+    "buddies",
+    "skins",
+    "inventory",
+    "wins",
+    "hours",
+    "followers",
+    "friends"
+  ];
+
+  for (const key of directSpecKeys) {
+    if (!(key in item)) {
+      continue;
+    }
+    const value = extractText(item[key], "");
+    if (!value) {
+      continue;
+    }
+    pushSpec(specs, buildSpec(key.replace(/_/g, " "), value));
+  }
+
+  return specs.slice(0, 18);
+}
+
 function extractDescription(item: Record<string, unknown>) {
   const direct = extractText(
     item.description ??
       item.short_description ??
       item.item_description ??
+      item.full_description ??
+      item.description_html ??
+      item.descriptionHtml ??
+      item.post ??
+      item.post_body ??
+      item.postBody ??
+      item.first_post ??
+      item.firstPost ??
+      item.body ??
+      item.content ??
+      item.message ??
+      item.text_html ??
       item.text ??
       item.about ??
       item.note,
@@ -284,7 +825,9 @@ function extractDescription(item: Record<string, unknown>) {
     item.attributes,
     item.props,
     item.characteristics,
-    item.details
+    item.details,
+    item.extra,
+    item.fields
   ];
 
   for (const candidate of attributeCandidates) {
@@ -315,11 +858,36 @@ function extractDescription(item: Record<string, unknown>) {
     }
   }
 
+  const deep = findTextDeep(item, [
+    "description",
+    "full_description",
+    "item_description",
+    "description_html",
+    "post",
+    "content",
+    "body",
+    "about",
+    "note",
+    "text",
+    "message",
+    "first_post"
+  ]);
+  if (deep) {
+    return stripHtml(deep);
+  }
+
   return "";
 }
 
 function stripHtml(value: string) {
-  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/\[img(?:=[^\]]*)?\][\s\S]*?\[\/img\]/gi, " ")
+    .replace(/\[url(?:=[^\]]*)?\]([\s\S]*?)\[\/url\]/gi, "$1")
+    .replace(/\[[a-z*\/][^\]]*]/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/:[a-z0-9_+-]+:/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function buildSearchUrl(endpoint: string, query: string) {
@@ -352,6 +920,7 @@ async function fetchListingsFromEndpoint(input: {
 
   const data = (await response.json()) as unknown;
   return extractItems(data)
+    .filter((entry) => !hasBlockedMarketplaceLink(buildListingSource(entry)))
     .map((entry) => mapRawListing(entry))
     .filter(
       (listing) =>
@@ -378,12 +947,24 @@ async function fetchListingDetailFromApi(listingId: string, token: string) {
 
     const raw = (await response.json()) as Record<string, unknown>;
     const fromArray = extractItems(raw);
-    const mapped = mapRawListing(fromArray[0] ?? raw);
+    const source = fromArray[0]
+      ? {
+          ...raw,
+          ...fromArray[0]
+        }
+      : raw;
+    if (hasBlockedMarketplaceLink(buildListingSource(source))) {
+      throw new Error("BLOCKED_LISTING");
+    }
+    const mapped = mapRawListing(source);
     if (!mapped.id) {
       mapped.id = listingId;
     }
     return mapped;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "BLOCKED_LISTING") {
+      throw error;
+    }
     return null;
   }
 }
@@ -466,7 +1047,11 @@ function hasRealImage(url: string) {
   ) {
     return false;
   }
-  return normalized.startsWith("http://") || normalized.startsWith("https://");
+  return (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("data:image/")
+  );
 }
 
 function mergeListing(base: MarketListing, detail: MarketListing | null) {
@@ -484,6 +1069,7 @@ function mergeListing(base: MarketListing, detail: MarketListing | null) {
     description: hasRealDescription(detail.description)
       ? detail.description
       : base.description,
+    specs: detail.specs.length > 0 ? detail.specs : base.specs,
     game: detail.game || base.game,
     category: detail.category || base.category,
     currency: detail.currency || base.currency,
@@ -625,6 +1211,14 @@ async function translateListingsToEnglish(listings: MarketListing[]) {
     if (containsCyrillic(listing.category)) {
       texts.add(listing.category);
     }
+    for (const spec of listing.specs) {
+      if (containsCyrillic(spec.label)) {
+        texts.add(spec.label);
+      }
+      if (containsCyrillic(spec.value)) {
+        texts.add(spec.value);
+      }
+    }
   }
 
   if (texts.size === 0) {
@@ -641,7 +1235,11 @@ async function translateListingsToEnglish(listings: MarketListing[]) {
     title: translations.get(listing.title) ?? listing.title,
     description: translations.get(listing.description) ?? listing.description,
     game: translations.get(listing.game) ?? listing.game,
-    category: translations.get(listing.category) ?? listing.category
+    category: translations.get(listing.category) ?? listing.category,
+    specs: listing.specs.map((spec) => ({
+      label: translations.get(spec.label) ?? spec.label,
+      value: translations.get(spec.value) ?? spec.value
+    }))
   }));
 }
 
@@ -713,7 +1311,10 @@ export async function getListingById(listingId: string) {
           price: applyMarkup(translated.basePrice, store.settings.markupPercent)
         };
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === "BLOCKED_LISTING") {
+        return null;
+      }
       return fallbackById(listingIdTrimmed, store.settings.markupPercent);
     }
   }

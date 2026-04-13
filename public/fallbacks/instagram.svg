@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" fill="none">
+  <rect width="1280" height="720" fill="#120F16"/>
+  <rect x="32" y="32" width="1216" height="656" rx="36" fill="url(#a)" stroke="#5A426C" stroke-width="2"/>
+  <circle cx="1030" cy="160" r="200" fill="#FF6E8D" fill-opacity="0.2"/>
+  <circle cx="1140" cy="320" r="130" fill="#FFC26A" fill-opacity="0.2"/>
+  <circle cx="250" cy="600" r="190" fill="#A56CFF" fill-opacity="0.18"/>
+  <rect x="120" y="516" width="370" height="62" rx="16" fill="#FFF1F8"/>
+  <text x="145" y="558" fill="#1B1421" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">INSTAGRAM</text>
+  <text x="120" y="146" fill="#FFE4F3" font-size="64" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AE VERIFIED</text>
+  <text x="120" y="210" fill="#F4C2E9" font-size="34" font-family="Segoe UI, Arial, sans-serif">Account Listing</text>
+  <defs>
+    <linearGradient id="a" x1="64" y1="48" x2="1248" y2="688" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3A1E4B"/>
+      <stop offset="0.55" stop-color="#3A204A"/>
+      <stop offset="1" stop-color="#262037"/>
+    </linearGradient>
+  </defs>
+</svg>

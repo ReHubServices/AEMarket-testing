@@ -87,6 +87,11 @@ export type StoreData = {
   settings: AppSettings;
 };
 
+export type MarketListingSpec = {
+  label: string;
+  value: string;
+};
+
 export type MarketListing = {
   id: string;
   title: string;
@@ -99,4 +104,5 @@ export type MarketListing = {
   seller: string;
   rating: number;
   description: string;
+  specs: MarketListingSpec[];
 };

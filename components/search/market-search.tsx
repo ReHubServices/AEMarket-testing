@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Sparkles, Star, Wallet } from "lucide-react";
+import { Search, Sparkles, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { MarketListing, PublicViewer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductDetailModal } from "@/components/search/product-detail-modal";
+import { getListingImage, getPresetListingImage } from "@/lib/listing-images";
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -342,16 +343,39 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {loading && query.trim() && (
+          <div className="glass-panel col-span-full rounded-2xl p-4 md:p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Searching marketplace...</p>
+                <p className="mt-1 text-xs text-zinc-300">
+                  Looking for matches for "{query.trim()}" across all categories
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/50 [animation-delay:180ms]" />
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/35 [animation-delay:360ms]" />
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading &&
           Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}
-              className="glass-panel animate-pulseSoft rounded-2xl p-4"
+              className="glass-panel animate-pulseSoft overflow-hidden rounded-2xl p-4"
             >
-              <div className="h-40 rounded-xl bg-white/8" />
+              <div className="relative h-44 overflow-hidden rounded-xl bg-white/8">
+                <div className="absolute inset-0 animate-pulseSoft bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              </div>
               <div className="mt-4 h-4 w-4/5 rounded bg-white/10" />
-              <div className="mt-2 h-3 w-1/2 rounded bg-white/10" />
-              <div className="mt-4 h-8 w-full rounded-lg bg-white/10" />
+              <div className="mt-2 h-3 w-3/5 rounded bg-white/10" />
+              <div className="mt-5 flex items-center justify-between">
+                <div className="h-6 w-24 rounded bg-white/10" />
+                <div className="h-6 w-14 rounded bg-white/10" />
+              </div>
             </div>
           ))}
 
@@ -368,9 +392,14 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             >
               <div className="relative h-44 w-full overflow-hidden">
                 <img
-                  src={listing.imageUrl}
+                  src={getListingImage(listing)}
                   alt={listing.title}
                   className="h-full w-full object-cover"
+                  loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = getPresetListingImage(listing);
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
@@ -390,12 +419,6 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                   <p className="max-h-10 overflow-hidden text-xs text-zinc-300">
                     {listing.description}
                   </p>
-                </div>
-                <div className="flex items-center justify-end text-xs text-zinc-300">
-                  <span className="inline-flex items-center gap-1">
-                    <Star size={12} className="fill-white text-white" />
-                    {listing.rating.toFixed(2)}
-                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="font-[var(--font-space-grotesk)] text-xl font-bold text-white">

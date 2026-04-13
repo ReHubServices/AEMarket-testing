@@ -13,7 +13,8 @@ export const fallbackListings: MarketListing[] = [
     category: "Skins",
     seller: "VaultedTrader",
     rating: 4.9,
-    description: "Includes legacy battle pass rewards and top-tier locker value."
+    description: "Includes legacy battle pass rewards and top-tier locker value.",
+    specs: []
   },
   {
     id: "cs2-prime-002",
@@ -27,7 +28,8 @@ export const fallbackListings: MarketListing[] = [
     category: "Accounts",
     seller: "PrimeStacks",
     rating: 4.8,
-    description: "Prime enabled account with medal history and curated skin set."
+    description: "Prime enabled account with medal history and curated skin set.",
+    specs: []
   },
   {
     id: "valorant-immortal-003",
@@ -41,7 +43,8 @@ export const fallbackListings: MarketListing[] = [
     category: "Accounts",
     seller: "EliteBoostHub",
     rating: 4.95,
-    description: "High-rank account with exclusive bundles and unlocked agents."
+    description: "High-rank account with exclusive bundles and unlocked agents.",
+    specs: []
   },
   {
     id: "apex-heirloom-004",
@@ -55,7 +58,8 @@ export const fallbackListings: MarketListing[] = [
     category: "Skins",
     seller: "HeirloomSource",
     rating: 4.7,
-    description: "Includes heirloom unlocks, event skins, and leveled battle pass."
+    description: "Includes heirloom unlocks, event skins, and leveled battle pass.",
+    specs: []
   },
   {
     id: "rust-vip-005",
@@ -69,6 +73,7 @@ export const fallbackListings: MarketListing[] = [
     category: "Accounts",
     seller: "RustSecure",
     rating: 4.85,
-    description: "Verified high-hour profile with premium DLC and clean reputation."
+    description: "Verified high-hour profile with premium DLC and clean reputation.",
+    specs: []
   }
 ];
