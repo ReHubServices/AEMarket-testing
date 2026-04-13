@@ -250,8 +250,8 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
     currency: extractCurrency(source),
     game,
     category,
-    seller: "Verified Seller",
-    rating: extractNumber(source.rating ?? 4.7),
+    seller: "AE Empire",
+    rating: 0,
     description,
     specs
   };
@@ -1246,8 +1246,8 @@ function mergeListing(base: MarketListing, detail: MarketListing | null) {
     game: detail.game || base.game,
     category: detail.category || base.category,
     currency: detail.currency || base.currency,
-    basePrice: detail.basePrice > 0 ? detail.basePrice : base.basePrice,
-    price: detail.price > 0 ? detail.price : base.price,
+    basePrice: base.basePrice,
+    price: base.price,
     rating: detail.rating > 0 ? detail.rating : base.rating
   };
 }

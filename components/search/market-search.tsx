@@ -50,6 +50,21 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   );
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  const [originOnly, setOriginOnly] = useState(false);
+  const [mailAccess, setMailAccess] = useState(false);
+  const [onlineOnly, setOnlineOnly] = useState(false);
+  const [guaranteedOnly, setGuaranteedOnly] = useState(false);
+  const [noReserveOnly, setNoReserveOnly] = useState(false);
+  const [vacCleanOnly, setVacCleanOnly] = useState(false);
+  const [firstOwnerOnly, setFirstOwnerOnly] = useState(false);
+  const [domain, setDomain] = useState("");
+  const [rank, setRank] = useState("");
+  const [region, setRegion] = useState("");
+  const [hoursMin, setHoursMin] = useState("");
+  const [hoursMax, setHoursMax] = useState("");
+  const [steamLevelMin, setSteamLevelMin] = useState("");
+  const [steamLevelMax, setSteamLevelMax] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [listings, setListings] = useState<MarketListing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,6 +103,48 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         if (maxPrice.trim()) {
           params.set("maxPrice", maxPrice.trim());
         }
+        if (originOnly) {
+          params.set("origin", "1");
+        }
+        if (mailAccess) {
+          params.set("ma", "1");
+        }
+        if (onlineOnly) {
+          params.set("online", "1");
+        }
+        if (guaranteedOnly) {
+          params.set("guarantee", "1");
+        }
+        if (noReserveOnly) {
+          params.set("no_reserve", "1");
+        }
+        if (vacCleanOnly) {
+          params.set("vac", "1");
+        }
+        if (firstOwnerOnly) {
+          params.set("first_owner", "1");
+        }
+        if (domain.trim()) {
+          params.set("domain", domain.trim());
+        }
+        if (rank.trim()) {
+          params.set("rank", rank.trim());
+        }
+        if (region.trim()) {
+          params.set("region", region.trim());
+        }
+        if (hoursMin.trim()) {
+          params.set("hours_min", hoursMin.trim());
+        }
+        if (hoursMax.trim()) {
+          params.set("hours_max", hoursMax.trim());
+        }
+        if (steamLevelMin.trim()) {
+          params.set("steam_level_min", steamLevelMin.trim());
+        }
+        if (steamLevelMax.trim()) {
+          params.set("steam_level_max", steamLevelMax.trim());
+        }
 
         const response = await fetch(`/api/search?${params.toString()}`, {
           cache: "no-store"
@@ -122,7 +179,26 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, sort, minPrice, maxPrice]);
+  }, [
+    debouncedQuery,
+    sort,
+    minPrice,
+    maxPrice,
+    originOnly,
+    mailAccess,
+    onlineOnly,
+    guaranteedOnly,
+    noReserveOnly,
+    vacCleanOnly,
+    firstOwnerOnly,
+    domain,
+    rank,
+    region,
+    hoursMin,
+    hoursMax,
+    steamLevelMin,
+    steamLevelMax
+  ]);
 
   useEffect(() => {
     const itemId = searchParams.get("item");
@@ -225,6 +301,40 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       setBuying(false);
     }
   }
+
+  function resetAdvancedFilters() {
+    setOriginOnly(false);
+    setMailAccess(false);
+    setOnlineOnly(false);
+    setGuaranteedOnly(false);
+    setNoReserveOnly(false);
+    setVacCleanOnly(false);
+    setFirstOwnerOnly(false);
+    setDomain("");
+    setRank("");
+    setRegion("");
+    setHoursMin("");
+    setHoursMax("");
+    setSteamLevelMin("");
+    setSteamLevelMax("");
+  }
+
+  const activeAdvancedFiltersCount = [
+    originOnly,
+    mailAccess,
+    onlineOnly,
+    guaranteedOnly,
+    noReserveOnly,
+    vacCleanOnly,
+    firstOwnerOnly,
+    Boolean(domain.trim()),
+    Boolean(rank.trim()),
+    Boolean(region.trim()),
+    Boolean(hoursMin.trim()),
+    Boolean(hoursMax.trim()),
+    Boolean(steamLevelMin.trim()),
+    Boolean(steamLevelMax.trim())
+  ].filter(Boolean).length;
 
   return (
     <main className="space-y-7 pt-3">
@@ -338,6 +448,166 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                 placeholder="No limit"
               />
             </label>
+          </div>
+
+          <div className="rounded-2xl border border-white/15 bg-black/25 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen((previous) => !previous)}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-xs uppercase tracking-[0.16em] text-zinc-200 transition hover:border-white/20 hover:text-white"
+              >
+                Advanced Filters
+                {activeAdvancedFiltersCount > 0 && (
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] tracking-normal text-white">
+                    {activeAdvancedFiltersCount}
+                  </span>
+                )}
+                <span className="text-[11px] normal-case text-zinc-300">
+                  {advancedOpen ? "Hide" : "Show"}
+                </span>
+              </button>
+              <Button type="button" variant="ghost" className="h-8 px-3" onClick={resetAdvancedFilters}>
+                Reset
+              </Button>
+            </div>
+
+            {advancedOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={originOnly}
+                      onChange={(event) => setOriginOnly(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Original Owner
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={mailAccess}
+                      onChange={(event) => setMailAccess(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Mail Access
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={onlineOnly}
+                      onChange={(event) => setOnlineOnly(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Online Access
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={guaranteedOnly}
+                      onChange={(event) => setGuaranteedOnly(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Extended Guarantee
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={noReserveOnly}
+                      onChange={(event) => setNoReserveOnly(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    No Reserve
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={vacCleanOnly}
+                      onChange={(event) => setVacCleanOnly(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    VAC Clean
+                  </label>
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200 md:col-span-3">
+                    <input
+                      type="checkbox"
+                      checked={firstOwnerOnly}
+                      onChange={(event) => setFirstOwnerOnly(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    First Owner
+                  </label>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="space-y-1 text-xs text-zinc-400">
+                    Domain
+                    <Input
+                      value={domain}
+                      onChange={(event) => setDomain(event.target.value)}
+                      placeholder="gmail.com"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-zinc-400">
+                    Rank
+                    <Input
+                      value={rank}
+                      onChange={(event) => setRank(event.target.value)}
+                      placeholder="Immortal, Global, etc."
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-zinc-400">
+                    Region
+                    <Input
+                      value={region}
+                      onChange={(event) => setRegion(event.target.value)}
+                      placeholder="EU / NA / TR..."
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-zinc-400">
+                    Min Hours
+                    <Input
+                      type="number"
+                      min={0}
+                      value={hoursMin}
+                      onChange={(event) => setHoursMin(event.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-zinc-400">
+                    Max Hours
+                    <Input
+                      type="number"
+                      min={0}
+                      value={hoursMax}
+                      onChange={(event) => setHoursMax(event.target.value)}
+                      placeholder="No limit"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-zinc-400">
+                    Min Steam Level
+                    <Input
+                      type="number"
+                      min={0}
+                      value={steamLevelMin}
+                      onChange={(event) => setSteamLevelMin(event.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-zinc-400 md:col-span-3">
+                    Max Steam Level
+                    <Input
+                      type="number"
+                      min={0}
+                      value={steamLevelMax}
+                      onChange={(event) => setSteamLevelMax(event.target.value)}
+                      placeholder="No limit"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

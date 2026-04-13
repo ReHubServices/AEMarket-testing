@@ -22,8 +22,6 @@ const SUPPLIER_FILTER_KEYS = [
   "domain",
   "rank",
   "region",
-  "seller_level_min",
-  "seller_level_max",
   "hours_min",
   "hours_max",
   "steam_level_min",
