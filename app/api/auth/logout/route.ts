@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/session";
 import { fail } from "@/lib/http";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { validateMutationRequest } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const security = validateMutationRequest(request);
+  if (!security.ok) {
+    return fail(security.message, security.status);
+  }
+
   const limiter = checkRateLimit({
     key: createRateKey(request, "auth_logout"),
     maxRequests: 60,

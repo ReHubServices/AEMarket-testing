@@ -1,16 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" fill="none">
-  <rect width="1200" height="800" fill="#111318"/>
-  <rect x="60" y="60" width="1080" height="680" rx="40" fill="url(#g1)" stroke="#2F333D" stroke-width="2"/>
-  <circle cx="260" cy="260" r="120" fill="#262B36"/>
-  <circle cx="940" cy="540" r="160" fill="#1C212B"/>
-  <rect x="210" y="360" width="780" height="28" rx="14" fill="#313744"/>
-  <rect x="210" y="412" width="620" height="22" rx="11" fill="#2B313D"/>
-  <rect x="210" y="456" width="690" height="22" rx="11" fill="#2B313D"/>
-  <rect x="210" y="520" width="320" height="56" rx="12" fill="#F3F4F6"/>
-  <defs>
-    <linearGradient id="g1" x1="60" y1="60" x2="1140" y2="740" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#171A21"/>
-      <stop offset="1" stop-color="#0F1116"/>
-    </linearGradient>
-  </defs>
+  <rect width="1200" height="800" fill="#0F1115"/>
+  <rect x="60" y="60" width="1080" height="680" rx="40" fill="#171B24" stroke="#313744" stroke-width="2"/>
+  <rect x="390" y="286" width="420" height="228" rx="24" fill="#11151C" stroke="#3A4352" stroke-width="2"/>
+  <rect x="558" y="352" width="84" height="60" rx="10" fill="#202837"/>
+  <circle cx="600" cy="328" r="15" fill="#2E3849"/>
+  <text x="600" y="464" text-anchor="middle" fill="#DCE3F1" font-size="56" font-family="Segoe UI, Arial, sans-serif" font-weight="700">No Image</text>
 </svg>

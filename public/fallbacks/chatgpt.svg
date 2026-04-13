@@ -5,7 +5,6 @@
   <circle cx="230" cy="610" r="180" fill="#3FD1B6" fill-opacity="0.16"/>
   <rect x="120" y="516" width="340" height="62" rx="16" fill="#E9FFF9"/>
   <text x="153" y="558" fill="#0F1715" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">CHATGPT</text>
-  <text x="120" y="146" fill="#D9FFF4" font-size="64" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AE VERIFIED</text>
   <text x="120" y="210" fill="#AAE4D8" font-size="34" font-family="Segoe UI, Arial, sans-serif">Account Listing</text>
   <defs>
     <linearGradient id="a" x1="64" y1="48" x2="1248" y2="688" gradientUnits="userSpaceOnUse">

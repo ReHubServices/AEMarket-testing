@@ -6,7 +6,6 @@
   <circle cx="200" cy="590" r="170" fill="#57C7FF" fill-opacity="0.14"/>
   <rect x="120" y="516" width="300" height="62" rx="16" fill="#F0FDFF"/>
   <text x="154" y="558" fill="#111820" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">TIKTOK</text>
-  <text x="120" y="146" fill="#E2F9FF" font-size="64" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AE VERIFIED</text>
   <text x="120" y="210" fill="#B2DAE7" font-size="34" font-family="Segoe UI, Arial, sans-serif">Account Listing</text>
   <defs>
     <linearGradient id="a" x1="64" y1="48" x2="1248" y2="688" gradientUnits="userSpaceOnUse">

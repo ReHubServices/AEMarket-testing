@@ -9,6 +9,9 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 function getSessionSecret() {
   const secret = process.env.AUTH_SECRET?.trim();
   if (secret) {
+    if (process.env.NODE_ENV === "production" && secret.length < 32) {
+      throw new Error("AUTH_SECRET must be at least 32 characters in production");
+    }
     return secret;
   }
 

@@ -4,6 +4,7 @@ import { readStore } from "@/lib/store";
 import { updateMarkupPercent } from "@/lib/order-flow";
 import { getViewerFromRequest } from "@/lib/viewer";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { validateMutationRequest } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const security = validateMutationRequest(request, { requireJson: true });
+  if (!security.ok) {
+    return fail(security.message, security.status);
+  }
+
   const limiter = checkRateLimit({
     key: createRateKey(request, "admin_markup_post"),
     maxRequests: 20,

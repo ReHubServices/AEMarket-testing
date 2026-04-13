@@ -141,6 +141,41 @@ function isOrderFinal(status: OrderRecord["status"]) {
   return status === "completed" || status === "failed";
 }
 
+function isSupplierFundingFailure(message: string) {
+  const text = message.toLowerCase();
+  const patterns = [
+    "insufficient",
+    "not enough",
+    "insufficient funds",
+    "insufficient balance",
+    "balance is too low",
+    "low balance",
+    "not enough balance",
+    "not enough funds",
+    "недостаточно средств",
+    "не хватает средств",
+    "недостаточный баланс",
+    "мало средств"
+  ];
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
+function mapFulfillmentFailure(error: unknown) {
+  const internalMessage = error instanceof Error ? error.message : "Purchase failed";
+  if (isSupplierFundingFailure(internalMessage)) {
+    return {
+      code: "B00",
+      publicMessage: "Something Failed, Contact Support and Give them this error code: B00",
+      internalMessage
+    };
+  }
+  return {
+    code: "B99",
+    publicMessage: "Something Failed, Contact Support and Give them this error code: B99",
+    internalMessage
+  };
+}
+
 export async function confirmPaymentAndReservePurchase(input: {
   transactionId: string | null;
   providerPaymentId: string;
@@ -261,7 +296,10 @@ export async function fulfillOrder(orderId: string) {
 
     return delivery;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Purchase failed";
+    const failure = mapFulfillmentFailure(error);
+    console.error(
+      `[${failure.code}] supplier purchase failed for order ${orderId}: ${failure.internalMessage}`
+    );
     await updateStore((store) => {
       const target = store.orders.find((item) => item.id === orderId);
       if (!target || isOrderFinal(target.status)) {
@@ -272,7 +310,7 @@ export async function fulfillOrder(orderId: string) {
         user.balance = normalizeMoney(user.balance + target.finalPrice);
       }
       target.status = "failed";
-      target.failureReason = message;
+      target.failureReason = failure.publicMessage;
       target.updatedAt = new Date().toISOString();
       store.transactions.push({
         id: createId("txn"),
@@ -284,12 +322,12 @@ export async function fulfillOrder(orderId: string) {
         currency: target.currency,
         providerPaymentId: null,
         checkoutUrl: null,
-        details: "Automatic refund after purchase failure",
+        details: `Automatic refund after purchase failure (${failure.code})`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
     });
-    throw error;
+    throw new Error(failure.code);
   }
 }
 

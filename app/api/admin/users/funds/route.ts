@@ -2,12 +2,18 @@ import { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/http";
 import { normalizeMoney } from "@/lib/pricing";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { validateMutationRequest } from "@/lib/request-security";
 import { updateStore } from "@/lib/store";
 import { getViewerFromRequest } from "@/lib/viewer";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const security = validateMutationRequest(request, { requireJson: true });
+  if (!security.ok) {
+    return fail(security.message, security.status);
+  }
+
   const limiter = checkRateLimit({
     key: createRateKey(request, "admin_users_funds"),
     maxRequests: 40,

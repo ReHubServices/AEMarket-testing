@@ -65,12 +65,24 @@ export function toPublicViewer(user: UserRecord): PublicViewer {
 }
 
 export async function ensureAdminUser() {
-  const adminUsername = process.env.ADMIN_USERNAME?.trim() || "aeadmin";
-  const adminPassword = process.env.ADMIN_PASSWORD?.trim() || "ChangeMe123!";
+  const adminUsername =
+    process.env.ADMIN_USERNAME?.trim() ||
+    (process.env.NODE_ENV === "production" ? "" : "aeadmin");
+  const adminPassword =
+    process.env.ADMIN_PASSWORD?.trim() ||
+    (process.env.NODE_ENV === "production" ? "" : "ChangeMe123!");
   const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@ae-empire.local";
+
+  if (process.env.NODE_ENV === "production" && (!adminUsername || !adminPassword)) {
+    throw new Error("ADMIN_CREDENTIALS_NOT_CONFIGURED");
+  }
+
   const normalized = normalizeUsername(adminUsername);
 
   if (adminUsername.length < 3 || adminUsername.length > 80 || !validatePassword(adminPassword)) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ADMIN_CREDENTIALS_INVALID");
+    }
     return;
   }
 

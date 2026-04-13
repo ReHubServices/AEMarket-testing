@@ -1,16 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" fill="none">
   <rect width="1280" height="720" fill="#0F1115"/>
-  <rect x="32" y="32" width="1216" height="656" rx="36" fill="url(#a)" stroke="#3B414F" stroke-width="2"/>
-  <circle cx="980" cy="170" r="200" fill="#78819A" fill-opacity="0.16"/>
-  <circle cx="240" cy="590" r="170" fill="#626C83" fill-opacity="0.14"/>
-  <rect x="120" y="516" width="340" height="62" rx="16" fill="#F3F5FA"/>
-  <text x="143" y="558" fill="#151922" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AE LISTING</text>
-  <text x="120" y="146" fill="#DFE6F8" font-size="64" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AE VERIFIED</text>
-  <text x="120" y="210" fill="#B3BCD4" font-size="34" font-family="Segoe UI, Arial, sans-serif">Account Listing</text>
-  <defs>
-    <linearGradient id="a" x1="64" y1="48" x2="1248" y2="688" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1A202E"/>
-      <stop offset="1" stop-color="#121722"/>
-    </linearGradient>
-  </defs>
+  <rect x="32" y="32" width="1216" height="656" rx="36" fill="#171B24" stroke="#313744" stroke-width="2"/>
+  <rect x="430" y="256" width="420" height="208" rx="24" fill="#11151C" stroke="#3A4352" stroke-width="2"/>
+  <rect x="602" y="314" width="76" height="56" rx="10" fill="#202837"/>
+  <circle cx="640" cy="292" r="14" fill="#2E3849"/>
+  <text x="640" y="418" text-anchor="middle" fill="#DCE3F1" font-size="52" font-family="Segoe UI, Arial, sans-serif" font-weight="700">No Image</text>
 </svg>

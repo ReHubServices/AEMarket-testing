@@ -3,12 +3,18 @@ import { fail, ok } from "@/lib/http";
 import { updateStore } from "@/lib/store";
 import { getViewerFromRequest } from "@/lib/viewer";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { validateMutationRequest } from "@/lib/request-security";
 
 type EntityType = "user" | "order" | "transaction";
 
 export const runtime = "nodejs";
 
 export async function DELETE(request: NextRequest) {
+  const security = validateMutationRequest(request, { requireJson: true });
+  if (!security.ok) {
+    return fail(security.message, security.status);
+  }
+
   const limiter = checkRateLimit({
     key: createRateKey(request, "admin_manage_delete"),
     maxRequests: 30,

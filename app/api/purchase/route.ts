@@ -5,10 +5,16 @@ import { createCheckoutSession } from "@/lib/payment-provider";
 import { getViewerFromRequest } from "@/lib/viewer";
 import { updateStore } from "@/lib/store";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { validateMutationRequest } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const security = validateMutationRequest(request, { requireJson: true });
+  if (!security.ok) {
+    return fail(security.message, security.status);
+  }
+
   const limiter = checkRateLimit({
     key: createRateKey(request, "purchase"),
     maxRequests: 20,
@@ -63,6 +69,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Payment initialization failed";
+      console.error(`Checkout initialization failed for order ${pending.order.id}: ${message}`);
       await updateStore((store) => {
         const transaction = store.transactions.find(
           (tx) => tx.id === pending.transaction.id
@@ -75,17 +82,20 @@ export async function POST(request: NextRequest) {
         const order = store.orders.find((item) => item.id === pending.order.id);
         if (order) {
           order.status = "failed";
-          order.failureReason = message;
+          order.failureReason = "Unable to initialize checkout. Please contact support.";
           order.updatedAt = new Date().toISOString();
         }
       });
       if (message.toLowerCase().includes("payment endpoint missing")) {
         return fail("Payment provider is not configured", 503);
       }
-      return fail(message, 502);
+      return fail("Unable to initialize checkout", 502);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Purchase initialization failed";
-    return fail(message, 400);
+    if (message === "Listing not found") {
+      return fail("Listing not found", 404);
+    }
+    return fail("Purchase initialization failed", 400);
   }
 }

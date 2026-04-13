@@ -3,10 +3,16 @@ import { createSessionToken, getSessionCookieOptions, SESSION_COOKIE_NAME } from
 import { fail, ok } from "@/lib/http";
 import { loginUser, toPublicViewer } from "@/lib/auth";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { validateMutationRequest } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const security = validateMutationRequest(request, { requireJson: true });
+  if (!security.ok) {
+    return fail(security.message, security.status);
+  }
+
   const ipLimiter = checkRateLimit({
     key: createRateKey(request, "auth_login_ip"),
     maxRequests: 20,
@@ -50,7 +56,14 @@ export async function POST(request: NextRequest) {
     const response = ok({ user: toPublicViewer(user) });
     response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions());
     return response;
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Login failed";
+    if (
+      message === "ADMIN_CREDENTIALS_NOT_CONFIGURED" ||
+      message === "ADMIN_CREDENTIALS_INVALID"
+    ) {
+      return fail("Authentication is not configured", 503);
+    }
     return fail("Login failed", 500);
   }
 }
