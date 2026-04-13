@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"]
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"]
-});
+import { SiteHeader } from "@/components/layout/site-header";
 
 export const metadata: Metadata = {
   title: "AE Empire Accounts",
-  description: "Premium LZT.Market account and skin trading platform"
+  description: "Premium game account and skin marketplace",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -23,8 +18,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body
         className={cn(
-          manrope.variable,
-          spaceGrotesk.variable,
           "surface-noise relative min-h-screen overflow-x-hidden bg-grain font-[var(--font-manrope)] text-foreground"
         )}
       >
@@ -34,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-zinc-500/10 blur-[150px]" />
         </div>
         <div className="mx-auto w-full max-w-[1300px] px-4 pb-16 pt-6 md:px-8">
+          <SiteHeader />
           {children}
         </div>
       </body>

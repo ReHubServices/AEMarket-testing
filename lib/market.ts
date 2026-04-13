@@ -1,15 +1,4 @@
-export type MarketListing = {
-  id: string;
-  title: string;
-  imageUrl: string;
-  price: number;
-  currency: string;
-  game: string;
-  category: string;
-  seller: string;
-  rating: number;
-  description: string;
-};
+import { MarketListing } from "@/lib/types";
 
 export const fallbackListings: MarketListing[] = [
   {
@@ -18,6 +7,7 @@ export const fallbackListings: MarketListing[] = [
     imageUrl:
       "https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=1200&q=80",
     price: 129.99,
+    basePrice: 129.99,
     currency: "USD",
     game: "Fortnite",
     category: "Skins",
@@ -31,6 +21,7 @@ export const fallbackListings: MarketListing[] = [
     imageUrl:
       "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
     price: 214.5,
+    basePrice: 214.5,
     currency: "USD",
     game: "Counter-Strike 2",
     category: "Accounts",
@@ -44,6 +35,7 @@ export const fallbackListings: MarketListing[] = [
     imageUrl:
       "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=1200&q=80",
     price: 349.0,
+    basePrice: 349.0,
     currency: "USD",
     game: "Valorant",
     category: "Accounts",
@@ -57,6 +49,7 @@ export const fallbackListings: MarketListing[] = [
     imageUrl:
       "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80",
     price: 287.0,
+    basePrice: 287.0,
     currency: "USD",
     game: "Apex Legends",
     category: "Skins",
@@ -70,6 +63,7 @@ export const fallbackListings: MarketListing[] = [
     imageUrl:
       "https://images.unsplash.com/photo-1614292253384-fb8999f4ef45?auto=format&fit=crop&w=1200&q=80",
     price: 179.99,
+    basePrice: 179.99,
     currency: "USD",
     game: "Rust",
     category: "Accounts",

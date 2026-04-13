@@ -1,60 +1,53 @@
-import { NextRequest, NextResponse } from "next/server";
-import { fallbackListings, type MarketListing } from "@/lib/market";
+import { NextRequest } from "next/server";
+import { fail, ok } from "@/lib/http";
+import { SearchSort, searchListings } from "@/lib/provider";
+import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
 
-function searchFallback(query: string): MarketListing[] {
-  if (!query) {
-    return fallbackListings;
-  }
-
-  const normalized = query.toLowerCase();
-  return fallbackListings.filter((listing) =>
-    [listing.title, listing.game, listing.category, listing.seller]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalized)
-  );
-}
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-  const endpoint = process.env.LZT_API_SEARCH_URL;
-  const token = process.env.LZT_API_TOKEN;
-
-  if (!endpoint || !token) {
-    return NextResponse.json({ listings: searchFallback(query) });
+  const limiter = checkRateLimit({
+    key: createRateKey(request, "search"),
+    maxRequests: 90,
+    windowMs: 60_000
+  });
+  if (!limiter.allowed) {
+    return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
   }
 
+  const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+  const sortParam = request.nextUrl.searchParams.get("sort")?.trim() ?? "";
+  const minPriceRaw = request.nextUrl.searchParams.get("minPrice");
+  const maxPriceRaw = request.nextUrl.searchParams.get("maxPrice");
+
+  const sort: SearchSort =
+    sortParam === "price_asc" ||
+    sortParam === "price_desc" ||
+    sortParam === "newest"
+      ? sortParam
+      : "relevance";
+  const minPrice =
+    minPriceRaw && Number.isFinite(Number(minPriceRaw)) ? Number(minPriceRaw) : null;
+  const maxPrice =
+    maxPriceRaw && Number.isFinite(Number(maxPriceRaw)) ? Number(maxPriceRaw) : null;
+
   try {
-    const upstream = await fetch(`${endpoint}?query=${encodeURIComponent(query)}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json"
-      },
-      cache: "no-store"
+    const listings = await searchListings(query, {
+      sort,
+      minPrice,
+      maxPrice
     });
-
-    if (!upstream.ok) {
-      return NextResponse.json({ listings: searchFallback(query) });
+    return ok({
+      listings: query ? listings : listings.slice(0, 30)
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "SEARCH_FAILED";
+    if (message === "LZT_AUTH_MISSING") {
+      return fail("LZT API token is not configured", 503);
     }
-
-    const raw = await upstream.json();
-    const listings: MarketListing[] = Array.isArray(raw?.items)
-      ? raw.items.map((item: Record<string, unknown>) => ({
-          id: String(item.id ?? ""),
-          title: String(item.title ?? "Untitled listing"),
-          imageUrl: String(item.image ?? ""),
-          price: Number(item.price ?? 0),
-          currency: String(item.currency ?? "USD"),
-          game: String(item.game ?? "Unknown"),
-          category: String(item.category ?? "Account"),
-          seller: String(item.seller ?? "Unknown seller"),
-          rating: Number(item.rating ?? 0),
-          description: String(item.description ?? "")
-        }))
-      : [];
-
-    return NextResponse.json({ listings: query ? listings : listings.slice(0, 24) });
-  } catch {
-    return NextResponse.json({ listings: searchFallback(query) });
+    if (message === "LZT_AUTH_FAILED") {
+      return fail("LZT API authorization failed", 401);
+    }
+    return fail("Search unavailable", 502);
   }
 }

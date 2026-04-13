@@ -10,6 +10,8 @@
   --card: 220 8% 11%;
   --ring: 0 0% 92%;
   --accent: 0 0% 100%;
+  --font-manrope: "Trebuchet MS", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-space-grotesk: "Verdana", "Geneva", sans-serif;
 }
 
 * {

@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+data/store.json
+.next
+node_modules
