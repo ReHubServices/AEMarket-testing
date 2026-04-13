@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 export async function SiteHeader() {
   const viewer = await getViewerFromCookies();
-  const logoExists = existsSync(path.join(process.cwd(), "public", "logo.png"));
+  const logoExists = existsSync(path.join(process.cwd(), "public", "Logo.png"));
 
   return (
     <header className="glass-panel sticky top-4 z-30 mb-7 rounded-2xl px-4 py-3 md:px-6">
@@ -16,7 +16,7 @@ export async function SiteHeader() {
           <Link href="/" className="flex items-center gap-3">
             {logoExists && (
               <img
-                src="/logo.png"
+                src="/Logo.png"
                 alt="AE Empire Accounts"
                 className="h-9 w-9 rounded-lg object-cover"
               />

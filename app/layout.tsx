@@ -7,9 +7,9 @@ export const metadata: Metadata = {
   title: "AE Empire Accounts",
   description: "Premium game account and skin marketplace",
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png"
+    icon: "/Logo.png",
+    shortcut: "/Logo.png",
+    apple: "/Logo.png"
   }
 };
 

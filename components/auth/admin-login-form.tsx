@@ -48,7 +48,7 @@ export function AdminLoginForm() {
       <div className="mb-6 space-y-2 text-center">
         <div className="mb-3 flex justify-center">
           <img
-            src="/logo.png"
+            src="/Logo.png"
             alt="AE Empire Accounts"
             className="h-14 w-14 rounded-xl object-cover"
             onError={(event) => {

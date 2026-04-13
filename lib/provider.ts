@@ -81,14 +81,24 @@ function extractText(value: unknown, fallback = ""): string {
     const keys = [
       "title",
       "name",
+      "description",
+      "description_en",
+      "description_html",
+      "descriptionHtml",
       "ru",
       "en",
       "username",
       "user_name",
       "login",
+      "message",
+      "body",
+      "content",
+      "post",
+      "first_post",
       "value",
       "label",
       "text",
+      "text_html",
       "url",
       "path"
     ];
@@ -222,16 +232,14 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
   );
   const id = extractText(source.id ?? source.item_id ?? source.itemId ?? source.listing_id ?? "");
   const title = extractText(
-    source.title ?? source.item_title ?? source.name ?? source.heading,
+    source.title_en ?? source.title ?? source.item_title ?? source.name ?? source.heading,
     "Untitled listing"
   );
   const imageUrl = extractImageUrl(source);
   const game = resolveGameLabel(source);
   const category = resolveCategoryLabel(source, game);
   const specs = extractSpecs(source);
-  const description =
-    extractDescription(source) ||
-    (specs.length > 0 ? "Structured details are available below." : "Details available in listing");
+  const description = extractDescription(source) || buildDescriptionFallback(source, specs);
 
   return {
     id,
@@ -485,6 +493,13 @@ function pickImageFromUnknown(value: unknown): string {
       if (found) {
         return found;
       }
+    }
+  }
+
+  for (const entry of Object.values(record)) {
+    const found = pickImageFromUnknown(entry);
+    if (found) {
+      return found;
     }
   }
 
@@ -799,19 +814,87 @@ function extractSpecs(item: Record<string, unknown>) {
   return specs.slice(0, 18);
 }
 
+function toReadableDate(value: unknown) {
+  const numeric = extractNumber(value);
+  if (!numeric || numeric <= 0) {
+    return "";
+  }
+
+  const timestamp = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function buildDescriptionFallback(
+  item: Record<string, unknown>,
+  specs: MarketListingSpec[]
+) {
+  const facts: string[] = [];
+  const candidates: Array<[string, unknown]> = [
+    ["Skins", item.fortnite_skin_count ?? item.skin_count ?? item.skins],
+    ["Level", item.fortnite_level ?? item.level],
+    ["Wins", item.fortnite_lifetime_wins ?? item.wins],
+    ["Pickaxes", item.fortnite_pickaxe_count],
+    ["Emotes", item.fortnite_dance_count ?? item.emote_count],
+    ["Agents", item.valorant_agents_count ?? item.agents],
+    ["Gun Buddies", item.valorant_gun_buddies_count ?? item.gun_buddies],
+    ["Hours", item.hours],
+    ["Followers", item.followers]
+  ];
+
+  for (const [label, rawValue] of candidates) {
+    const value = extractText(rawValue, "");
+    if (!value) {
+      continue;
+    }
+    facts.push(`${label}: ${value}`);
+  }
+
+  const lastActivity = toReadableDate(item.fortnite_last_activity ?? item.last_activity);
+  if (lastActivity) {
+    facts.push(`Last Activity: ${lastActivity}`);
+  }
+
+  if (facts.length > 0) {
+    return facts.slice(0, 5).join(" | ").slice(0, 320);
+  }
+
+  if (specs.length > 0) {
+    return specs
+      .slice(0, 4)
+      .map((spec) => `${spec.label}: ${spec.value}`)
+      .join(" | ")
+      .slice(0, 320);
+  }
+
+  return "Account details available in listing";
+}
+
 function extractDescription(item: Record<string, unknown>) {
   const direct = extractText(
-    item.description ??
+    item.description_en ??
+      item.description ??
       item.short_description ??
       item.item_description ??
       item.full_description ??
       item.description_html ??
       item.descriptionHtml ??
+      item.message_html ??
       item.post ??
       item.post_body ??
       item.postBody ??
       item.first_post ??
       item.firstPost ??
+      item.first_post_message ??
+      item.firstPostMessage ??
       item.body ??
       item.content ??
       item.message ??
@@ -975,36 +1058,50 @@ async function fetchListingsFromEndpoint(input: {
 }
 
 async function fetchListingDetailFromApi(listingId: string, token: string) {
-  const endpoint = getItemEndpointBase();
+  const endpoint = getItemEndpointBase().replace(/\/+$/, "");
+  const encodedId = encodeURIComponent(listingId);
+  const detailUrls = endpoint.includes("{item_id}")
+    ? [endpoint.replace("{item_id}", encodedId)]
+    : Array.from(
+        new Set([
+          `${endpoint}/${encodedId}`,
+          `${endpoint}/item/${encodedId}`,
+          `${endpoint}/items/${encodedId}`,
+          `${endpoint}/market/${encodedId}`
+        ])
+      );
 
   try {
-    const response = await fetch(`${endpoint}/${encodeURIComponent(listingId)}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json"
-      },
-      cache: "no-store"
-    });
-    if (!response.ok) {
-      return null;
-    }
+    for (const url of detailUrls) {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json"
+        },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        continue;
+      }
 
-    const raw = (await response.json()) as Record<string, unknown>;
-    const fromArray = extractItems(raw);
-    const source = fromArray[0]
-      ? {
-          ...raw,
-          ...fromArray[0]
-        }
-      : raw;
-    if (hasBlockedMarketplaceLink(buildListingSource(source))) {
-      throw new Error("BLOCKED_LISTING");
+      const raw = (await response.json()) as Record<string, unknown>;
+      const fromArray = extractItems(raw);
+      const source = fromArray[0]
+        ? {
+            ...raw,
+            ...fromArray[0]
+          }
+        : raw;
+      if (hasBlockedMarketplaceLink(buildListingSource(source))) {
+        throw new Error("BLOCKED_LISTING");
+      }
+      const mapped = mapRawListing(source);
+      if (!mapped.id) {
+        mapped.id = listingId;
+      }
+      return mapped;
     }
-    const mapped = mapRawListing(source);
-    if (!mapped.id) {
-      mapped.id = listingId;
-    }
-    return mapped;
+    return null;
   } catch (error) {
     if (error instanceof Error && error.message === "BLOCKED_LISTING") {
       throw error;
