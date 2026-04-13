@@ -1,6 +1,6 @@
 @echo off
 echo ================================================
-echo AE Empire Accounts - Upload Changes
+echo AE Empire Accounts - Deploy to Vercel
 echo ================================================
 echo.
 
@@ -17,11 +17,13 @@ echo Committing...
 git commit -m "%commitmsg%" || echo Nothing new to commit.
 
 echo.
-echo Pushing to GitHub...
+echo Pushing to GitHub (this will trigger Vercel redeploy)...
 git push origin main
 
 echo.
 echo ================================================
-echo Done! Changes uploaded to https://github.com/ReHubServices/AEMarket-testing
+echo Done!
+echo Vercel should start building automatically now.
+echo Check your Vercel dashboard in 30-60 seconds.
 echo.
 pause
