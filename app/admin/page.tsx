@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/admin/admin-dashboard";
 import { getViewerFromCookies } from "@/lib/viewer";
-import { ensureAdminUser } from "@/lib/auth";
 import { getAdminOverview } from "@/lib/order-flow";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  await ensureAdminUser();
   const viewer = await getViewerFromCookies();
   if (!viewer?.isAdmin) {
     redirect("/admin/login");
