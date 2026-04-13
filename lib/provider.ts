@@ -1169,18 +1169,46 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
     return output;
   }
 
-  const details = await Promise.all(
-    candidates.map((listing) => fetchListingDetailFromApi(listing.id, token))
+  const detailStates = await Promise.all(
+    candidates.map(async (listing) => {
+      try {
+        const detail = await fetchListingDetailFromApi(listing.id, token);
+        return {
+          id: listing.id,
+          detail,
+          blocked: false
+        };
+      } catch (error) {
+        if (error instanceof Error && error.message === "BLOCKED_LISTING") {
+          return {
+            id: listing.id,
+            detail: null,
+            blocked: true
+          };
+        }
+        return {
+          id: listing.id,
+          detail: null,
+          blocked: false
+        };
+      }
+    })
+  );
+
+  const blockedIds = new Set(
+    detailStates.filter((state) => state.blocked).map((state) => state.id)
   );
 
   const detailById = new Map<string, MarketListing>();
-  for (const detail of details) {
-    if (detail?.id) {
-      detailById.set(detail.id, detail);
+  for (const state of detailStates) {
+    if (state.detail?.id) {
+      detailById.set(state.detail.id, state.detail);
     }
   }
 
-  return output.map((listing) => mergeListing(listing, detailById.get(listing.id) ?? null));
+  return output
+    .filter((listing) => !blockedIds.has(listing.id))
+    .map((listing) => mergeListing(listing, detailById.get(listing.id) ?? null));
 }
 
 function applyLocalFilters(listings: MarketListing[], options: SearchOptions) {
@@ -1421,7 +1449,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       options
     });
     const categoryEndpoints = buildCategoryEndpoints(endpoint, options);
-    const categoryResults = await Promise.all(
+    const categoryResultsSettled = await Promise.allSettled(
       categoryEndpoints.map((categoryEndpoint) =>
         fetchListingsFromEndpoint({
           endpoint: categoryEndpoint,
@@ -1431,6 +1459,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
         })
       )
     );
+    const categoryResults = categoryResultsSettled
+      .filter(
+        (entry): entry is PromiseFulfilledResult<MarketListing[]> =>
+          entry.status === "fulfilled"
+      )
+      .map((entry) => entry.value);
 
     const combined = mergeUnique([primary, ...categoryResults].flat());
     const filtered = applyLocalFilters(combined, options).slice(0, 80);

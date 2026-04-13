@@ -3,7 +3,21 @@ import path from "node:path";
 import { neon } from "@neondatabase/serverless";
 import { StoreData } from "@/lib/types";
 
-const STORE_DIR = path.join(process.cwd(), "data");
+function resolveStoreDir() {
+  const configured = process.env.STORE_DIR?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    const runtimeTmp = process.env.TMPDIR?.trim() || process.env.TEMP?.trim() || "/tmp";
+    return path.join(runtimeTmp, "ae-empire-store");
+  }
+
+  return path.join(process.cwd(), "data");
+}
+
+const STORE_DIR = resolveStoreDir();
 const STORE_PATH = path.join(STORE_DIR, "store.json");
 const DATABASE_URL =
   process.env.DATABASE_URL?.trim() ||
