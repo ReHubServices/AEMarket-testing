@@ -74,15 +74,12 @@ export async function ensureAdminUser() {
   const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@ae-empire.local";
 
   if (process.env.NODE_ENV === "production" && (!adminUsername || !adminPassword)) {
-    throw new Error("ADMIN_CREDENTIALS_NOT_CONFIGURED");
+    return;
   }
 
   const normalized = normalizeUsername(adminUsername);
 
   if (adminUsername.length < 3 || adminUsername.length > 80 || !validatePassword(adminPassword)) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("ADMIN_CREDENTIALS_INVALID");
-    }
     return;
   }
 
@@ -170,6 +167,21 @@ export async function loginUser(input: {
 }) {
   const username = normalizeUsername(input.username);
   const password = input.password;
+
+  const hasAdminUsername = Boolean(process.env.ADMIN_USERNAME?.trim());
+  const hasAdminPassword = Boolean(process.env.ADMIN_PASSWORD?.trim());
+  if (input.adminOnly && process.env.NODE_ENV === "production") {
+    if (!hasAdminUsername || !hasAdminPassword) {
+      throw new Error("ADMIN_CREDENTIALS_NOT_CONFIGURED");
+    }
+    if (
+      process.env.ADMIN_USERNAME!.trim().length < 3 ||
+      process.env.ADMIN_USERNAME!.trim().length > 80 ||
+      !validatePassword(process.env.ADMIN_PASSWORD!.trim())
+    ) {
+      throw new Error("ADMIN_CREDENTIALS_INVALID");
+    }
+  }
 
   await ensureAdminUser();
 
