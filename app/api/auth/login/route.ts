@@ -57,13 +57,7 @@ export async function POST(request: NextRequest) {
     response.cookies.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions());
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Login failed";
-    if (
-      message === "ADMIN_CREDENTIALS_NOT_CONFIGURED" ||
-      message === "ADMIN_CREDENTIALS_INVALID"
-    ) {
-      return fail("Authentication is not configured", 503);
-    }
+    void error;
     return fail("Login failed", 500);
   }
 }

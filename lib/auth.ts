@@ -172,14 +172,14 @@ export async function loginUser(input: {
   const hasAdminPassword = Boolean(process.env.ADMIN_PASSWORD?.trim());
   if (input.adminOnly && process.env.NODE_ENV === "production") {
     if (!hasAdminUsername || !hasAdminPassword) {
-      throw new Error("ADMIN_CREDENTIALS_NOT_CONFIGURED");
+      return null;
     }
     if (
       process.env.ADMIN_USERNAME!.trim().length < 3 ||
       process.env.ADMIN_USERNAME!.trim().length > 80 ||
       !validatePassword(process.env.ADMIN_PASSWORD!.trim())
     ) {
-      throw new Error("ADMIN_CREDENTIALS_INVALID");
+      return null;
     }
   }
 
