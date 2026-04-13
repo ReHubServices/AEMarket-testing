@@ -10,6 +10,12 @@ export type SearchOptions = {
   sort?: SearchSort;
   minPrice?: number | null;
   maxPrice?: number | null;
+  game?: string | null;
+  category?: string | null;
+  hasImage?: boolean;
+  hasDescription?: boolean;
+  hasSpecs?: boolean;
+  supplierFilters?: Record<string, string>;
 };
 
 const translationCache = new Map<string, string>();
@@ -890,11 +896,48 @@ function stripHtml(value: string) {
     .trim();
 }
 
-function buildSearchUrl(endpoint: string, query: string) {
+function resolveSupplierSort(sort: SearchSort | undefined) {
+  if (sort === "price_asc") {
+    return "price_to_up";
+  }
+  if (sort === "price_desc") {
+    return "price_to_down";
+  }
+  if (sort === "newest") {
+    return "pdate_to_down";
+  }
+  return "pdate_to_down";
+}
+
+function buildSearchUrl(endpoint: string, query: string, options: SearchOptions) {
   const url = new URL(normalizeEndpoint(endpoint));
   url.searchParams.set("title", query);
-  url.searchParams.set("order_by", "pdate_to_down");
+  url.searchParams.set("q", query);
+  url.searchParams.set("order_by", resolveSupplierSort(options.sort));
   url.searchParams.set("page", "1");
+
+  if (Number.isFinite(options.minPrice ?? NaN)) {
+    const min = String(Number(options.minPrice));
+    url.searchParams.set("price_from", min);
+    url.searchParams.set("pmin", min);
+  }
+  if (Number.isFinite(options.maxPrice ?? NaN)) {
+    const max = String(Number(options.maxPrice));
+    url.searchParams.set("price_to", max);
+    url.searchParams.set("pmax", max);
+  }
+
+  if (options.supplierFilters) {
+    for (const [key, value] of Object.entries(options.supplierFilters)) {
+      const normalizedKey = key.trim();
+      const normalizedValue = value.trim();
+      if (!normalizedKey || !normalizedValue) {
+        continue;
+      }
+      url.searchParams.set(normalizedKey, normalizedValue);
+    }
+  }
+
   return url.toString();
 }
 
@@ -902,8 +945,9 @@ async function fetchListingsFromEndpoint(input: {
   endpoint: string;
   token: string;
   query: string;
+  options: SearchOptions;
 }) {
-  const response = await fetch(buildSearchUrl(input.endpoint, input.query), {
+  const response = await fetch(buildSearchUrl(input.endpoint, input.query, input.options), {
     headers: {
       Authorization: `Bearer ${input.token}`,
       Accept: "application/json"
@@ -969,7 +1013,15 @@ async function fetchListingDetailFromApi(listingId: string, token: string) {
   }
 }
 
-function buildCategoryEndpoints(baseEndpoint: string) {
+function toSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const custom = (process.env.LZT_CATEGORY_ENDPOINTS ?? "")
     .split(",")
     .map((item) => item.trim())
@@ -1003,11 +1055,35 @@ function buildCategoryEndpoints(baseEndpoint: string) {
   ];
 
   const categories = custom.length > 0 ? custom : defaults;
+  const requestedCategory = options.category ? toSlug(options.category) : "";
+  const requestedGame = options.game ? toSlug(options.game) : "";
+  const requested = requestedCategory || requestedGame;
+  const narrowedCategories =
+    requested.length > 0
+      ? categories.filter((item) => {
+          const slug = toSlug(item);
+          if (!slug) {
+            return false;
+          }
+          if (slug === requested || slug.includes(requested) || requested.includes(slug)) {
+            return true;
+          }
+          if (
+            requested.includes("social") &&
+            ["instagram", "tiktok", "telegram", "discord", "facebook", "twitter"].some((social) =>
+              slug.includes(social)
+            )
+          ) {
+            return true;
+          }
+          return false;
+        })
+      : categories;
   const root = normalizeEndpoint(baseEndpoint);
 
   return Array.from(
     new Set(
-      categories.map((category) =>
+      (narrowedCategories.length > 0 ? narrowedCategories : categories).map((category) =>
         category.startsWith("http://") || category.startsWith("https://")
           ? category
           : `${root}${category}`
@@ -1109,12 +1185,82 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
 
 function applyLocalFilters(listings: MarketListing[], options: SearchOptions) {
   let output = listings.slice();
+  const gameFilter = options.game?.trim().toLowerCase() ?? "";
+  const categoryFilter = options.category?.trim().toLowerCase() ?? "";
 
   if (Number.isFinite(options.minPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice >= Number(options.minPrice));
   }
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
+  }
+  if (gameFilter) {
+    output = output.filter((item) => {
+      const haystack = `${item.game} ${item.title} ${item.category}`.toLowerCase();
+      return haystack.includes(gameFilter);
+    });
+  }
+  if (categoryFilter) {
+    output = output.filter((item) => {
+      const haystack = `${item.category} ${item.title} ${item.game}`.toLowerCase();
+      return haystack.includes(categoryFilter);
+    });
+  }
+  if (options.hasImage) {
+    output = output.filter((item) => hasRealImage(item.imageUrl));
+  }
+  if (options.hasDescription) {
+    output = output.filter((item) => hasRealDescription(item.description));
+  }
+  if (options.hasSpecs) {
+    output = output.filter((item) => item.specs.length > 0);
+  }
+
+  if (options.supplierFilters) {
+    const domainFilter = options.supplierFilters.domain?.trim().toLowerCase() ?? "";
+    const rankFilter = options.supplierFilters.rank?.trim().toLowerCase() ?? "";
+    const requiresOrigin = options.supplierFilters.origin === "1";
+    const requiresMailAccess = options.supplierFilters.ma === "1";
+    const requiresOnline = options.supplierFilters.online === "1";
+    const requiresGuarantee = options.supplierFilters.guarantee === "1";
+    const requiresNoReserve = options.supplierFilters.no_reserve === "1";
+
+    if (domainFilter) {
+      output = output.filter((item) => {
+        const haystack = `${item.title} ${item.description} ${item.specs
+          .map((spec) => `${spec.label} ${spec.value}`)
+          .join(" ")}`.toLowerCase();
+        return haystack.includes(domainFilter);
+      });
+    }
+
+    if (rankFilter) {
+      output = output.filter((item) => {
+        const haystack = `${item.title} ${item.description} ${item.specs
+          .map((spec) => `${spec.label} ${spec.value}`)
+          .join(" ")}`.toLowerCase();
+        return haystack.includes(rankFilter);
+      });
+    }
+
+    const matchesSpecKeyword = (item: MarketListing, keyword: string) =>
+      item.specs.some((spec) => `${spec.label} ${spec.value}`.toLowerCase().includes(keyword));
+
+    if (requiresOrigin) {
+      output = output.filter((item) => matchesSpecKeyword(item, "original"));
+    }
+    if (requiresMailAccess) {
+      output = output.filter((item) => matchesSpecKeyword(item, "mail"));
+    }
+    if (requiresOnline) {
+      output = output.filter((item) => matchesSpecKeyword(item, "online"));
+    }
+    if (requiresGuarantee) {
+      output = output.filter((item) => matchesSpecKeyword(item, "guarantee"));
+    }
+    if (requiresNoReserve) {
+      output = output.filter((item) => !matchesSpecKeyword(item, "reserve"));
+    }
   }
 
   if (options.sort === "price_asc") {
@@ -1268,11 +1414,21 @@ export async function searchListings(query: string, options: SearchOptions = {})
   }
 
   try {
-    const primary = await fetchListingsFromEndpoint({ endpoint, token, query: trimmedQuery });
-    const categoryEndpoints = buildCategoryEndpoints(endpoint);
+    const primary = await fetchListingsFromEndpoint({
+      endpoint,
+      token,
+      query: trimmedQuery,
+      options
+    });
+    const categoryEndpoints = buildCategoryEndpoints(endpoint, options);
     const categoryResults = await Promise.all(
       categoryEndpoints.map((categoryEndpoint) =>
-        fetchListingsFromEndpoint({ endpoint: categoryEndpoint, token, query: trimmedQuery })
+        fetchListingsFromEndpoint({
+          endpoint: categoryEndpoint,
+          token,
+          query: trimmedQuery,
+          options
+        })
       )
     );
 
