@@ -52,19 +52,19 @@ export function UserAuthForm({ mode }: UserAuthFormProps) {
   }
 
   return (
-    <div className="glass-panel mx-auto w-full max-w-md rounded-3xl p-6 md:p-8">
+    <div className="glass-panel mx-auto w-full max-w-md rounded-3xl p-5 sm:p-6 md:p-8">
       <div className="mb-6 space-y-2 text-center">
         <div className="mb-3 flex justify-center">
           <img
             src="/Logo.png"
             alt="AE Empire Accounts"
-            className="h-14 w-14 rounded-xl object-cover"
+            className="h-12 w-12 rounded-xl object-cover sm:h-14 sm:w-14"
             onError={(event) => {
               event.currentTarget.style.display = "none";
             }}
           />
         </div>
-        <h1 className="font-[var(--font-space-grotesk)] text-3xl font-bold text-white">
+        <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-white sm:text-[2rem]">
           {mode === "login" ? "Welcome Back" : "Create Account"}
         </h1>
         <p className="text-sm text-zinc-300">

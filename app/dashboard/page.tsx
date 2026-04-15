@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   return (
     <main className="space-y-6">
       <section className="glass-panel rounded-3xl p-6 md:p-8">
-        <h1 className="font-[var(--font-space-grotesk)] text-3xl font-bold text-white">
+        <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-white md:text-3xl">
           Account Dashboard
         </h1>
         <p className="mt-2 text-zinc-300">
@@ -39,7 +39,7 @@ export default async function DashboardPage() {
         </div>
         <div className="mt-4">
           <a href="/wallet/add-funds">
-            <Button>Add Funds</Button>
+            <Button className="w-full sm:w-auto">Add Funds</Button>
           </a>
         </div>
       </section>

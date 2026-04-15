@@ -47,13 +47,13 @@ export function ConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-md rounded-3xl p-6">
+      <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6">
         <h3 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
           {title}
         </h3>
         <p className="mt-2 text-sm leading-6 text-zinc-300">{description}</p>
         {children}
-        <div className="mt-6 grid grid-cols-2 gap-2">
+        <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Button
             type="button"
             variant="ghost"

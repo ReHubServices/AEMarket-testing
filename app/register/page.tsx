@@ -11,7 +11,7 @@ export default async function RegisterPage() {
   }
 
   return (
-    <main className="py-8 md:py-12">
+    <main className="py-5 sm:py-8 md:py-12">
       <UserAuthForm mode="register" />
     </main>
   );

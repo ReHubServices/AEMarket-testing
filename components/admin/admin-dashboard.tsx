@@ -207,7 +207,7 @@ export function AdminDashboard({
   return (
     <main className="space-y-6">
       <section className="glass-panel rounded-3xl p-6 md:p-8">
-        <h1 className="font-[var(--font-space-grotesk)] text-3xl font-bold text-white">
+        <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-white md:text-3xl">
           Admin Control Center
         </h1>
         <p className="mt-2 text-zinc-300">Monitor users, orders, payments, and pricing.</p>
@@ -244,7 +244,7 @@ export function AdminDashboard({
         <h2 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
           Global Markup
         </h2>
-        <form onSubmit={onSaveMarkup} className="mt-4 flex flex-col gap-3 md:flex-row">
+        <form onSubmit={onSaveMarkup} className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
           <Input
             type="number"
             min={0}
@@ -252,10 +252,12 @@ export function AdminDashboard({
             step={0.5}
             value={markupPercent}
             onChange={(event) => setMarkupPercent(event.target.value)}
-            className="max-w-xs"
+            className="w-full max-w-xs"
           />
-          <Button disabled={saving}>{saving ? "Saving..." : "Save Markup"}</Button>
-          {status && <p className="self-center text-sm text-zinc-300">{status}</p>}
+          <Button className="w-full md:w-auto" disabled={saving}>
+            {saving ? "Saving..." : "Save Markup"}
+          </Button>
+          {status && <p className="text-sm text-zinc-300 md:self-center">{status}</p>}
         </form>
       </section>
 
@@ -272,7 +274,7 @@ export function AdminDashboard({
                   key={user.id}
                   className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                     <div>
                       <p className="font-medium text-white">{user.username}</p>
                       <p className="text-zinc-400">{user.isAdmin ? "Admin" : "User"}</p>
@@ -280,14 +282,14 @@ export function AdminDashboard({
                     </div>
                     <Button
                       variant="ghost"
-                      className="h-9 border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                      className="h-9 w-full border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20 sm:w-auto"
                       disabled={deletingKey === key || user.isAdmin}
                       onClick={() => requestDelete("user", user.id, `user ${user.username}`)}
                     >
                       {deletingKey === key ? "Deleting..." : user.isAdmin ? "Protected" : "Delete"}
                     </Button>
                   </div>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Input
                       type="number"
                       min={0.01}
@@ -300,11 +302,11 @@ export function AdminDashboard({
                           [user.id]: event.target.value
                         }))
                       }
-                      className="h-9 sm:max-w-[160px]"
+                      className="h-9 w-full sm:max-w-[160px]"
                     />
                     <Button
                       type="button"
-                      className="h-9 sm:w-[120px]"
+                      className="h-9 w-full sm:w-[120px]"
                       disabled={fundingKey === user.id}
                       onClick={() => requestAddFunds(user)}
                     >
@@ -329,19 +331,19 @@ export function AdminDashboard({
                   key={order.id}
                   className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                     <div>
                       <p className="font-medium text-white">{order.title}</p>
                       <p className="text-zinc-400">
                         {order.status} - {order.userId}
                       </p>
-                      <p className="text-zinc-300">
+                      <p className="break-all text-zinc-300">
                         {formatPrice(order.finalPrice, order.currency)} - {order.id}
                       </p>
                     </div>
                     <Button
                       variant="ghost"
-                      className="h-9 border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                      className="h-9 w-full border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20 sm:w-auto"
                       disabled={deletingKey === key}
                       onClick={() => requestDelete("order", order.id, `order ${order.id}`)}
                     >
@@ -367,19 +369,19 @@ export function AdminDashboard({
                 key={transaction.id}
                 className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                   <div>
                     <p className="font-medium text-white">
                       {transaction.type} - {transaction.status}
                     </p>
                     <p className="text-zinc-400">{transaction.orderId || "No order"}</p>
-                    <p className="text-zinc-300">
+                    <p className="break-all text-zinc-300">
                       {formatPrice(transaction.amount, transaction.currency)} - {transaction.id}
                     </p>
                   </div>
                   <Button
                     variant="ghost"
-                    className="h-9 border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                    className="h-9 w-full border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20 sm:w-auto"
                     disabled={deletingKey === key}
                     onClick={() =>
                       requestDelete("transaction", transaction.id, `transaction ${transaction.id}`)

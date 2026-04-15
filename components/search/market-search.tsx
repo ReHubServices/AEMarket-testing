@@ -800,7 +800,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         }
         return aNorm.localeCompare(bNorm);
       })
-      .slice(0, 80)
+      .slice(0, 140)
       .map((entry) => entry.value);
 
     return scored;
@@ -808,16 +808,16 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   const showSuggestions = searchFocused && suggestions.length > 0;
 
   return (
-    <main className="space-y-7 pt-3">
-      <header className="glass-panel rounded-3xl px-6 py-7 md:px-8">
+    <main className="space-y-5 pt-1 sm:space-y-6 sm:pt-2 md:space-y-7 md:pt-3">
+      <header className="glass-panel rounded-3xl px-4 py-5 sm:px-6 sm:py-7 md:px-8">
         <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/8 px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-zinc-300">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/8 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-zinc-300 sm:text-[11px] sm:tracking-[0.2em]">
               <Sparkles size={13} />
               AE Empire Accounts
             </div>
             <div className="space-y-2">
-              <h1 className="text-glow font-[var(--font-space-grotesk)] text-3xl font-bold leading-tight md:text-5xl">
+              <h1 className="text-glow font-[var(--font-space-grotesk)] text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">
                 Welcome to AE EMPIRE
               </h1>
               <p className="max-w-2xl text-sm text-zinc-300 md:text-base">
@@ -827,12 +827,12 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               </p>
             </div>
           </div>
-          <div className="flex gap-3 text-xs text-zinc-300">
-            <div className="glass-panel rounded-2xl px-4 py-3">
+          <div className="grid grid-cols-2 gap-3 text-xs text-zinc-300">
+            <div className="glass-panel rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
               <p className="font-semibold text-white">100%</p>
               <p>Delivery Rate</p>
             </div>
-            <div className="glass-panel rounded-2xl px-4 py-3">
+            <div className="glass-panel rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
               <p className="font-semibold text-white">24/7</p>
               <p>Monitoring</p>
             </div>
@@ -840,7 +840,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         </div>
       </header>
 
-      <section className="glass-panel rounded-3xl p-5 md:p-6">
+      <section className="glass-panel rounded-3xl p-4 sm:p-5 md:p-6">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 md:flex-row">
             <div className="relative flex-1">
@@ -878,18 +878,18 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               )}
             </div>
             {!viewer && (
-              <Link href="/login">
-                <Button className="min-w-[136px]">Sign In To Buy</Button>
+              <Link href="/login" className="w-full md:w-auto">
+                <Button className="min-w-[136px] w-full md:w-auto">Sign In To Buy</Button>
               </Link>
             )}
             {viewer && (
-              <div className="flex items-center gap-2">
-                <div className="inline-flex h-12 min-w-[180px] items-center justify-center gap-2 rounded-xl border border-white/15 bg-black/35 px-4 text-sm text-zinc-200">
+              <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+                <div className="inline-flex h-12 w-full min-w-[180px] items-center justify-center gap-2 rounded-xl border border-white/15 bg-black/35 px-4 text-sm text-zinc-200 sm:w-auto">
                   <Wallet size={16} />
                   Balance {formatPrice(viewer.balance, "USD")}
                 </div>
-                <a href="/wallet/add-funds">
-                  <Button variant="ghost" className="h-12">
+                <a href="/wallet/add-funds" className="w-full sm:w-auto">
+                  <Button variant="ghost" className="h-12 w-full sm:w-auto">
                     Add Funds
                   </Button>
                 </a>
@@ -897,7 +897,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="space-y-1 text-xs text-zinc-400">
               Category
               <select
@@ -963,8 +963,8 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             </label>
           </div>
 
-          <div className="rounded-2xl border border-white/15 bg-black/25 p-4">
-            <div className="flex items-center justify-between gap-3">
+          <div className="rounded-2xl border border-white/15 bg-black/25 p-3 sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <button
                 type="button"
                 onClick={() => setAdvancedOpen((previous) => !previous)}
@@ -980,13 +980,13 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                   {advancedOpen ? "Hide" : "Show"}
                 </span>
               </button>
-              <Button type="button" variant="ghost" className="h-8 px-3" onClick={resetAdvancedFilters}>
+              <Button type="button" variant="ghost" className="h-8 w-full px-3 sm:w-auto" onClick={resetAdvancedFilters}>
                 Reset
               </Button>
             </div>
 
             {advancedOpen && (
-              <div className="mt-3 grid gap-3 xl:grid-cols-2">
+              <div className="mt-3 grid max-h-[68vh] gap-3 overflow-y-auto pr-1 xl:max-h-none xl:grid-cols-2">
                 {selectedGame !== "all" && (
                   <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3 xl:col-span-2">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
@@ -1275,8 +1275,8 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading && (
-          <div className="glass-panel col-span-full rounded-2xl p-6 text-center">
-            <p className="text-base font-semibold text-white">Loading listings, please wait...</p>
+          <div className="glass-panel col-span-full rounded-2xl p-5 text-center md:p-6">
+            <p className="text-base font-semibold text-white">Loading listings, please wait</p>
             <div className="mt-3 inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.3s]" />
               <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300/85 [animation-delay:-0.15s]" />
@@ -1350,7 +1350,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       </section>
 
       {ready && !loading && (listings.length > 0 || currentPage > 1 || hasMore) && (
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2 px-1">
           <Button
             type="button"
             variant="ghost"

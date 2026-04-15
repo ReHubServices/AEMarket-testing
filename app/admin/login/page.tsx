@@ -12,7 +12,7 @@ export default async function AdminLoginPage() {
   }
 
   return (
-    <main className="py-8 md:py-12">
+    <main className="py-5 sm:py-8 md:py-12">
       <AdminLoginForm />
     </main>
   );

@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="absolute right-0 top-32 h-80 w-80 rounded-full bg-zinc-300/10 blur-[130px]" />
           <div className="absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-zinc-500/10 blur-[150px]" />
         </div>
-        <div className="mx-auto w-full max-w-[1300px] px-4 pb-16 pt-6 md:px-8">
+        <div className="mx-auto w-full max-w-[1300px] px-3 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5 md:px-8 md:pt-6">
           <SiteHeader />
           {children}
         </div>

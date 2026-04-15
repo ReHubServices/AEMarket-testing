@@ -48,9 +48,9 @@ export function AddFundsPanel() {
   }
 
   return (
-    <div className="glass-panel mx-auto w-full max-w-xl rounded-3xl p-6 md:p-8">
+    <div className="glass-panel mx-auto w-full max-w-xl rounded-3xl p-5 sm:p-6 md:p-8">
       <div className="space-y-2">
-        <h1 className="font-[var(--font-space-grotesk)] text-3xl font-bold text-white">
+        <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-white sm:text-3xl">
           Add Funds
         </h1>
         <p className="text-sm text-zinc-300">
@@ -58,13 +58,13 @@ export function AddFundsPanel() {
         </p>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {quickAmounts.map((value) => (
           <button
             key={value}
             type="button"
             onClick={() => setAmount(String(value))}
-            className={`rounded-xl border px-3 py-2 text-sm transition ${
+            className={`rounded-xl border px-3 py-2 text-sm transition sm:min-w-[84px] ${
               Number(amount) === value
                 ? "border-white/35 bg-white/15 text-white"
                 : "border-white/15 bg-black/40 text-zinc-300 hover:border-white/30 hover:text-white"
