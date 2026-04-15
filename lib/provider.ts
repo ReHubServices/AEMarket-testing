@@ -377,11 +377,37 @@ function extractItems(data: unknown): Record<string, unknown>[] {
 function mapRawListing(item: Record<string, unknown>): MarketListing {
   const source = buildListingSource(item);
   const basePrice = resolveListingBasePrice(source);
-  const id = extractText(source.id ?? source.item_id ?? source.itemId ?? source.listing_id ?? "");
   const title = extractText(
     source.title_en ?? source.title ?? source.item_title ?? source.name ?? source.heading,
     "Untitled listing"
   );
+  const fallbackIdSource = [
+    extractText(source.url ?? source.link ?? source.href ?? source.permalink, ""),
+    extractText(source.slug ?? source.code ?? source.uuid, ""),
+    extractText(source.post_id ?? source.thread_id ?? source.offer_id ?? source.listing_id, ""),
+    title,
+    String(basePrice || 0)
+  ]
+    .join("|")
+    .trim();
+  const id = extractText(
+    source.item_id ??
+      source.itemId ??
+      source.listing_id ??
+      source.listingId ??
+      source.offer_id ??
+      source.offerId ??
+      source.thread_id ??
+      source.threadId ??
+      source.post_id ??
+      source.postId ??
+      source.market_item_id ??
+      source.marketItemId ??
+      source.uuid ??
+      source.slug ??
+      source.id,
+    ""
+  ) || `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 28)}`;
   const imageUrl = extractImageUrl(source);
   const game = resolveGameLabel(source);
   const category = resolveCategoryLabel(source, game);
@@ -1282,6 +1308,10 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "online",
     "vac",
     "first_owner",
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders",
     "media_followers_min",
     "media_verified",
     "media_platform"
@@ -1290,16 +1320,6 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     url.searchParams.set("q", normalizedQuery);
     url.searchParams.set("query", normalizedQuery);
     url.searchParams.set("search", normalizedQuery);
-  }
-  const normalizedGame = options.game?.trim();
-  const normalizedCategory = options.category?.trim();
-  if (normalizedGame) {
-    url.searchParams.set("game", normalizedGame);
-    url.searchParams.set("platform", normalizedGame);
-  }
-  if (normalizedCategory) {
-    url.searchParams.set("category", normalizedCategory);
-    url.searchParams.set("cat", normalizedCategory);
   }
   url.searchParams.set("order_by", resolveSupplierSort(options.sort));
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
@@ -1367,8 +1387,7 @@ async function fetchListingsFromEndpoint(input: {
     .filter(
       (listing) =>
         Boolean(listing.id) &&
-        listing.basePrice > 0 &&
-        listing.title.toLowerCase() !== "untitled listing"
+        listing.basePrice > 0
     );
 }
 
@@ -1474,6 +1493,38 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const requestedCategory = options.category ? toSlug(options.category) : "";
   const requestedGame = options.game ? toSlug(options.game) : "";
   const requested = requestedCategory || requestedGame;
+  const requestedAliases: Record<string, string[]> = {
+    fortnite: ["fortnite", "epicgames", "epic-games", "epic"],
+    valorant: ["valorant", "riot"],
+    siege: ["siege", "rainbow-six-siege", "rainbow6", "r6"],
+    steam: ["steam", "cs2", "counter-strike", "counter-strike-2"],
+    cs2: ["cs2", "steam", "counter-strike", "counter-strike-2", "csgo"],
+    battlenet: ["battlenet", "battle-net", "blizzard"],
+    media: [
+      "instagram",
+      "tiktok",
+      "telegram",
+      "discord",
+      "facebook",
+      "twitter",
+      "youtube",
+      "snapchat"
+    ],
+    social: [
+      "instagram",
+      "tiktok",
+      "telegram",
+      "discord",
+      "facebook",
+      "twitter",
+      "youtube",
+      "snapchat"
+    ]
+  };
+  const requestedTokens =
+    requested.length > 0
+      ? Array.from(new Set([requested, ...(requestedAliases[requested] ?? [])]))
+      : [];
   const narrowedCategories =
     requested.length > 0
       ? categories.filter((item) => {
@@ -1481,21 +1532,10 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
           if (!slug) {
             return false;
           }
-          if (slug === requested || slug.includes(requested) || requested.includes(slug)) {
-            return true;
-          }
           if (
-            (requested.includes("social") || requested.includes("media")) &&
-            [
-              "instagram",
-              "tiktok",
-              "telegram",
-              "discord",
-              "facebook",
-              "twitter",
-              "youtube",
-              "snapchat"
-            ].some((social) => slug.includes(social))
+            requestedTokens.some(
+              (token) => slug === token || slug.includes(token) || token.includes(slug)
+            )
           ) {
             return true;
           }
@@ -1516,13 +1556,22 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
 }
 
 function mergeUnique(listings: MarketListing[]) {
-  const byId = new Map<string, MarketListing>();
+  const byFingerprint = new Map<string, MarketListing>();
   for (const listing of listings) {
-    if (!byId.has(listing.id)) {
-      byId.set(listing.id, listing);
+    const normalizedTitle = listing.title.trim().toLowerCase();
+    const fingerprint = [
+      listing.id.trim().toLowerCase(),
+      normalizedTitle,
+      String(Math.round(listing.basePrice * 100) / 100),
+      listing.currency.trim().toLowerCase(),
+      listing.category.trim().toLowerCase(),
+      listing.game.trim().toLowerCase()
+    ].join("::");
+    if (!byFingerprint.has(fingerprint)) {
+      byFingerprint.set(fingerprint, listing);
     }
   }
-  return Array.from(byId.values());
+  return Array.from(byFingerprint.values());
 }
 
 function normalizeMoney(value: number) {
@@ -1642,6 +1691,15 @@ function applyLocalFilters(
   const hasKeywordQuery = Boolean(queryTerm.trim());
   const mediaFollowersMin = Number(options.supplierFilters?.media_followers_min ?? NaN);
   const mediaVerified = options.supplierFilters?.media_verified?.trim() ?? "";
+  const parseMultiSelect = (raw: string | undefined) =>
+    (raw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+  const fortniteOutfits = parseMultiSelect(options.supplierFilters?.fortnite_outfits);
+  const fortnitePickaxes = parseMultiSelect(options.supplierFilters?.fortnite_pickaxes);
+  const fortniteEmotes = parseMultiSelect(options.supplierFilters?.fortnite_emotes);
+  const fortniteGliders = parseMultiSelect(options.supplierFilters?.fortnite_gliders);
   const socialKeywords = [
     "instagram",
     "insta",
@@ -1751,6 +1809,28 @@ function applyLocalFilters(
         : Math.max(2, Math.ceil(queryTokens.length * 0.67));
     return matches >= requiredMatches;
   };
+  const matchesSelectedTerm = (item: MarketListing, term: string) => {
+    const normalizedTerm = normalizeText(term);
+    if (!normalizedTerm) {
+      return false;
+    }
+    const haystack = normalizeText(
+      `${item.title} ${item.description} ${item.game} ${item.category} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+    if (!haystack) {
+      return false;
+    }
+    if (haystack.includes(normalizedTerm)) {
+      return true;
+    }
+    const termTokens = normalizedTerm.split(" ").filter((token) => token.length > 1);
+    if (termTokens.length === 0) {
+      return false;
+    }
+    return termTokens.every((token) => haystack.includes(token));
+  };
 
   const matchesGameToken = (item: MarketListing, token: string) => {
     const haystack = `${item.game} ${item.title} ${item.category} ${item.description}`.toLowerCase();
@@ -1763,12 +1843,15 @@ function applyLocalFilters(
         "fn",
         "epicgames",
         "epic games",
+        "epic",
         "save the world",
         "stw",
         "vbucks",
         "v-bucks",
         "battle pass",
-        "leviathan"
+        "leviathan",
+        "фортнайт",
+        "эпик"
       ].some((keyword) => haystack.includes(keyword));
     }
     if (token === "steam") {
@@ -1954,10 +2037,10 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  if ((hasKeywordQuery || forceScopeMatch) && gameFilter) {
+  if (forceScopeMatch && gameFilter) {
     output = output.filter((item) => matchesGameToken(item, gameFilter));
   }
-  if ((hasKeywordQuery || forceScopeMatch) && categoryFilter) {
+  if (forceScopeMatch && categoryFilter) {
     output = output.filter((item) => matchesGameToken(item, categoryFilter));
   }
   if (hasKeywordQuery) {
@@ -1978,6 +2061,26 @@ function applyLocalFilters(
   }
   if (mediaVerified === "0") {
     output = output.filter((item) => !isVerifiedMedia(item));
+  }
+  if (fortniteOutfits.length > 0) {
+    output = output.filter((item) =>
+      fortniteOutfits.some((term) => matchesSelectedTerm(item, term))
+    );
+  }
+  if (fortnitePickaxes.length > 0) {
+    output = output.filter((item) =>
+      fortnitePickaxes.some((term) => matchesSelectedTerm(item, term))
+    );
+  }
+  if (fortniteEmotes.length > 0) {
+    output = output.filter((item) =>
+      fortniteEmotes.some((term) => matchesSelectedTerm(item, term))
+    );
+  }
+  if (fortniteGliders.length > 0) {
+    output = output.filter((item) =>
+      fortniteGliders.some((term) => matchesSelectedTerm(item, term))
+    );
   }
   if (options.hasImage) {
     output = output.filter((item) => hasRealImage(item.imageUrl));
@@ -2173,7 +2276,7 @@ function buildSupplierQueryVariants(query: string) {
     }
   }
 
-  return Array.from(variants).filter(Boolean).slice(0, 3);
+  return Array.from(variants).filter(Boolean).slice(0, 5);
 }
 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
@@ -2209,19 +2312,28 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const fetchFromEndpointForQueries = async (
       endpointTarget: string,
       pageOptions: SearchOptions,
-      supplierQueries: string[]
+      supplierQueries: string[],
+      supplierPages: number[]
     ) => {
       const normalizedQueries = supplierQueries.length > 0 ? supplierQueries : [""];
-      const settled = await Promise.allSettled(
-        normalizedQueries.map((supplierQuery) =>
-          fetchListingsFromEndpoint({
-            endpoint: endpointTarget,
-            token,
-            query: supplierQuery,
-            options: pageOptions
-          })
-        )
-      );
+      const pageTargets = supplierPages.length > 0 ? supplierPages : [Number(pageOptions.page) || 1];
+      const tasks: Array<Promise<MarketListing[]>> = [];
+      for (const supplierPage of pageTargets) {
+        for (const supplierQuery of normalizedQueries) {
+          tasks.push(
+            fetchListingsFromEndpoint({
+              endpoint: endpointTarget,
+              token,
+              query: supplierQuery,
+              options: {
+                ...pageOptions,
+                page: supplierPage
+              }
+            })
+          );
+        }
+      }
+      const settled = await Promise.allSettled(tasks);
       return settled
         .filter(
           (entry): entry is PromiseFulfilledResult<MarketListing[]> =>
@@ -2240,7 +2352,16 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ...normalizedOptions,
         page: targetPage
       };
-      const primary = await fetchFromEndpointForQueries(endpoint, pageOptions, supplierQueries);
+      const supplierPageSpan = hasBrowseScope ? (trimmedQuery ? 4 : 3) : 1;
+      const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
+      const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
+
+      const primary = await fetchFromEndpointForQueries(
+        endpoint,
+        pageOptions,
+        supplierQueries,
+        supplierPages
+      );
       const endpointScope = broadMode
         ? {
             ...options,
@@ -2251,7 +2372,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope);
       const categoryResultsSettled = await Promise.allSettled(
         categoryEndpoints.map((categoryEndpoint) =>
-          fetchFromEndpointForQueries(categoryEndpoint, pageOptions, supplierQueries)
+          fetchFromEndpointForQueries(
+            categoryEndpoint,
+            pageOptions,
+            supplierQueries,
+            supplierPages
+          )
         )
       );
       const categoryResults = categoryResultsSettled
@@ -2265,65 +2391,135 @@ export async function searchListings(query: string, options: SearchOptions = {})
       return applyLocalFilters(combined, options, trimmedQuery, forceScopeMatch);
     };
 
-    let activeSupplierQueries = [trimmedQuery];
-    const initialForceScope = hasBrowseScope && !trimmedQuery;
-    let filteredCurrentPage = await loadFilteredPage(page, false, initialForceScope);
+    let activeSupplierQueries = trimmedQuery
+      ? buildSupplierQueryVariants(trimmedQuery)
+      : [trimmedQuery];
+    const initialForceScope = false;
+    let filteredCurrentPage = await loadFilteredPage(
+      page,
+      false,
+      initialForceScope,
+      activeSupplierQueries
+    );
     let usingBroadFallback = false;
     let usingScopeMatchFallback = initialForceScope;
-    if (filteredCurrentPage.length === 0 && trimmedQuery) {
-      const keywordVariants = buildSupplierQueryVariants(trimmedQuery);
-      if (keywordVariants.length > 1) {
-        activeSupplierQueries = keywordVariants;
-        filteredCurrentPage = await loadFilteredPage(
-          page,
-          false,
-          false,
-          activeSupplierQueries
-        );
-      }
-      if (filteredCurrentPage.length === 0) {
+    if (trimmedQuery) {
+      if (filteredCurrentPage.length < pageSize) {
         usingBroadFallback = true;
         usingScopeMatchFallback = hasBrowseScope;
-        filteredCurrentPage = await loadFilteredPage(
+        const broadScoped = await loadFilteredPage(
           page,
           true,
           usingScopeMatchFallback,
           activeSupplierQueries
         );
-        if (filteredCurrentPage.length === 0 && usingScopeMatchFallback) {
+        if (broadScoped.length > filteredCurrentPage.length) {
+          filteredCurrentPage = broadScoped;
+        }
+
+        if (filteredCurrentPage.length < pageSize && usingScopeMatchFallback) {
           usingScopeMatchFallback = false;
-          filteredCurrentPage = await loadFilteredPage(
+          const broadUnscoped = await loadFilteredPage(
             page,
             true,
             usingScopeMatchFallback,
             activeSupplierQueries
           );
+          if (broadUnscoped.length > filteredCurrentPage.length) {
+            filteredCurrentPage = broadUnscoped;
+          }
         }
       }
     }
-    if (filteredCurrentPage.length === 0 && hasBrowseScope && !trimmedQuery) {
-      filteredCurrentPage = await loadFilteredPage(page, true, true);
-      usingBroadFallback = true;
-      usingScopeMatchFallback = true;
-      if (filteredCurrentPage.length === 0) {
-        filteredCurrentPage = await loadFilteredPage(page, true, false);
-        usingScopeMatchFallback = false;
+    if (hasBrowseScope && !trimmedQuery) {
+      const broadScoped = await loadFilteredPage(page, true, true, activeSupplierQueries);
+      if (broadScoped.length > filteredCurrentPage.length) {
+        filteredCurrentPage = broadScoped;
+        usingBroadFallback = true;
+        usingScopeMatchFallback = true;
+      }
+
+      if (filteredCurrentPage.length < pageSize) {
+        const broadUnscoped = await loadFilteredPage(page, true, false, activeSupplierQueries);
+        if (broadUnscoped.length > filteredCurrentPage.length) {
+          filteredCurrentPage = broadUnscoped;
+          usingBroadFallback = true;
+          usingScopeMatchFallback = false;
+        }
       }
     }
-    const visibleWindow = filteredCurrentPage.slice(0, pageSize + 40);
-    let hasMore = filteredCurrentPage.length > pageSize;
+    const targetStart = (page - 1) * pageSize;
+    const targetEnd = targetStart + pageSize;
+    const aggregated: MarketListing[] = [];
+    const seenIds = new Set<string>();
+    const preloadedByLogicalPage = new Map<number, MarketListing[]>([[page, filteredCurrentPage]]);
+    const pushChunkUnique = (chunk: MarketListing[]) => {
+      for (const item of chunk) {
+        if (!item.id || seenIds.has(item.id)) {
+          continue;
+        }
+        seenIds.add(item.id);
+        aggregated.push(item);
+      }
+    };
+
+    let logicalCursor = 1;
+    const maxLogicalPages = Math.max(page + 14, 20);
+    let consecutiveEmpty = 0;
+
+    while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {
+      let chunk = preloadedByLogicalPage.get(logicalCursor);
+      if (!chunk) {
+        chunk = await loadFilteredPage(
+          logicalCursor,
+          usingBroadFallback,
+          usingScopeMatchFallback,
+          activeSupplierQueries
+        );
+      }
+
+      if (chunk.length === 0) {
+        consecutiveEmpty += 1;
+        if (consecutiveEmpty >= 3 && logicalCursor > page) {
+          break;
+        }
+      } else {
+        consecutiveEmpty = 0;
+        pushChunkUnique(chunk);
+      }
+
+      logicalCursor += 1;
+    }
+
+    if (options.sort === "price_asc") {
+      aggregated.sort((a, b) => a.basePrice - b.basePrice);
+    } else if (options.sort === "price_desc") {
+      aggregated.sort((a, b) => b.basePrice - a.basePrice);
+    } else if (options.sort === "newest") {
+      aggregated.sort((a, b) => b.id.localeCompare(a.id));
+    }
+
+    const visibleWindow = aggregated.slice(targetStart, targetEnd);
+    let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
-      const filteredNextPage = await loadFilteredPage(
-        page + 1,
-        usingBroadFallback,
-        usingScopeMatchFallback,
-        activeSupplierQueries
-      );
-      hasMore = filteredNextPage.length > 0;
+      const probeLimit = 2;
+      for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
+        const probePage = logicalCursor + probeOffset;
+        const probeChunk = await loadFilteredPage(
+          probePage,
+          usingBroadFallback,
+          usingScopeMatchFallback,
+          activeSupplierQueries
+        );
+        if (probeChunk.length > 0) {
+          hasMore = true;
+          break;
+        }
+      }
     }
     const enriched = await enrichListingsWithDetails(visibleWindow, token);
     const translated = await translateListingsToEnglish(enriched);
-    const pagedListings = withMarkup(translated, store.settings.markupPercent).slice(0, pageSize);
+    const pagedListings = withMarkup(translated, store.settings.markupPercent);
     return {
       listings: pagedListings,
       hasMore,

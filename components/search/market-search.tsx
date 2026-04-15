@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Sparkles, Wallet } from "lucide-react";
+import { Search, Sparkles, Wallet, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { MarketListing, PublicViewer } from "@/lib/types";
@@ -384,6 +384,127 @@ type RarityTone = {
   nameClass: string;
 };
 
+type FortniteSelectorKey =
+  | "fortnite_outfits"
+  | "fortnite_pickaxes"
+  | "fortnite_emotes"
+  | "fortnite_gliders";
+
+type FortniteSelectorConfig = {
+  key: FortniteSelectorKey;
+  title: string;
+  placeholder: string;
+  options: string[];
+};
+
+const FORTNITE_SELECTOR_CONFIG: FortniteSelectorConfig[] = [
+  {
+    key: "fortnite_outfits",
+    title: "Select outfits",
+    placeholder: "Select outfits",
+    options: [
+      "Galaxy",
+      "Galaxy Scout",
+      "Galaxy Grappler",
+      "Renegade Raider",
+      "Aerial Assault Trooper",
+      "Black Knight",
+      "Skull Trooper",
+      "Ghoul Trooper",
+      "Ikonik",
+      "Glow",
+      "Honor Guard",
+      "Wonder",
+      "Wildcat",
+      "Travis Scott",
+      "Astro Jack",
+      "LeBron James",
+      "The Reaper",
+      "Omega",
+      "Raven",
+      "Peely",
+      "Midas",
+      "Aura",
+      "Crystal"
+    ]
+  },
+  {
+    key: "fortnite_pickaxes",
+    title: "Select pickaxes",
+    placeholder: "Select pickaxes",
+    options: [
+      "Leviathan Axe",
+      "Raider's Revenge",
+      "Axe of Champions",
+      "Reaper",
+      "Driver",
+      "Star Wand",
+      "Minty Axe",
+      "Vision",
+      "Ice Breaker",
+      "Crowbar",
+      "Harley Hitter",
+      "Ski Boot",
+      "Psycho Buzz Axes",
+      "Candy Axe",
+      "Studded Axe",
+      "Throwback Axe"
+    ]
+  },
+  {
+    key: "fortnite_emotes",
+    title: "Select emotes",
+    placeholder: "Select emotes",
+    options: [
+      "Take the L",
+      "Floss",
+      "Orange Justice",
+      "Scenario",
+      "Fresh",
+      "Dance Moves",
+      "Electro Shuffle",
+      "Laugh It Up",
+      "Poki",
+      "Slick",
+      "The Renegade",
+      "Rollie",
+      "Never Gonna",
+      "Billy Bounce",
+      "Jabba Switchway",
+      "Go Mufasa"
+    ]
+  },
+  {
+    key: "fortnite_gliders",
+    title: "Select gliders",
+    placeholder: "Select gliders",
+    options: [
+      "Mako",
+      "Snowflake",
+      "Founder's Glider",
+      "Umbrella",
+      "One Shot",
+      "Paper Plane",
+      "Classified",
+      "Conquest",
+      "Wet Paint",
+      "Get Down!",
+      "Dragacorn",
+      "Cloud Llama Board",
+      "Palm Leaf",
+      "Wings of Valor",
+      "Arcana"
+    ]
+  }
+];
+
+function parseSelectedValues(raw: string | undefined) {
+  return (raw ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function normalizeSuggestionValue(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -483,6 +604,11 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   const [detailListing, setDetailListing] = useState<MarketListing | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [fortniteSelectorOpen, setFortniteSelectorOpen] = useState<FortniteSelectorKey | null>(
+    null
+  );
+  const [fortniteSelectorSearch, setFortniteSelectorSearch] = useState("");
+  const [fortniteSelectorDraft, setFortniteSelectorDraft] = useState<string[]>([]);
   const debouncedQuery = useDebouncedValue(query);
 
   function changePage(nextPage: number) {
@@ -495,6 +621,9 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
 
   useEffect(() => {
     setGameFilters({});
+    setFortniteSelectorOpen(null);
+    setFortniteSelectorSearch("");
+    setFortniteSelectorDraft([]);
   }, [selectedGame]);
 
   useEffect(() => {
@@ -704,6 +833,9 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   function resetAdvancedFilters() {
     setSelectedGame("all");
     setGameFilters({});
+    setFortniteSelectorOpen(null);
+    setFortniteSelectorSearch("");
+    setFortniteSelectorDraft([]);
   }
 
   function setGameFilter(key: string, value: string) {
@@ -711,6 +843,38 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       ...previous,
       [key]: value
     }));
+  }
+
+  function openFortniteSelector(key: FortniteSelectorKey) {
+    setFortniteSelectorOpen(key);
+    setFortniteSelectorSearch("");
+    setFortniteSelectorDraft(parseSelectedValues(gameFilters[key]));
+  }
+
+  function toggleFortniteSelectorValue(value: string) {
+    setFortniteSelectorDraft((previous) =>
+      previous.includes(value)
+        ? previous.filter((entry) => entry !== value)
+        : [...previous, value]
+    );
+  }
+
+  function applyFortniteSelector() {
+    if (!fortniteSelectorOpen) {
+      return;
+    }
+    setGameFilter(fortniteSelectorOpen, fortniteSelectorDraft.join(","));
+    setFortniteSelectorOpen(null);
+    setFortniteSelectorSearch("");
+  }
+
+  function resetFortniteSelector() {
+    setFortniteSelectorDraft([]);
+  }
+
+  function closeFortniteSelector() {
+    setFortniteSelectorOpen(null);
+    setFortniteSelectorSearch("");
   }
 
   const activeAdvancedFiltersCount = [
@@ -806,6 +970,23 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
     return scored;
   }, [query, selectedGame, listings]);
   const showSuggestions = searchFocused && suggestions.length > 0;
+  const activeFortniteSelector = useMemo(
+    () =>
+      FORTNITE_SELECTOR_CONFIG.find((config) => config.key === fortniteSelectorOpen) ?? null,
+    [fortniteSelectorOpen]
+  );
+  const fortniteSelectorOptions = useMemo(() => {
+    if (!activeFortniteSelector) {
+      return [];
+    }
+    const normalized = fortniteSelectorSearch.trim().toLowerCase();
+    if (!normalized) {
+      return activeFortniteSelector.options;
+    }
+    return activeFortniteSelector.options.filter((option) =>
+      option.toLowerCase().includes(normalized)
+    );
+  }, [activeFortniteSelector, fortniteSelectorSearch]);
 
   return (
     <main className="space-y-5 pt-1 sm:space-y-6 sm:pt-2 md:space-y-7 md:pt-3">
@@ -1013,46 +1194,68 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                     </div>
 
                     {selectedGame === "fortnite" && (
-                      <div className="grid gap-2 md:grid-cols-3">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Skins From
-                          <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.fortnite_skin_count_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_skin_count_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Level From
-                          <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.fortnite_level_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_level_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Wins From
-                          <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.fortnite_lifetime_wins_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_lifetime_wins_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
-                          />
-                        </label>
+                      <div className="space-y-2">
+                        <div className="grid gap-2 md:grid-cols-3">
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Skins From
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_skin_count_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_skin_count_min", event.target.value)
+                              }
+                              placeholder="0"
+                              className="h-10"
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Level From
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_level_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_level_min", event.target.value)
+                              }
+                              placeholder="0"
+                              className="h-10"
+                            />
+                          </label>
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Wins From
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_lifetime_wins_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_lifetime_wins_min", event.target.value)
+                              }
+                              placeholder="0"
+                              className="h-10"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="grid gap-2 md:grid-cols-2">
+                          {FORTNITE_SELECTOR_CONFIG.map((selector) => {
+                            const selectedValues = parseSelectedValues(gameFilters[selector.key]);
+                            const selectedLabel =
+                              selectedValues.length > 0
+                                ? `${selector.placeholder} (${selectedValues.length})`
+                                : selector.placeholder;
+                            return (
+                              <button
+                                key={selector.key}
+                                type="button"
+                                onClick={() => openFortniteSelector(selector.key)}
+                                className="h-11 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-left text-sm text-zinc-200 transition hover:border-white/30 hover:text-white"
+                              >
+                                {selectedLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
@@ -1409,6 +1612,71 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       {error && (
         <div className="glass-panel rounded-2xl border border-red-300/20 bg-red-950/20 p-4 text-sm text-red-100">
           {error}
+        </div>
+      )}
+
+      {activeFortniteSelector && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-2 backdrop-blur-md md:items-center md:p-6">
+          <div className="glass-panel mx-auto flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl md:rounded-3xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 md:px-5">
+              <p className="font-[var(--font-space-grotesk)] text-lg font-semibold text-white">
+                {activeFortniteSelector.title}
+              </p>
+              <button
+                type="button"
+                onClick={closeFortniteSelector}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/35 text-zinc-200 transition hover:bg-black/60"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-3 px-4 py-3 md:px-5">
+              <Input
+                value={fortniteSelectorSearch}
+                onChange={(event) => setFortniteSelectorSearch(event.target.value)}
+                placeholder="Search options"
+                className="h-10"
+              />
+              <p className="text-xs text-zinc-400">
+                Selected: {fortniteSelectorDraft.length}
+              </p>
+            </div>
+
+            <div className="min-h-[200px] flex-1 space-y-1 overflow-y-auto px-4 pb-2 md:px-5">
+              {fortniteSelectorOptions.map((option) => {
+                const checked = fortniteSelectorDraft.includes(option);
+                return (
+                  <label
+                    key={option}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200 transition hover:border-white/25"
+                  >
+                    <span>{option}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleFortniteSelectorValue(option)}
+                      className="h-4 w-4"
+                    />
+                  </label>
+                );
+              })}
+              {fortniteSelectorOptions.length === 0 && (
+                <p className="rounded-lg border border-white/10 bg-black/25 px-3 py-3 text-sm text-zinc-300">
+                  No matching options.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-4 md:px-5">
+              <Button type="button" variant="ghost" onClick={resetFortniteSelector}>
+                Reset
+              </Button>
+              <Button type="button" onClick={applyFortniteSelector}>
+                Apply
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
