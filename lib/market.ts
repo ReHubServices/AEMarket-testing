@@ -11,8 +11,6 @@ export const fallbackListings: MarketListing[] = [
     currency: "USD",
     game: "Fortnite",
     category: "Skins",
-    seller: "AE Empire",
-    rating: 0,
     description: "Includes legacy battle pass rewards and top-tier locker value.",
     specs: []
   },
@@ -26,8 +24,6 @@ export const fallbackListings: MarketListing[] = [
     currency: "USD",
     game: "Counter-Strike 2",
     category: "Accounts",
-    seller: "AE Empire",
-    rating: 0,
     description: "Prime enabled account with medal history and curated skin set.",
     specs: []
   },
@@ -41,8 +37,6 @@ export const fallbackListings: MarketListing[] = [
     currency: "USD",
     game: "Valorant",
     category: "Accounts",
-    seller: "AE Empire",
-    rating: 0,
     description: "High-rank account with exclusive bundles and unlocked agents.",
     specs: []
   },
@@ -56,8 +50,6 @@ export const fallbackListings: MarketListing[] = [
     currency: "USD",
     game: "Apex Legends",
     category: "Skins",
-    seller: "AE Empire",
-    rating: 0,
     description: "Includes heirloom unlocks, event skins, and leveled battle pass.",
     specs: []
   },
@@ -71,8 +63,6 @@ export const fallbackListings: MarketListing[] = [
     currency: "USD",
     game: "Rust",
     category: "Accounts",
-    seller: "AE Empire",
-    rating: 0,
     description: "Verified high-hour profile with premium DLC and clean reputation.",
     specs: []
   }

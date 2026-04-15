@@ -101,8 +101,6 @@ export type MarketListing = {
   currency: string;
   game: string;
   category: string;
-  seller: string;
-  rating: number;
   description: string;
   specs: MarketListingSpec[];
 };

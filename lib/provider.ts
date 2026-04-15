@@ -5,6 +5,12 @@ import { readStore } from "@/lib/store";
 import { MarketListing, MarketListingSpec } from "@/lib/types";
 
 export type SearchSort = "relevance" | "price_asc" | "price_desc" | "newest";
+export type SearchResult = {
+  listings: MarketListing[];
+  hasMore: boolean;
+  page: number;
+  pageSize: number;
+};
 
 export type SearchOptions = {
   sort?: SearchSort;
@@ -12,6 +18,8 @@ export type SearchOptions = {
   maxPrice?: number | null;
   game?: string | null;
   category?: string | null;
+  page?: number;
+  pageSize?: number;
   hasImage?: boolean;
   hasDescription?: boolean;
   hasSpecs?: boolean;
@@ -29,23 +37,15 @@ function getLztBaseUrl() {
 }
 
 function getSearchEndpoint() {
-  return (
-    process.env.LZT_API_SEARCH_URL ??
-    process.env.SUPPLIER_API_SEARCH_URL ??
-    `${getLztBaseUrl()}/`
-  );
+  return process.env.LZT_API_SEARCH_URL ?? `${getLztBaseUrl()}/`;
 }
 
 function getItemEndpointBase() {
-  return (
-    process.env.LZT_API_ITEM_URL ??
-    process.env.SUPPLIER_API_ITEM_URL ??
-    getLztBaseUrl()
-  );
+  return process.env.LZT_API_ITEM_URL ?? getLztBaseUrl();
 }
 
 function getPurchaseEndpoint(listingId: string) {
-  const configured = process.env.LZT_API_PURCHASE_URL ?? process.env.SUPPLIER_API_PURCHASE_URL;
+  const configured = process.env.LZT_API_PURCHASE_URL;
   if (configured?.includes("{item_id}")) {
     return configured.replace("{item_id}", encodeURIComponent(listingId));
   }
@@ -168,25 +168,174 @@ function findTextDeep(
   return walk(value, 0);
 }
 
-function extractNumber(value: unknown): number {
+function parseMoneyToken(rawToken: string) {
+  const compact = rawToken
+    .trim()
+    .replace(/\u00a0/g, "")
+    .replace(/\s+/g, "")
+    .replace(/'/g, "")
+    .replace(/[^\d,.-]/g, "");
+
+  if (!compact) {
+    return 0;
+  }
+
+  const isNegative = compact.startsWith("-");
+  const unsigned = compact.replace(/-/g, "");
+  const commaCount = (unsigned.match(/,/g) ?? []).length;
+  const dotCount = (unsigned.match(/\./g) ?? []).length;
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastDot = unsigned.lastIndexOf(".");
+  const lastSeparator = Math.max(lastComma, lastDot);
+
+  let normalized = "";
+  if (lastSeparator >= 0) {
+    const fractionalLength = unsigned.length - lastSeparator - 1;
+    const treatAsDecimal =
+      fractionalLength > 0 &&
+      fractionalLength <= 2 &&
+      (commaCount > 1 || dotCount > 1 || commaCount + dotCount >= 1);
+
+    if (treatAsDecimal) {
+      const integerPart = unsigned.slice(0, lastSeparator).replace(/[.,]/g, "");
+      const fractionalPart = unsigned.slice(lastSeparator + 1).replace(/[.,]/g, "");
+      normalized = `${integerPart}.${fractionalPart}`;
+    } else {
+      normalized = unsigned.replace(/[.,]/g, "");
+    }
+  } else {
+    normalized = unsigned;
+  }
+
+  if (!normalized || normalized === ".") {
+    return 0;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  const result = isNegative ? -parsed : parsed;
+  if (result <= 0 || result > 100_000_000) {
+    return 0;
+  }
+  return result;
+}
+
+function extractMoneyCandidatesFromString(raw: string) {
+  const text = raw.trim();
+  if (!text) {
+    return [];
+  }
+  const tokens =
+    text.match(/-?\d{1,3}(?:[.,'\s]\d{3})*(?:[.,]\d{1,2})?|-?\d+(?:[.,]\d{1,2})?/g) ?? [];
+
+  const values = tokens
+    .map((token) => parseMoneyToken(token))
+    .filter((value) => value > 0);
+
+  if (values.length === 0) {
+    return [];
+  }
+
+  const lowered = text.toLowerCase();
+  if (/(discount|sale|now|final|old|before|after|скид|до|после|старая|новая)/.test(lowered)) {
+    return [...values].sort((a, b) => a - b);
+  }
+
+  return values;
+}
+
+function extractNumber(value: unknown, depth = 0, seen = new Set<unknown>()): number {
+  if (depth > 4 || value == null) {
+    return 0;
+  }
   if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
+    return Number.isFinite(value) && value > 0 ? value : 0;
   }
   if (typeof value === "string") {
-    const normalized = value.replace(/\s+/g, "").replace(",", ".").replace(/[^\d.-]/g, "");
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
+    const candidates = extractMoneyCandidatesFromString(value);
+    return candidates[0] ?? 0;
   }
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const candidates = [record.amount, record.value, record.price, record.sum];
-    for (const candidate of candidates) {
-      const parsed: number = extractNumber(candidate);
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const parsed = extractNumber(entry, depth + 1, seen);
       if (parsed > 0) {
         return parsed;
       }
     }
+    return 0;
   }
+  if (typeof value === "object") {
+    if (seen.has(value)) {
+      return 0;
+    }
+    seen.add(value);
+
+    const record = value as Record<string, unknown>;
+    const orderedKeys = [
+      "final_price",
+      "sale_price",
+      "current_price",
+      "price",
+      "amount",
+      "value",
+      "sum",
+      "cost",
+      "price_rub",
+      "currency_price",
+      "display_price"
+    ];
+
+    for (const key of orderedKeys) {
+      if (!(key in record)) {
+        continue;
+      }
+      const parsed = extractNumber(record[key], depth + 1, seen);
+      if (parsed > 0) {
+        return parsed;
+      }
+    }
+
+    for (const [key, raw] of Object.entries(record)) {
+      const normalizedKey = key.toLowerCase();
+      if (
+        normalizedKey.includes("price") ||
+        normalizedKey.includes("amount") ||
+        normalizedKey.includes("cost") ||
+        normalizedKey.includes("sum")
+      ) {
+        const parsed = extractNumber(raw, depth + 1, seen);
+        if (parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+function resolveListingBasePrice(source: Record<string, unknown>) {
+  const directCandidates = [
+    source.final_price,
+    source.sale_price,
+    source.current_price,
+    source.price,
+    source.amount,
+    source.currency_price,
+    source.cost,
+    source.price_rub,
+    source.sum,
+    source.display_price
+  ];
+
+  for (const candidate of directCandidates) {
+    const parsed = extractNumber(candidate);
+    if (parsed > 0) {
+      return Math.round(parsed * 100) / 100;
+    }
+  }
+
   return 0;
 }
 
@@ -227,9 +376,7 @@ function extractItems(data: unknown): Record<string, unknown>[] {
 
 function mapRawListing(item: Record<string, unknown>): MarketListing {
   const source = buildListingSource(item);
-  const basePrice = extractNumber(
-    source.price ?? source.amount ?? source.price_rub ?? source.currency_price ?? source.cost
-  );
+  const basePrice = resolveListingBasePrice(source);
   const id = extractText(source.id ?? source.item_id ?? source.itemId ?? source.listing_id ?? "");
   const title = extractText(
     source.title_en ?? source.title ?? source.item_title ?? source.name ?? source.heading,
@@ -250,8 +397,6 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
     currency: extractCurrency(source),
     game,
     category,
-    seller: "AE Empire",
-    rating: 0,
     description,
     specs
   };
@@ -377,7 +522,103 @@ function normalizeImageUrl(value: string) {
   return "";
 }
 
-function extractImageUrlFromText(value: string) {
+function isLikelyImageUrl(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.startsWith("data:image/")) {
+    return true;
+  }
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)) {
+    return true;
+  }
+  const likelyByPathHint = (
+    normalized.includes("/image") ||
+    normalized.includes("/images/") ||
+    normalized.includes("/photo") ||
+    normalized.includes("/thumb") ||
+    normalized.includes("/preview") ||
+    normalized.includes("/attachment") ||
+    normalized.includes("nztcdn.com/files/")
+  );
+  if (likelyByPathHint) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    if (host.includes("nztcdn.com") || host.includes("lztcdn.com")) {
+      return true;
+    }
+    if (path.includes("/attachments/") || path.includes("/uploads/")) {
+      return true;
+    }
+    if (
+      (host.includes("cdn") || host.includes("img") || host.includes("image") || host.includes("media")) &&
+      !/\.(html?|php|asp|aspx|jsp)$/i.test(path)
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+function extractImageUrlFromPostText(value: unknown, depth = 0): string {
+  if (depth > 3 || value == null) {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found: string = extractImageUrlFromPostText(entry, depth + 1);
+      if (found) {
+        return found;
+      }
+    }
+    return "";
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const textKeys = [
+      "message",
+      "text",
+      "text_html",
+      "body",
+      "content",
+      "post",
+      "first_post",
+      "description",
+      "description_html"
+    ];
+    for (const key of textKeys) {
+      if (!(key in record)) {
+        continue;
+      }
+      const found: string = extractImageUrlFromPostText(record[key], depth + 1);
+      if (found) {
+        return found;
+      }
+    }
+    for (const entry of Object.values(record)) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const found: string = extractImageUrlFromPostText(entry, depth + 1);
+      if (found) {
+        return found;
+      }
+    }
+    return "";
+  }
+
+  if (typeof value !== "string") {
+    return "";
+  }
+
   const text = value.trim();
   if (!text) {
     return "";
@@ -386,7 +627,7 @@ function extractImageUrlFromText(value: string) {
   const bbCodeMatch = text.match(/\[img(?:=[^\]]*)?\]\s*([^\s\]]+)\s*\[\/img\]/i);
   if (bbCodeMatch?.[1]) {
     const normalized = normalizeImageUrl(bbCodeMatch[1]);
-    if (normalized) {
+    if (normalized && isLikelyImageUrl(normalized)) {
       return normalized;
     }
   }
@@ -394,7 +635,7 @@ function extractImageUrlFromText(value: string) {
   const markdownMatch = text.match(/!\[[^\]]*]\(([^)\s]+)\)/i);
   if (markdownMatch?.[1]) {
     const normalized = normalizeImageUrl(markdownMatch[1]);
-    if (normalized) {
+    if (normalized && isLikelyImageUrl(normalized)) {
       return normalized;
     }
   }
@@ -402,19 +643,7 @@ function extractImageUrlFromText(value: string) {
   const urlMatches = text.match(/(?:https?:\/\/|\/\/)[^\s"'<>)\]]+/gi) ?? [];
   for (const url of urlMatches) {
     const normalized = normalizeImageUrl(url);
-    if (!normalized) {
-      continue;
-    }
-    const lower = normalized.toLowerCase();
-    if (
-      lower.includes(".jpg") ||
-      lower.includes(".jpeg") ||
-      lower.includes(".png") ||
-      lower.includes(".webp") ||
-      lower.includes(".gif") ||
-      lower.includes(".bmp") ||
-      lower.includes(".avif")
-    ) {
+    if (normalized && isLikelyImageUrl(normalized)) {
       return normalized;
     }
   }
@@ -424,12 +653,11 @@ function extractImageUrlFromText(value: string) {
 
 function pickImageFromUnknown(value: unknown): string {
   if (typeof value === "string") {
-    const fromText = extractImageUrlFromText(value);
-    if (fromText) {
-      return fromText;
-    }
     const normalized = normalizeImageUrl(value);
-    return normalized;
+    if (!normalized) {
+      return "";
+    }
+    return isLikelyImageUrl(normalized) ? normalized : "";
   }
 
   if (Array.isArray(value)) {
@@ -497,6 +725,9 @@ function pickImageFromUnknown(value: unknown): string {
   }
 
   for (const entry of Object.values(record)) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
     const found = pickImageFromUnknown(entry);
     if (found) {
       return found;
@@ -533,10 +764,7 @@ function extractImageUrl(item: Record<string, unknown>) {
     item.images,
     item.media,
     item.gallery,
-    item.attachments,
-    item.first_post,
-    item.firstPost,
-    item.post
+    item.attachments
   ];
   for (const candidate of arrayCandidates) {
     const found = pickImageFromUnknown(candidate);
@@ -545,26 +773,41 @@ function extractImageUrl(item: Record<string, unknown>) {
     }
   }
 
-  const textCandidates = [
-    item.description,
-    item.short_description,
-    item.item_description,
-    item.full_description,
-    item.description_html,
-    item.descriptionHtml,
+  const objectCandidates = [
+    item.first_post,
+    item.firstPost,
     item.post,
     item.post_body,
     item.postBody,
+    item.listing,
+    item.item,
+    item.account,
+    item.result,
+    item.data,
+    item.offer,
+    item.product
+  ];
+  for (const candidate of objectCandidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+    const found = pickImageFromUnknown(candidate);
+    if (found) {
+      return found;
+    }
+  }
+
+  const postTextCandidates = [
     item.first_post,
     item.firstPost,
-    item.content,
-    item.body,
-    item.message,
-    item.text_html,
-    item.text
+    item.post,
+    item.post_body,
+    item.postBody,
+    item.first_post_message,
+    item.firstPostMessage
   ];
-  for (const candidate of textCandidates) {
-    const found = pickImageFromUnknown(candidate);
+  for (const candidate of postTextCandidates) {
+    const found = extractImageUrlFromPostText(candidate);
     if (found) {
       return found;
     }
@@ -636,16 +879,45 @@ function hasBlockedMarketplaceLink(item: Record<string, unknown>) {
 
 function extractCurrency(item: Record<string, unknown>) {
   const currencyRaw = extractText(item.currency ?? item.currency_code ?? item.curr, "USD");
-  if (!currencyRaw) {
-    return "USD";
-  }
-  if (currencyRaw.includes("₽") || currencyRaw.toLowerCase() === "rub") {
+  const direct = currencyRaw.toLowerCase();
+  if (direct.includes("₽") || direct === "rub" || direct.includes("rur")) {
     return "RUB";
   }
-  if (currencyRaw.includes("$") || currencyRaw.toLowerCase() === "usd") {
+  if (direct.includes("$") || direct === "usd") {
     return "USD";
   }
-  return currencyRaw.toUpperCase();
+  if (direct.includes("€") || direct === "eur") {
+    return "EUR";
+  }
+  if (currencyRaw) {
+    return currencyRaw.toUpperCase();
+  }
+
+  const priceTextCandidates = [
+    extractText(item.price, ""),
+    extractText(item.amount, ""),
+    extractText(item.currency_price, ""),
+    extractText(item.price_rub, ""),
+    extractText(item.cost, "")
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    priceTextCandidates.includes("₽") ||
+    priceTextCandidates.includes(" rub") ||
+    priceTextCandidates.includes("руб")
+  ) {
+    return "RUB";
+  }
+  if (priceTextCandidates.includes("$") || priceTextCandidates.includes(" usd")) {
+    return "USD";
+  }
+  if (priceTextCandidates.includes("€") || priceTextCandidates.includes(" eur")) {
+    return "EUR";
+  }
+
+  return "USD";
 }
 
 function cleanSpecText(value: string) {
@@ -994,10 +1266,29 @@ function resolveSupplierSort(sort: SearchSort | undefined) {
 
 function buildSearchUrl(endpoint: string, query: string, options: SearchOptions) {
   const url = new URL(normalizeEndpoint(endpoint));
-  url.searchParams.set("title", query);
-  url.searchParams.set("q", query);
+  const normalizedQuery = query.trim();
+  const localOnlySupplierKeys = new Set([
+    "ma",
+    "online",
+    "vac",
+    "first_owner",
+    "media_followers_min",
+    "media_verified",
+    "media_platform"
+  ]);
+  if (normalizedQuery) {
+    url.searchParams.set("title", normalizedQuery);
+    url.searchParams.set("q", normalizedQuery);
+  }
   url.searchParams.set("order_by", resolveSupplierSort(options.sort));
-  url.searchParams.set("page", "1");
+  const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
+  const pageSize = Number.isFinite(options.pageSize ?? NaN)
+    ? Math.min(60, Math.max(1, Number(options.pageSize)))
+    : 15;
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(pageSize));
+  url.searchParams.set("limit", String(pageSize));
+  url.searchParams.set("count", String(pageSize));
 
   if (Number.isFinite(options.minPrice ?? NaN)) {
     const min = String(Number(options.minPrice));
@@ -1015,6 +1306,9 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
       const normalizedKey = key.trim();
       const normalizedValue = value.trim();
       if (!normalizedKey || !normalizedValue) {
+        continue;
+      }
+      if (localOnlySupplierKeys.has(normalizedKey)) {
         continue;
       }
       url.searchParams.set(normalizedKey, normalizedValue);
@@ -1127,6 +1421,7 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const defaults = [
     "steam",
     "fortnite",
+    "rainbow-six-siege",
     "mihoyo",
     "riot",
     "telegram",
@@ -1143,6 +1438,9 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
     "discord",
     "tiktok",
     "instagram",
+    "facebook",
+    "twitter",
+    "youtube",
     "chatgpt",
     "battlenet",
     "vpn",
@@ -1166,10 +1464,17 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
             return true;
           }
           if (
-            requested.includes("social") &&
-            ["instagram", "tiktok", "telegram", "discord", "facebook", "twitter"].some((social) =>
-              slug.includes(social)
-            )
+            (requested.includes("social") || requested.includes("media")) &&
+            [
+              "instagram",
+              "tiktok",
+              "telegram",
+              "discord",
+              "facebook",
+              "twitter",
+              "youtube",
+              "snapchat"
+            ].some((social) => slug.includes(social))
           ) {
             return true;
           }
@@ -1247,8 +1552,7 @@ function mergeListing(base: MarketListing, detail: MarketListing | null) {
     category: detail.category || base.category,
     currency: detail.currency || base.currency,
     basePrice: base.basePrice,
-    price: base.price,
-    rating: detail.rating > 0 ? detail.rating : base.rating
+    price: base.price
   };
 }
 
@@ -1308,10 +1612,204 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
     .map((listing) => mergeListing(listing, detailById.get(listing.id) ?? null));
 }
 
-function applyLocalFilters(listings: MarketListing[], options: SearchOptions) {
+function applyLocalFilters(
+  listings: MarketListing[],
+  options: SearchOptions,
+  queryTerm: string,
+  forceScopeMatch = false
+) {
   let output = listings.slice();
   const gameFilter = options.game?.trim().toLowerCase() ?? "";
   const categoryFilter = options.category?.trim().toLowerCase() ?? "";
+  const hasKeywordQuery = Boolean(queryTerm.trim());
+  const mediaFollowersMin = Number(options.supplierFilters?.media_followers_min ?? NaN);
+  const mediaVerified = options.supplierFilters?.media_verified?.trim() ?? "";
+  const socialKeywords = [
+    "instagram",
+    "insta",
+    "tiktok",
+    "tik tok",
+    "facebook",
+    "twitter",
+    "x.com",
+    "youtube",
+    "telegram",
+    "discord",
+    "snapchat",
+    "social",
+    "media",
+    "инстаграм",
+    "тикток",
+    "ютуб",
+    "фейсбук",
+    "соц"
+  ];
+  const mediaPlatformKeywords: Record<string, string[]> = {
+    instagram: ["instagram", "insta", "инстаграм"],
+    tiktok: ["tiktok", "tik tok", "тикток"],
+    facebook: ["facebook", "фейсбук"],
+    telegram: ["telegram", "телеграм"],
+    discord: ["discord", "дискорд"],
+    youtube: ["youtube", "ютуб"],
+    twitter: ["twitter", "x.com", "икс", "твиттер"],
+    snapchat: ["snapchat", "снапчат"]
+  };
+
+  const matchesGameToken = (item: MarketListing, token: string) => {
+    const haystack = `${item.game} ${item.title} ${item.category} ${item.description}`.toLowerCase();
+    if (token === "social" || token === "media") {
+      return socialKeywords.some((keyword) => haystack.includes(keyword));
+    }
+    if (token === "steam") {
+      return (
+        haystack.includes("steam") ||
+        haystack.includes("cs2") ||
+        haystack.includes("counter-strike") ||
+        haystack.includes("dota") ||
+        haystack.includes("rust") ||
+        haystack.includes("pubg") ||
+        haystack.includes("vac") ||
+        haystack.includes("prime") ||
+        haystack.includes("faceit")
+      );
+    }
+    if (token === "siege") {
+      return haystack.includes("siege") || haystack.includes("rainbow") || haystack.includes("r6");
+    }
+    if (token === "valorant") {
+      return haystack.includes("valorant") || haystack.includes("riot");
+    }
+    return haystack.includes(token);
+  };
+  const normalizeText = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
+  const parseCompactNumber = (raw: string) => {
+    const text = raw.toLowerCase().replace(/\s+/g, "").replace(",", ".");
+    const match = text.match(/(\d+(?:\.\d+)?)(k|m|b)?/);
+    if (!match) {
+      return 0;
+    }
+    const base = Number(match[1]);
+    if (!Number.isFinite(base)) {
+      return 0;
+    }
+    const suffix = match[2] ?? "";
+    const multiplier =
+      suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
+    return Math.round(base * multiplier);
+  };
+  const extractFollowers = (item: MarketListing) => {
+    const sources = [
+      item.title,
+      item.description,
+      ...item.specs.map((spec) => `${spec.label}: ${spec.value}`)
+    ];
+    const keywords = [
+      "followers",
+      "subs",
+      "subscribers",
+      "подпис",
+      "audience"
+    ];
+
+    let maxValue = 0;
+    for (const source of sources) {
+      const text = source.toLowerCase();
+      const compactMatches = text.match(/\b\d+(?:[.,]\d+)?\s*[kmb]\b/gi) ?? [];
+      for (const token of compactMatches) {
+        maxValue = Math.max(maxValue, parseCompactNumber(token));
+      }
+
+      const explicitMatches =
+        text.match(/\b\d[\d\s.,]{1,12}\b(?=[^\n]{0,24}(followers|subs|subscribers|подпис|audience))/gi) ??
+        [];
+      for (const token of explicitMatches) {
+        const numeric = Number(token.replace(/[^\d]/g, ""));
+        if (Number.isFinite(numeric)) {
+          maxValue = Math.max(maxValue, numeric);
+        }
+      }
+
+      if (keywords.some((keyword) => text.includes(keyword))) {
+        const fallbackMatches = text.match(/\b\d[\d\s.,]{1,12}\b/gi) ?? [];
+        for (const token of fallbackMatches) {
+          const numeric = Number(token.replace(/[^\d]/g, ""));
+          if (Number.isFinite(numeric)) {
+            maxValue = Math.max(maxValue, numeric);
+          }
+        }
+      }
+    }
+    return maxValue;
+  };
+  const isVerifiedMedia = (item: MarketListing) => {
+    const text = normalizeText(
+      `${item.title} ${item.description} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+    const positive = [
+      "verified",
+      "verification",
+      "blue check",
+      "checkmark",
+      "галочка",
+      "вериф"
+    ];
+    const negative = [
+      "not verified",
+      "without verify",
+      "no verify",
+      "без вериф",
+      "без галочки"
+    ];
+    if (negative.some((token) => text.includes(token))) {
+      return false;
+    }
+    return positive.some((token) => text.includes(token));
+  };
+  const hasMailAccess = (item: MarketListing) => {
+    const specsCombined = item.specs.map((spec) => `${spec.label} ${spec.value}`).join(" ");
+    const text = normalizeText(`${item.title} ${item.description} ${specsCombined}`);
+    const negativePatterns = [
+      /\bwithout mail\b/,
+      /\bwithout email\b/,
+      /\bno mail\b/,
+      /\bno email\b/,
+      /\bmail access\s*[:=-]?\s*(no|false|0)\b/,
+      /\bemail access\s*[:=-]?\s*(no|false|0)\b/,
+      /\bma\s*[:=-]?\s*(no|false|0)\b/,
+      /без\s+почт/,
+      /почт[аы]\s+нет/
+    ];
+    if (negativePatterns.some((pattern) => pattern.test(text))) {
+      return false;
+    }
+
+    const positivePatterns = [
+      /\bmail access\b/,
+      /\bemail access\b/,
+      /\bwith mail\b/,
+      /\bwith email\b/,
+      /\bmail\b/,
+      /\bemail\b/,
+      /\bgmail\b/,
+      /\bпочт[аы]\b/,
+      /родн(?:ая|ой)\s+почт/,
+      /доступ[^.]{0,32}почт/
+    ];
+    if (positivePatterns.some((pattern) => pattern.test(text))) {
+      return true;
+    }
+
+    return item.specs.some((spec) => {
+      const label = normalizeText(spec.label);
+      const value = normalizeText(spec.value);
+      if (label !== "ma") {
+        return false;
+      }
+      return ["1", "yes", "true", "on", "available"].includes(value);
+    });
+  };
 
   if (Number.isFinite(options.minPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice >= Number(options.minPrice));
@@ -1319,17 +1817,27 @@ function applyLocalFilters(listings: MarketListing[], options: SearchOptions) {
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  if (gameFilter) {
+  if ((hasKeywordQuery || forceScopeMatch) && gameFilter) {
+    output = output.filter((item) => matchesGameToken(item, gameFilter));
+  }
+  if ((hasKeywordQuery || forceScopeMatch) && categoryFilter) {
+    output = output.filter((item) => matchesGameToken(item, categoryFilter));
+  }
+  if (categoryFilter in mediaPlatformKeywords) {
+    const platformTokens = mediaPlatformKeywords[categoryFilter] ?? [];
     output = output.filter((item) => {
-      const haystack = `${item.game} ${item.title} ${item.category}`.toLowerCase();
-      return haystack.includes(gameFilter);
+      const haystack = `${item.title} ${item.description} ${item.game} ${item.category}`.toLowerCase();
+      return platformTokens.some((token) => haystack.includes(token));
     });
   }
-  if (categoryFilter) {
-    output = output.filter((item) => {
-      const haystack = `${item.category} ${item.title} ${item.game}`.toLowerCase();
-      return haystack.includes(categoryFilter);
-    });
+  if (Number.isFinite(mediaFollowersMin) && mediaFollowersMin > 0) {
+    output = output.filter((item) => extractFollowers(item) >= mediaFollowersMin);
+  }
+  if (mediaVerified === "1") {
+    output = output.filter((item) => isVerifiedMedia(item));
+  }
+  if (mediaVerified === "0") {
+    output = output.filter((item) => !isVerifiedMedia(item));
   }
   if (options.hasImage) {
     output = output.filter((item) => hasRealImage(item.imageUrl));
@@ -1342,49 +1850,17 @@ function applyLocalFilters(listings: MarketListing[], options: SearchOptions) {
   }
 
   if (options.supplierFilters) {
-    const domainFilter = options.supplierFilters.domain?.trim().toLowerCase() ?? "";
-    const rankFilter = options.supplierFilters.rank?.trim().toLowerCase() ?? "";
-    const requiresOrigin = options.supplierFilters.origin === "1";
     const requiresMailAccess = options.supplierFilters.ma === "1";
     const requiresOnline = options.supplierFilters.online === "1";
-    const requiresGuarantee = options.supplierFilters.guarantee === "1";
-    const requiresNoReserve = options.supplierFilters.no_reserve === "1";
-
-    if (domainFilter) {
-      output = output.filter((item) => {
-        const haystack = `${item.title} ${item.description} ${item.specs
-          .map((spec) => `${spec.label} ${spec.value}`)
-          .join(" ")}`.toLowerCase();
-        return haystack.includes(domainFilter);
-      });
-    }
-
-    if (rankFilter) {
-      output = output.filter((item) => {
-        const haystack = `${item.title} ${item.description} ${item.specs
-          .map((spec) => `${spec.label} ${spec.value}`)
-          .join(" ")}`.toLowerCase();
-        return haystack.includes(rankFilter);
-      });
-    }
 
     const matchesSpecKeyword = (item: MarketListing, keyword: string) =>
       item.specs.some((spec) => `${spec.label} ${spec.value}`.toLowerCase().includes(keyword));
 
-    if (requiresOrigin) {
-      output = output.filter((item) => matchesSpecKeyword(item, "original"));
-    }
     if (requiresMailAccess) {
-      output = output.filter((item) => matchesSpecKeyword(item, "mail"));
+      output = output.filter((item) => hasMailAccess(item));
     }
     if (requiresOnline) {
       output = output.filter((item) => matchesSpecKeyword(item, "online"));
-    }
-    if (requiresGuarantee) {
-      output = output.filter((item) => matchesSpecKeyword(item, "guarantee"));
-    }
-    if (requiresNoReserve) {
-      output = output.filter((item) => !matchesSpecKeyword(item, "reserve"));
     }
   }
 
@@ -1525,54 +2001,124 @@ function withMarkup(listings: MarketListing[], markupPercent: number) {
   });
 }
 
-export async function searchListings(query: string, options: SearchOptions = {}) {
+export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
   const store = await readStore();
   const endpoint = getSearchEndpoint();
   const token = await getLztAccessToken();
   const trimmedQuery = query.trim();
+  const hasBrowseScope = Boolean(options.game?.trim() || options.category?.trim());
+  const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
+  const pageSize = Number.isFinite(options.pageSize ?? NaN)
+    ? Math.min(60, Math.max(1, Number(options.pageSize)))
+    : 15;
+  const fetchPageSize = Math.min(80, pageSize + 12);
+  const normalizedOptions: SearchOptions = {
+    ...options,
+    page,
+    pageSize: fetchPageSize
+  };
 
-  if (!trimmedQuery) {
-    return [];
+  if (!trimmedQuery && !hasBrowseScope) {
+    return {
+      listings: [],
+      hasMore: false,
+      page,
+      pageSize
+    };
   }
   if (!token) {
     throw new Error("LZT_AUTH_MISSING");
   }
 
   try {
-    const primary = await fetchListingsFromEndpoint({
-      endpoint,
-      token,
-      query: trimmedQuery,
-      options
-    });
-    const categoryEndpoints = buildCategoryEndpoints(endpoint, options);
-    const categoryResultsSettled = await Promise.allSettled(
-      categoryEndpoints.map((categoryEndpoint) =>
-        fetchListingsFromEndpoint({
-          endpoint: categoryEndpoint,
-          token,
-          query: trimmedQuery,
-          options
-        })
-      )
-    );
-    const categoryResults = categoryResultsSettled
-      .filter(
-        (entry): entry is PromiseFulfilledResult<MarketListing[]> =>
-          entry.status === "fulfilled"
-      )
-      .map((entry) => entry.value);
+    const loadFilteredPage = async (
+      targetPage: number,
+      broadMode = false,
+      forceScopeMatch = false
+    ) => {
+      const pageOptions: SearchOptions = {
+        ...normalizedOptions,
+        page: targetPage
+      };
+      const shouldFetchPrimary = broadMode || (Boolean(trimmedQuery) && !hasBrowseScope);
+      const primary = shouldFetchPrimary
+        ? await fetchListingsFromEndpoint({
+            endpoint,
+            token,
+            query: trimmedQuery,
+            options: pageOptions
+          })
+        : [];
+      const endpointScope = broadMode
+        ? {
+            ...options,
+            game: null,
+            category: null
+          }
+        : options;
+      const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope);
+      const categoryResultsSettled = await Promise.allSettled(
+        categoryEndpoints.map((categoryEndpoint) =>
+          fetchListingsFromEndpoint({
+            endpoint: categoryEndpoint,
+            token,
+            query: trimmedQuery,
+            options: pageOptions
+          })
+        )
+      );
+      const categoryResults = categoryResultsSettled
+        .filter(
+          (entry): entry is PromiseFulfilledResult<MarketListing[]> =>
+            entry.status === "fulfilled"
+        )
+        .map((entry) => entry.value);
 
-    const combined = mergeUnique([primary, ...categoryResults].flat());
-    const filtered = applyLocalFilters(combined, options).slice(0, 80);
-    const enriched = await enrichListingsWithDetails(filtered, token);
+      const combined = mergeUnique([primary, ...categoryResults].flat());
+      return applyLocalFilters(combined, options, trimmedQuery, forceScopeMatch);
+    };
+
+    let filteredCurrentPage = await loadFilteredPage(page);
+    let usingBroadFallback = false;
+    let usingScopeMatchFallback = false;
+    if (filteredCurrentPage.length === 0 && hasBrowseScope && !trimmedQuery) {
+      filteredCurrentPage = await loadFilteredPage(page, true, true);
+      usingBroadFallback = true;
+      usingScopeMatchFallback = true;
+      if (filteredCurrentPage.length === 0) {
+        filteredCurrentPage = await loadFilteredPage(page, true, false);
+        usingScopeMatchFallback = false;
+      }
+    }
+    const visibleWindow = filteredCurrentPage.slice(0, pageSize + 40);
+    let hasMore = filteredCurrentPage.length > pageSize;
+    if (!hasMore) {
+      const filteredNextPage = await loadFilteredPage(
+        page + 1,
+        usingBroadFallback,
+        usingScopeMatchFallback
+      );
+      hasMore = filteredNextPage.length > 0;
+    }
+    const enriched = await enrichListingsWithDetails(visibleWindow, token);
     const translated = await translateListingsToEnglish(enriched);
-    return withMarkup(translated, store.settings.markupPercent).slice(0, 60);
+    const pagedListings = withMarkup(translated, store.settings.markupPercent).slice(0, pageSize);
+    return {
+      listings: pagedListings,
+      hasMore,
+      page,
+      pageSize
+    };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("LZT_AUTH_")) {
       throw error;
     }
-    return [];
+    return {
+      listings: [],
+      hasMore: false,
+      page,
+      pageSize
+    };
   }
 }
 

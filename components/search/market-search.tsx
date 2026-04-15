@@ -31,42 +31,103 @@ function useDebouncedValue(value: string, delay = 260) {
 
 type SearchResponse = {
   listings: MarketListing[];
-};
-
-type ListingDetailResponse = {
-  listing: MarketListing;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    hasMore: boolean;
+  };
 };
 
 type MarketSearchProps = {
   viewer: PublicViewer | null;
 };
 
+type GameFilterTarget =
+  | "all"
+  | "fortnite"
+  | "valorant"
+  | "siege"
+  | "media"
+  | "telegram"
+  | "discord"
+  | "steam"
+  | "cs2"
+  | "battlenet";
+
+const GAME_SEARCH_PARAMS: Record<
+  GameFilterTarget,
+  { game?: string; category?: string }
+> = {
+  all: {},
+  fortnite: { game: "fortnite", category: "fortnite" },
+  valorant: { game: "valorant", category: "riot" },
+  siege: { game: "siege", category: "rainbow-six-siege" },
+  media: { game: "social", category: "media" },
+  telegram: { game: "telegram", category: "telegram" },
+  discord: { game: "discord", category: "discord" },
+  steam: { game: "steam", category: "steam" },
+  cs2: { game: "cs2", category: "steam" },
+  battlenet: { game: "battlenet", category: "battlenet" }
+};
+
+const GAME_TOGGLE_FILTERS: Record<
+  Exclude<GameFilterTarget, "all">,
+  Array<{ key: string; label: string }>
+> = {
+  fortnite: [
+    { key: "first_owner", label: "First Owner" },
+    { key: "ma", label: "Mail Access" }
+  ],
+  valorant: [
+    { key: "ma", label: "Mail Access" }
+  ],
+  siege: [
+    { key: "ma", label: "Mail Access" }
+  ],
+  media: [
+    { key: "ma", label: "Mail Access" }
+  ],
+  telegram: [
+    { key: "ma", label: "Mail Access" },
+    { key: "online", label: "Online Access" }
+  ],
+  discord: [
+    { key: "ma", label: "Mail Access" },
+    { key: "online", label: "Online Access" }
+  ],
+  steam: [
+    { key: "first_owner", label: "First Owner" },
+    { key: "ma", label: "Mail Access" },
+    { key: "vac", label: "VAC Clean" }
+  ],
+  cs2: [
+    { key: "first_owner", label: "First Owner" },
+    { key: "ma", label: "Mail Access" },
+    { key: "vac", label: "VAC Clean" }
+  ],
+  battlenet: [
+    { key: "ma", label: "Mail Access" },
+    { key: "online", label: "Online Access" }
+  ]
+};
+
 export function MarketSearch({ viewer }: MarketSearchProps) {
+  const PAGE_SIZE = 15;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"relevance" | "price_asc" | "price_desc" | "newest">(
     "relevance"
   );
+  const [selectedGame, setSelectedGame] = useState<GameFilterTarget>("all");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [originOnly, setOriginOnly] = useState(false);
-  const [mailAccess, setMailAccess] = useState(false);
-  const [onlineOnly, setOnlineOnly] = useState(false);
-  const [guaranteedOnly, setGuaranteedOnly] = useState(false);
-  const [noReserveOnly, setNoReserveOnly] = useState(false);
-  const [vacCleanOnly, setVacCleanOnly] = useState(false);
-  const [firstOwnerOnly, setFirstOwnerOnly] = useState(false);
-  const [domain, setDomain] = useState("");
-  const [rank, setRank] = useState("");
-  const [region, setRegion] = useState("");
-  const [hoursMin, setHoursMin] = useState("");
-  const [hoursMax, setHoursMax] = useState("");
-  const [steamLevelMin, setSteamLevelMin] = useState("");
-  const [steamLevelMax, setSteamLevelMax] = useState("");
+  const [gameFilters, setGameFilters] = useState<Record<string, string>>({});
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [listings, setListings] = useState<MarketListing[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [buying, setBuying] = useState(false);
@@ -76,12 +137,30 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(query);
 
+  function changePage(nextPage: number) {
+    const normalized = Math.max(1, nextPage);
+    setCurrentPage(normalized);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  useEffect(() => {
+    setGameFilters({});
+  }, [selectedGame]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, sort, selectedGame, minPrice, maxPrice, gameFilters]);
+
   useEffect(() => {
     let cancelled = false;
     const normalized = debouncedQuery.trim();
+    const hasSearchContext = Boolean(normalized) || selectedGame !== "all";
 
-    if (!normalized) {
+    if (!hasSearchContext) {
       setListings([]);
+      setHasMore(false);
       setLoading(false);
       setReady(true);
       setError(null);
@@ -95,55 +174,36 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        params.set("q", normalized);
+        if (normalized) {
+          params.set("q", normalized);
+        }
+        params.set("page", String(currentPage));
+        params.set("pageSize", String(PAGE_SIZE));
         params.set("sort", sort);
+        const searchTarget = GAME_SEARCH_PARAMS[selectedGame];
+        if (searchTarget.game) {
+          params.set("game", searchTarget.game);
+        }
+        if (searchTarget.category) {
+          params.set("category", searchTarget.category);
+        }
+        if (selectedGame === "media") {
+          const mediaPlatform = (gameFilters.media_platform ?? "").trim();
+          if (mediaPlatform) {
+            params.set("category", mediaPlatform);
+          }
+        }
         if (minPrice.trim()) {
           params.set("minPrice", minPrice.trim());
         }
         if (maxPrice.trim()) {
           params.set("maxPrice", maxPrice.trim());
         }
-        if (originOnly) {
-          params.set("origin", "1");
-        }
-        if (mailAccess) {
-          params.set("ma", "1");
-        }
-        if (onlineOnly) {
-          params.set("online", "1");
-        }
-        if (guaranteedOnly) {
-          params.set("guarantee", "1");
-        }
-        if (noReserveOnly) {
-          params.set("no_reserve", "1");
-        }
-        if (vacCleanOnly) {
-          params.set("vac", "1");
-        }
-        if (firstOwnerOnly) {
-          params.set("first_owner", "1");
-        }
-        if (domain.trim()) {
-          params.set("domain", domain.trim());
-        }
-        if (rank.trim()) {
-          params.set("rank", rank.trim());
-        }
-        if (region.trim()) {
-          params.set("region", region.trim());
-        }
-        if (hoursMin.trim()) {
-          params.set("hours_min", hoursMin.trim());
-        }
-        if (hoursMax.trim()) {
-          params.set("hours_max", hoursMax.trim());
-        }
-        if (steamLevelMin.trim()) {
-          params.set("steam_level_min", steamLevelMin.trim());
-        }
-        if (steamLevelMax.trim()) {
-          params.set("steam_level_max", steamLevelMax.trim());
+        for (const [key, value] of Object.entries(gameFilters)) {
+          const normalizedValue = value.trim();
+          if (normalizedValue) {
+            params.set(key, normalizedValue);
+          }
         }
 
         const response = await fetch(`/api/search?${params.toString()}`, {
@@ -158,10 +218,12 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         const data: SearchResponse = await response.json();
         if (!cancelled) {
           setListings(Array.isArray(data.listings) ? data.listings : []);
+          setHasMore(Boolean(data.pagination?.hasMore));
         }
       } catch (searchError) {
         if (!cancelled) {
           setListings([]);
+          setHasMore(false);
           const message =
             searchError instanceof Error ? searchError.message : "Unable to load listings";
           setError(message);
@@ -182,22 +244,11 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   }, [
     debouncedQuery,
     sort,
+    selectedGame,
     minPrice,
     maxPrice,
-    originOnly,
-    mailAccess,
-    onlineOnly,
-    guaranteedOnly,
-    noReserveOnly,
-    vacCleanOnly,
-    firstOwnerOnly,
-    domain,
-    rank,
-    region,
-    hoursMin,
-    hoursMax,
-    steamLevelMin,
-    steamLevelMax
+    gameFilters,
+    currentPage,
   ]);
 
   useEffect(() => {
@@ -303,38 +354,37 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   }
 
   function resetAdvancedFilters() {
-    setOriginOnly(false);
-    setMailAccess(false);
-    setOnlineOnly(false);
-    setGuaranteedOnly(false);
-    setNoReserveOnly(false);
-    setVacCleanOnly(false);
-    setFirstOwnerOnly(false);
-    setDomain("");
-    setRank("");
-    setRegion("");
-    setHoursMin("");
-    setHoursMax("");
-    setSteamLevelMin("");
-    setSteamLevelMax("");
+    setSelectedGame("all");
+    setGameFilters({});
+  }
+
+  function setGameFilter(key: string, value: string) {
+    setGameFilters((previous) => ({
+      ...previous,
+      [key]: value
+    }));
   }
 
   const activeAdvancedFiltersCount = [
-    originOnly,
-    mailAccess,
-    onlineOnly,
-    guaranteedOnly,
-    noReserveOnly,
-    vacCleanOnly,
-    firstOwnerOnly,
-    Boolean(domain.trim()),
-    Boolean(rank.trim()),
-    Boolean(region.trim()),
-    Boolean(hoursMin.trim()),
-    Boolean(hoursMax.trim()),
-    Boolean(steamLevelMin.trim()),
-    Boolean(steamLevelMax.trim())
+    selectedGame !== "all",
+    ...Object.values(gameFilters).map((value) => Boolean(value.trim()))
   ].filter(Boolean).length;
+  const selectedGameToggles =
+    selectedGame === "all" ? [] : GAME_TOGGLE_FILTERS[selectedGame];
+  const hasSearchContext = Boolean(query.trim()) || selectedGame !== "all";
+  const pageButtons = useMemo(() => {
+    const numbers = new Set<number>([currentPage]);
+    if (currentPage > 1) {
+      numbers.add(currentPage - 1);
+      numbers.add(1);
+    }
+    if (hasMore) {
+      numbers.add(currentPage + 1);
+    }
+    return Array.from(numbers)
+      .filter((value) => value > 0)
+      .sort((a, b) => a - b);
+  }, [currentPage, hasMore]);
 
   return (
     <main className="space-y-7 pt-3">
@@ -350,9 +400,9 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                 Welcome to AE EMPIRE
               </h1>
               <p className="max-w-2xl text-sm text-zinc-300 md:text-base">
-                We offer Fortnite accounts and more for sale through AE Marketplace. All
-                accounts are guaranteed to meet the advertised specifications at the time of
-                purchase.
+                We offer Fortnite, Siege, media accounts, and more through AE Marketplace.
+                All accounts are guaranteed to meet the advertised specifications at the time
+                of purchase.
               </p>
             </div>
           </div>
@@ -381,7 +431,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="pl-11"
-                placeholder="Search by game, skin, rank, in-game item"
+                placeholder="Search by title, skin, rank, item"
               />
             </div>
             {!viewer && (
@@ -404,7 +454,27 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             )}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="space-y-1 text-xs text-zinc-400">
+              Category
+              <select
+                value={selectedGame}
+                onChange={(event) => setSelectedGame(event.target.value as GameFilterTarget)}
+                className="h-11 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+              >
+                <option value="all">All Categories</option>
+                <option value="fortnite">Fortnite</option>
+                <option value="valorant">Valorant</option>
+                <option value="siege">Rainbow Six Siege</option>
+                <option value="media">Media Accounts</option>
+                <option value="steam">Steam</option>
+                <option value="cs2">Counter-Strike 2</option>
+                <option value="telegram">Telegram</option>
+                <option value="discord">Discord</option>
+                <option value="battlenet">Battle.net</option>
+              </select>
+            </label>
+
             <label className="space-y-1 text-xs text-zinc-400">
               Sort
               <select
@@ -473,139 +543,287 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             </div>
 
             {advancedOpen && (
-              <div className="mt-3 space-y-3">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={originOnly}
-                      onChange={(event) => setOriginOnly(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Original Owner
-                  </label>
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={mailAccess}
-                      onChange={(event) => setMailAccess(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Mail Access
-                  </label>
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={onlineOnly}
-                      onChange={(event) => setOnlineOnly(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Online Access
-                  </label>
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={guaranteedOnly}
-                      onChange={(event) => setGuaranteedOnly(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Extended Guarantee
-                  </label>
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={noReserveOnly}
-                      onChange={(event) => setNoReserveOnly(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    No Reserve
-                  </label>
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={vacCleanOnly}
-                      onChange={(event) => setVacCleanOnly(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    VAC Clean
-                  </label>
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200 md:col-span-3">
-                    <input
-                      type="checkbox"
-                      checked={firstOwnerOnly}
-                      onChange={(event) => setFirstOwnerOnly(event.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    First Owner
-                  </label>
-                </div>
+              <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                {selectedGame !== "all" && (
+                  <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3 xl:col-span-2">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
+                      Category Filters
+                    </p>
 
-                <div className="grid gap-3 md:grid-cols-3">
-                  <label className="space-y-1 text-xs text-zinc-400">
-                    Domain
-                    <Input
-                      value={domain}
-                      onChange={(event) => setDomain(event.target.value)}
-                      placeholder="gmail.com"
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs text-zinc-400">
-                    Rank
-                    <Input
-                      value={rank}
-                      onChange={(event) => setRank(event.target.value)}
-                      placeholder="Immortal, Global, etc."
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs text-zinc-400">
-                    Region
-                    <Input
-                      value={region}
-                      onChange={(event) => setRegion(event.target.value)}
-                      placeholder="EU / NA / TR..."
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs text-zinc-400">
-                    Min Hours
-                    <Input
-                      type="number"
-                      min={0}
-                      value={hoursMin}
-                      onChange={(event) => setHoursMin(event.target.value)}
-                      placeholder="0"
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs text-zinc-400">
-                    Max Hours
-                    <Input
-                      type="number"
-                      min={0}
-                      value={hoursMax}
-                      onChange={(event) => setHoursMax(event.target.value)}
-                      placeholder="No limit"
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs text-zinc-400">
-                    Min Steam Level
-                    <Input
-                      type="number"
-                      min={0}
-                      value={steamLevelMin}
-                      onChange={(event) => setSteamLevelMin(event.target.value)}
-                      placeholder="0"
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs text-zinc-400 md:col-span-3">
-                    Max Steam Level
-                    <Input
-                      type="number"
-                      min={0}
-                      value={steamLevelMax}
-                      onChange={(event) => setSteamLevelMax(event.target.value)}
-                      placeholder="No limit"
-                    />
-                  </label>
-                </div>
+                    <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                      {selectedGameToggles.map((toggle) => (
+                        <label
+                          key={`${selectedGame}_${toggle.key}`}
+                          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={(gameFilters[toggle.key] ?? "") === "1"}
+                            onChange={(event) =>
+                              setGameFilter(toggle.key, event.target.checked ? "1" : "")
+                            }
+                            className="h-4 w-4"
+                          />
+                          {toggle.label}
+                        </label>
+                      ))}
+                    </div>
+
+                    {selectedGame === "fortnite" && (
+                      <div className="grid gap-2 md:grid-cols-3">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Skins From
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.fortnite_skin_count_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_skin_count_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Level From
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.fortnite_level_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_level_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Wins From
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.fortnite_lifetime_wins_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_lifetime_wins_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "valorant" && (
+                      <div className="grid gap-2 md:grid-cols-3">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Rank
+                          <Input
+                            value={gameFilters.valorant_rank ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("valorant_rank", event.target.value)
+                            }
+                            placeholder="Iron, Gold, Immortal..."
+                            className="h-10"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Skins From
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.valorant_skin_count_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("valorant_skin_count_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Agents From
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.valorant_agents_count_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("valorant_agents_count_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "telegram" && (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Country
+                          <Input
+                            value={gameFilters.telegram_country ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("telegram_country", event.target.value)
+                            }
+                            placeholder="US, GB, DE..."
+                            className="h-10"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Premium
+                          <select
+                            value={gameFilters.telegram_premium ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("telegram_premium", event.target.value)
+                            }
+                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Any</option>
+                            <option value="1">Only Premium</option>
+                            <option value="0">Without Premium</option>
+                          </select>
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "media" && (
+                      <div className="grid gap-2 md:grid-cols-3">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Platform
+                          <select
+                            value={gameFilters.media_platform ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("media_platform", event.target.value)
+                            }
+                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">All Media Platforms</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="discord">Discord</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="twitter">X / Twitter</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Min Followers
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.media_followers_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("media_followers_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Verified
+                          <select
+                            value={gameFilters.media_verified ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("media_verified", event.target.value)
+                            }
+                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Any</option>
+                            <option value="1">Verified Only</option>
+                            <option value="0">Not Verified</option>
+                          </select>
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "discord" && (
+                      <div className="grid gap-2 md:grid-cols-1">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Nitro
+                          <select
+                            value={gameFilters.discord_nitro ?? ""}
+                            onChange={(event) => setGameFilter("discord_nitro", event.target.value)}
+                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Any</option>
+                            <option value="1">Only Nitro</option>
+                            <option value="0">Without Nitro</option>
+                          </select>
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "steam" && (
+                      <div className="grid gap-2 md:grid-cols-1">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Games From
+                          <Input
+                            type="number"
+                            min={0}
+                            value={gameFilters.steam_game_count_min ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("steam_game_count_min", event.target.value)
+                            }
+                            placeholder="0"
+                            className="h-10"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "cs2" && (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Prime
+                          <select
+                            value={gameFilters.cs2_prime ?? ""}
+                            onChange={(event) => setGameFilter("cs2_prime", event.target.value)}
+                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Any</option>
+                            <option value="1">Prime Only</option>
+                            <option value="0">No Prime</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Rank
+                          <Input
+                            value={gameFilters.cs2_rank ?? ""}
+                            onChange={(event) => setGameFilter("cs2_rank", event.target.value)}
+                            placeholder="Global, Faceit, etc."
+                            className="h-10"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {selectedGame === "battlenet" && (
+                      <div className="grid gap-2 md:grid-cols-1">
+                        <label className="space-y-1 text-xs text-zinc-400">
+                          Region
+                          <select
+                            value={gameFilters.battlenet_region ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("battlenet_region", event.target.value)
+                            }
+                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Any</option>
+                            <option value="EU">EU</option>
+                            <option value="NA">NA</option>
+                            <option value="ASIA">Asia</option>
+                          </select>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedGame === "all" && (
+                  <div className="rounded-xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-300">
+                    Select a category above to see its specific filters.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -613,13 +831,15 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {loading && query.trim() && (
+        {loading && (
           <div className="glass-panel col-span-full rounded-2xl p-4 md:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-white">Searching marketplace...</p>
                 <p className="mt-1 text-xs text-zinc-300">
-                  Looking for matches for "{query.trim()}" across all categories
+                  {query.trim()
+                    ? `Looking for matches for "${query.trim()}" across all categories`
+                    : "Loading listings for selected category"}
                 </p>
               </div>
               <div className="inline-flex items-center gap-1.5">
@@ -703,7 +923,41 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
           ))}
       </section>
 
-      {ready && !loading && !query.trim() && (
+      {ready && !loading && (listings.length > 0 || currentPage > 1 || hasMore) && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 px-3"
+            disabled={currentPage <= 1}
+            onClick={() => changePage(currentPage - 1)}
+          >
+            Prev
+          </Button>
+          {pageButtons.map((pageNumber) => (
+            <Button
+              key={pageNumber}
+              type="button"
+              variant={currentPage === pageNumber ? "solid" : "ghost"}
+              className="h-9 min-w-9 px-3"
+              onClick={() => changePage(pageNumber)}
+            >
+              {pageNumber}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 px-3"
+            disabled={!hasMore}
+            onClick={() => changePage(currentPage + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+
+      {ready && !loading && !hasSearchContext && (
         <div className="glass-panel rounded-2xl p-10 text-center">
           <p className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
             Most Popular Listings
@@ -715,13 +969,13 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         </div>
       )}
 
-      {ready && !loading && query.trim() && listings.length === 0 && (
+      {ready && !loading && hasSearchContext && listings.length === 0 && (
         <div className="glass-panel rounded-2xl p-10 text-center">
           <p className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
             No listings found
           </p>
           <p className="mt-2 text-sm text-zinc-300">
-            Try searching with a game title, rank keyword, or skin name.
+            Try changing the selected category, filters, or search keywords.
           </p>
         </div>
       )}

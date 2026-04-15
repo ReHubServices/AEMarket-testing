@@ -14,20 +14,25 @@ function parseFlag(value: string | null) {
 }
 
 const SUPPLIER_FILTER_KEYS = [
-  "origin",
   "ma",
   "online",
-  "guarantee",
-  "no_reserve",
-  "domain",
-  "rank",
-  "region",
-  "hours_min",
-  "hours_max",
-  "steam_level_min",
-  "steam_level_max",
   "vac",
-  "first_owner"
+  "first_owner",
+  "fortnite_skin_count_min",
+  "fortnite_level_min",
+  "fortnite_lifetime_wins_min",
+  "valorant_rank",
+  "valorant_skin_count_min",
+  "valorant_agents_count_min",
+  "telegram_country",
+  "telegram_premium",
+  "discord_nitro",
+  "steam_game_count_min",
+  "cs2_prime",
+  "cs2_rank",
+  "battlenet_region",
+  "media_followers_min",
+  "media_verified"
 ] as const;
 
 export async function GET(request: NextRequest) {
@@ -42,6 +47,8 @@ export async function GET(request: NextRequest) {
 
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const sortParam = request.nextUrl.searchParams.get("sort")?.trim() ?? "";
+  const pageRaw = request.nextUrl.searchParams.get("page");
+  const pageSizeRaw = request.nextUrl.searchParams.get("pageSize");
   const minPriceRaw = request.nextUrl.searchParams.get("minPrice");
   const maxPriceRaw = request.nextUrl.searchParams.get("maxPrice");
   const game = request.nextUrl.searchParams.get("game")?.trim() ?? "";
@@ -60,6 +67,12 @@ export async function GET(request: NextRequest) {
     minPriceRaw && Number.isFinite(Number(minPriceRaw)) ? Number(minPriceRaw) : null;
   const maxPrice =
     maxPriceRaw && Number.isFinite(Number(maxPriceRaw)) ? Number(maxPriceRaw) : null;
+  const page =
+    pageRaw && Number.isFinite(Number(pageRaw)) ? Math.max(1, Math.floor(Number(pageRaw))) : 1;
+  const pageSize =
+    pageSizeRaw && Number.isFinite(Number(pageSizeRaw))
+      ? Math.min(60, Math.max(1, Math.floor(Number(pageSizeRaw))))
+      : 15;
   const supplierFilters: Record<string, string> = {};
   for (const key of SUPPLIER_FILTER_KEYS) {
     const value = request.nextUrl.searchParams.get(key)?.trim();
@@ -69,10 +82,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const listings = await searchListings(query, {
+    const result = await searchListings(query, {
       sort,
       minPrice,
       maxPrice,
+      page,
+      pageSize,
       game: game || null,
       category: category || null,
       hasImage,
@@ -81,7 +96,12 @@ export async function GET(request: NextRequest) {
       supplierFilters
     });
     return ok({
-      listings: query ? listings : listings.slice(0, 30)
+      listings: result.listings,
+      pagination: {
+        page: result.page,
+        pageSize: result.pageSize,
+        hasMore: result.hasMore
+      }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SEARCH_FAILED";

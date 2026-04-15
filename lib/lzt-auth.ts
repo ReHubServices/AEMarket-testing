@@ -6,7 +6,7 @@ type CachedToken = {
 let tokenCache: CachedToken | null = null;
 
 function getStaticToken() {
-  return process.env.LZT_API_TOKEN ?? process.env.SUPPLIER_API_TOKEN ?? null;
+  return process.env.LZT_API_TOKEN ?? null;
 }
 
 function getOAuthConfig() {
