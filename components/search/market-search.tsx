@@ -111,6 +111,353 @@ const GAME_TOGGLE_FILTERS: Record<
   ]
 };
 
+const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
+  all: [
+    "Fortnite",
+    "Valorant",
+    "Steam",
+    "CS2",
+    "Telegram",
+    "Discord",
+    "Instagram",
+    "TikTok",
+    "YouTube",
+    "Facebook",
+    "Verified",
+    "High Level",
+    "Stacked",
+    "OG"
+  ],
+  fortnite: [
+    "Galaxy",
+    "Galaxy Scout",
+    "Galaxy Grappler",
+    "Skull Trooper",
+    "Renegade Raider",
+    "Black Knight",
+    "Aerial Assault Trooper",
+    "Ikonik",
+    "Glow",
+    "Honor Guard",
+    "Travis Scott",
+    "Leviathan Axe",
+    "Mako",
+    "Take the L",
+    "OG",
+    "Stacked",
+    "Season 1",
+    "Season 2",
+    "Rare emotes",
+    "Many skins",
+    "FA account",
+    "NFA account"
+  ],
+  valorant: [
+    "Radiant",
+    "Immortal",
+    "Ascendant",
+    "Diamond",
+    "Platinum",
+    "Champions",
+    "Vandal skins",
+    "Phantom skins",
+    "Knife skins",
+    "Prime Vandal",
+    "RGX",
+    "Reaver",
+    "Oni",
+    "Spectrum",
+    "Many agents",
+    "All agents",
+    "Level 20+",
+    "Premier ready"
+  ],
+  siege: [
+    "Champion",
+    "Diamond",
+    "Emerald",
+    "Ranked",
+    "Elite skins",
+    "Black Ice",
+    "Year 1 operators",
+    "All operators",
+    "High level",
+    "Rare skins",
+    "R6 credits",
+    "Ubisoft connect"
+  ],
+  media: [
+    "Instagram",
+    "TikTok",
+    "Facebook",
+    "YouTube",
+    "Twitter",
+    "Verified",
+    "Blue check",
+    "Monetized",
+    "Followers",
+    "High engagement",
+    "OG username",
+    "Aged account",
+    "US audience",
+    "EU audience",
+    "Business page",
+    "Creator account"
+  ],
+  telegram: [
+    "Premium",
+    "US",
+    "EU",
+    "Aged",
+    "Old account",
+    "Rare username",
+    "Short username",
+    "Channel owner",
+    "2FA disabled",
+    "Mail access",
+    "Many dialogs"
+  ],
+  discord: [
+    "Nitro",
+    "Aged",
+    "Verified",
+    "Phone verified",
+    "Rare username",
+    "Old token",
+    "Many friends",
+    "Server owner",
+    "Mail access",
+    "No flags"
+  ],
+  steam: [
+    "Prime",
+    "VAC Clean",
+    "Faceit",
+    "CS2",
+    "Dota",
+    "Rust",
+    "PUBG",
+    "GTA V",
+    "High level",
+    "Many games",
+    "Inventory",
+    "Knife",
+    "Gloves",
+    "Medals",
+    "Years of service",
+    "Trusted"
+  ],
+  cs2: [
+    "Prime",
+    "Faceit level 10",
+    "Global",
+    "Supreme",
+    "LEM",
+    "Knife",
+    "Gloves",
+    "Inventory",
+    "Medals",
+    "Service medal",
+    "VAC Clean",
+    "Premier rating",
+    "High trust"
+  ],
+  battlenet: [
+    "EU",
+    "NA",
+    "Asia",
+    "Overwatch",
+    "COD",
+    "Diablo",
+    "WoW",
+    "Rare skins",
+    "High level",
+    "Mail access"
+  ]
+};
+
+const GLOBAL_SUGGESTION_POOL = [
+  "Account",
+  "Stacked",
+  "OG",
+  "Rare",
+  "Ultra Rare",
+  "Legendary",
+  "Mythic",
+  "Epic",
+  "Full Access",
+  "Mail Access",
+  "First Owner",
+  "Verified",
+  "Aged",
+  "Old Account",
+  "High Level",
+  "Premium",
+  "Cheap",
+  "Budget",
+  "Instant Delivery",
+  "Secure",
+  "Fortnite",
+  "Galaxy",
+  "Glow",
+  "Ikonik",
+  "Black Knight",
+  "Skull Trooper",
+  "Renegade Raider",
+  "Aerial Assault Trooper",
+  "Travis Scott",
+  "Mako",
+  "Take the L",
+  "OG Skins",
+  "Season 1",
+  "Season 2",
+  "Save The World",
+  "Valorant",
+  "Radiant",
+  "Immortal",
+  "Ascendant",
+  "Diamond",
+  "Champions",
+  "Prime Vandal",
+  "Reaver",
+  "Oni",
+  "RGX",
+  "Spectrum",
+  "Knife Skins",
+  "All Agents",
+  "Steam",
+  "Steam Level",
+  "Many Games",
+  "VAC Clean",
+  "Prime Enabled",
+  "CS2",
+  "Counter Strike",
+  "Faceit",
+  "Global Elite",
+  "Supreme",
+  "Premier Rating",
+  "Knife",
+  "Gloves",
+  "Medals",
+  "Rust",
+  "Dota 2",
+  "PUBG",
+  "GTA V",
+  "R6",
+  "Rainbow Six Siege",
+  "Champion",
+  "Elite Skins",
+  "Black Ice",
+  "All Operators",
+  "Instagram",
+  "TikTok",
+  "YouTube",
+  "Facebook",
+  "Twitter",
+  "Discord",
+  "Telegram",
+  "Followers",
+  "Subscribers",
+  "Engagement",
+  "Creator",
+  "Business",
+  "Monetized",
+  "Blue Check",
+  "Nitro",
+  "Phone Verified",
+  "Server Owner",
+  "Battle.net",
+  "Overwatch",
+  "Call of Duty",
+  "Diablo",
+  "World of Warcraft",
+  "EU",
+  "NA",
+  "Asia",
+  "US",
+  "TR",
+  "DE"
+];
+
+type RarityTone = {
+  label: string;
+  nameClass: string;
+};
+
+function normalizeSuggestionValue(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isSubsequenceMatch(haystack: string, needle: string) {
+  if (!needle) {
+    return true;
+  }
+  let pointer = 0;
+  for (const char of haystack) {
+    if (char === needle[pointer]) {
+      pointer += 1;
+      if (pointer === needle.length) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function addTokenizedSuggestions(source: Set<string>, text: string) {
+  const words = text
+    .split(/[^a-zA-Z0-9]+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 3 && word.length <= 22);
+
+  for (const word of words) {
+    source.add(word);
+  }
+
+  for (let index = 0; index < words.length - 1; index += 1) {
+    const pair = `${words[index]} ${words[index + 1]}`;
+    if (pair.length >= 7 && pair.length <= 44) {
+      source.add(pair);
+    }
+  }
+
+  for (let index = 0; index < words.length - 2; index += 1) {
+    const triple = `${words[index]} ${words[index + 1]} ${words[index + 2]}`;
+    if (triple.length >= 10 && triple.length <= 58) {
+      source.add(triple);
+    }
+  }
+}
+
+function inferRarityTone(listing: MarketListing): RarityTone {
+  const text = `${listing.title} ${listing.description} ${listing.specs
+    .map((spec) => `${spec.label} ${spec.value}`)
+    .join(" ")}`.toLowerCase();
+
+  if (text.includes("mythic")) {
+    return { label: "Mythic", nameClass: "text-rose-300" };
+  }
+  if (text.includes("legendary")) {
+    return { label: "Legendary", nameClass: "text-amber-300" };
+  }
+  if (text.includes("epic")) {
+    return { label: "Epic", nameClass: "text-fuchsia-300" };
+  }
+  if (text.includes("rare")) {
+    return { label: "Rare", nameClass: "text-sky-300" };
+  }
+  if (text.includes("uncommon")) {
+    return { label: "Uncommon", nameClass: "text-emerald-300" };
+  }
+  if (text.includes("common")) {
+    return { label: "Common", nameClass: "text-zinc-200" };
+  }
+  if (text.includes("icon")) {
+    return { label: "Icon", nameClass: "text-cyan-300" };
+  }
+  return { label: "Standard", nameClass: "text-white" };
+}
+
 export function MarketSearch({ viewer }: MarketSearchProps) {
   const PAGE_SIZE = 15;
   const router = useRouter();
@@ -131,6 +478,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailListing, setDetailListing] = useState<MarketListing | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -385,6 +733,79 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       .filter((value) => value > 0)
       .sort((a, b) => a - b);
   }, [currentPage, hasMore]);
+  const suggestions = useMemo(() => {
+    const normalized = normalizeSuggestionValue(query);
+    if (normalized.length < 1) {
+      return [];
+    }
+
+    const source = new Set<string>(CATEGORY_SUGGESTION_SEEDS[selectedGame]);
+    for (const generic of CATEGORY_SUGGESTION_SEEDS.all) {
+      source.add(generic);
+    }
+    for (const global of GLOBAL_SUGGESTION_POOL) {
+      source.add(global);
+    }
+    for (const listing of listings) {
+      const title = listing.title.trim();
+      if (title && title.length <= 96) {
+        source.add(title);
+      }
+      addTokenizedSuggestions(source, title);
+      addTokenizedSuggestions(source, listing.description);
+      for (const spec of listing.specs) {
+        const value = spec.value.trim();
+        if (value.length >= 3 && value.length <= 88) {
+          source.add(value);
+        }
+        const label = spec.label.trim();
+        if (label.length >= 3 && label.length <= 44) {
+          source.add(label);
+        }
+        addTokenizedSuggestions(source, `${label} ${value}`);
+      }
+    }
+
+    const scored = Array.from(source)
+      .map((value) => {
+        const normalizedCandidate = normalizeSuggestionValue(value);
+        if (!normalizedCandidate) {
+          return null;
+        }
+        const queryWords = normalized.split(" ");
+        const candidateWords = normalizedCandidate.split(" ");
+        const starts = normalizedCandidate.startsWith(normalized);
+        const contains = normalizedCandidate.includes(normalized);
+        const wordStarts = candidateWords.some((word) =>
+          queryWords.some((token) => token.length > 0 && word.startsWith(token))
+        );
+        const subsequence = isSubsequenceMatch(normalizedCandidate.replace(/\s+/g, ""), normalized.replace(/\s+/g, ""));
+
+        if (!starts && !contains && !wordStarts && !subsequence) {
+          return null;
+        }
+
+        const score = starts ? 0 : wordStarts ? 1 : contains ? 2 : 3;
+        return { value, score };
+      })
+      .filter((entry): entry is { value: string; score: number } => Boolean(entry))
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return a.score - b.score;
+        }
+        const aNorm = normalizeSuggestionValue(a.value);
+        const bNorm = normalizeSuggestionValue(b.value);
+        if (aNorm.length !== bNorm.length) {
+          return aNorm.length - bNorm.length;
+        }
+        return aNorm.localeCompare(bNorm);
+      })
+      .slice(0, 80)
+      .map((entry) => entry.value);
+
+    return scored;
+  }, [query, selectedGame, listings]);
+  const showSuggestions = searchFocused && suggestions.length > 0;
 
   return (
     <main className="space-y-7 pt-3">
@@ -430,9 +851,31 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => {
+                  window.setTimeout(() => setSearchFocused(false), 120);
+                }}
                 className="pl-11"
                 placeholder="Search by title, skin, rank, item"
               />
+              {showSuggestions && (
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-96 overflow-y-auto rounded-xl border border-white/15 bg-black/80 p-1 backdrop-blur">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        setQuery(suggestion);
+                        setSearchFocused(false);
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/10"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {!viewer && (
               <Link href="/login">
@@ -832,95 +1275,78 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading && (
-          <div className="glass-panel col-span-full rounded-2xl p-4 md:p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-white">Searching marketplace...</p>
-                <p className="mt-1 text-xs text-zinc-300">
-                  {query.trim()
-                    ? `Looking for matches for "${query.trim()}" across all categories`
-                    : "Loading listings for selected category"}
-                </p>
-              </div>
-              <div className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/50 [animation-delay:180ms]" />
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/35 [animation-delay:360ms]" />
-              </div>
+          <div className="glass-panel col-span-full rounded-2xl p-6 text-center">
+            <p className="text-base font-semibold text-white">Loading listings, please wait...</p>
+            <div className="mt-3 inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.3s]" />
+              <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300/85 [animation-delay:-0.15s]" />
+              <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300/70" />
             </div>
           </div>
         )}
 
-        {loading &&
-          Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={index}
-              className="glass-panel animate-pulseSoft overflow-hidden rounded-2xl p-4"
-            >
-              <div className="relative h-44 overflow-hidden rounded-xl bg-white/8">
-                <div className="absolute inset-0 animate-pulseSoft bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              </div>
-              <div className="mt-4 h-4 w-4/5 rounded bg-white/10" />
-              <div className="mt-2 h-3 w-3/5 rounded bg-white/10" />
-              <div className="mt-5 flex items-center justify-between">
-                <div className="h-6 w-24 rounded bg-white/10" />
-                <div className="h-6 w-14 rounded bg-white/10" />
-              </div>
-            </div>
-          ))}
-
         {!loading &&
-          listings.map((listing) => (
-            <button
-              key={listing.id}
-              type="button"
-              onClick={() => setActiveListingId(listing.id)}
-              className={cn(
-                "glass-panel overflow-hidden rounded-2xl text-left transition duration-200 hover:scale-[1.01] hover:border-white/25",
-                activeListingId === listing.id && "border-white/35"
-              )}
-            >
-              <div className="relative h-44 w-full overflow-hidden">
-                <img
-                  src={getListingImage(listing)}
-                  alt={listing.title}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                  onError={(event) => {
-                    event.currentTarget.onerror = null;
-                    event.currentTarget.src = getPresetListingImage(listing);
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                  <span className="rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[11px] uppercase tracking-wider text-zinc-200">
-                    {listing.game}
-                  </span>
-                  <span className="rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[11px] text-zinc-200">
-                    {listing.category}
-                  </span>
+          listings.map((listing) => {
+            const rarityTone = inferRarityTone(listing);
+            return (
+              <button
+                key={listing.id}
+                type="button"
+                onClick={() => setActiveListingId(listing.id)}
+                className={cn(
+                  "glass-panel overflow-hidden rounded-2xl text-left transition duration-200 hover:scale-[1.01] hover:border-white/25",
+                  activeListingId === listing.id && "border-white/35"
+                )}
+              >
+                <div className="relative h-44 w-full overflow-hidden">
+                  <img
+                    src={getListingImage(listing)}
+                    alt={listing.title}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = getPresetListingImage(listing);
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                    <span className="rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[11px] uppercase tracking-wider text-zinc-200">
+                      {listing.game}
+                    </span>
+                    <span className="rounded-full border border-white/25 bg-black/40 px-2.5 py-1 text-[11px] text-zinc-200">
+                      {listing.category}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-4 p-4">
-                <div className="space-y-2">
-                  <h3 className="max-h-[3.4rem] overflow-hidden font-[var(--font-space-grotesk)] text-lg font-semibold text-white">
-                    {listing.title}
-                  </h3>
-                  <p className="max-h-10 overflow-hidden text-xs text-zinc-300">
-                    {listing.description}
-                  </p>
+                <div className="space-y-4 p-4">
+                  <div className="space-y-2">
+                    <h3
+                      className={cn(
+                        "max-h-[3.4rem] overflow-hidden font-[var(--font-space-grotesk)] text-lg font-semibold",
+                        rarityTone.nameClass
+                      )}
+                    >
+                      {listing.title}
+                    </h3>
+                    <p className="max-h-10 overflow-hidden text-xs text-zinc-300">
+                      {listing.description}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="font-[var(--font-space-grotesk)] text-xl font-bold text-white">
+                      {formatPrice(listing.price, listing.currency)}
+                    </p>
+                    <span className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-xs text-zinc-200">
+                      {rarityTone.label}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <p className="font-[var(--font-space-grotesk)] text-xl font-bold text-white">
-                    {formatPrice(listing.price, listing.currency)}
-                  </p>
-                  <span className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-xs text-zinc-200">
-                    View
-                  </span>
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
       </section>
 
       {ready && !loading && (listings.length > 0 || currentPage > 1 || hasMore) && (

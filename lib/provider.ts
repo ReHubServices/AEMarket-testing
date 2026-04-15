@@ -651,18 +651,21 @@ function extractImageUrlFromPostText(value: unknown, depth = 0): string {
   return "";
 }
 
-function pickImageFromUnknown(value: unknown): string {
+function pickImageFromUnknown(value: unknown, permissive = false): string {
   if (typeof value === "string") {
     const normalized = normalizeImageUrl(value);
     if (!normalized) {
       return "";
+    }
+    if (permissive) {
+      return normalized;
     }
     return isLikelyImageUrl(normalized) ? normalized : "";
   }
 
   if (Array.isArray(value)) {
     for (const entry of value) {
-      const found = pickImageFromUnknown(entry);
+      const found = pickImageFromUnknown(entry, permissive);
       if (found) {
         return found;
       }
@@ -696,7 +699,7 @@ function pickImageFromUnknown(value: unknown): string {
 
   for (const key of directKeys) {
     if (key in record) {
-      const found = pickImageFromUnknown(record[key]);
+      const found = pickImageFromUnknown(record[key], true);
       if (found) {
         return found;
       }
@@ -717,7 +720,7 @@ function pickImageFromUnknown(value: unknown): string {
       lower.includes("media") ||
       lower.includes("gallery")
     ) {
-      const found = pickImageFromUnknown(entry);
+      const found = pickImageFromUnknown(entry, true);
       if (found) {
         return found;
       }
@@ -728,7 +731,7 @@ function pickImageFromUnknown(value: unknown): string {
     if (!entry || typeof entry !== "object") {
       continue;
     }
-    const found = pickImageFromUnknown(entry);
+    const found = pickImageFromUnknown(entry, permissive);
     if (found) {
       return found;
     }
@@ -753,7 +756,7 @@ function extractImageUrl(item: Record<string, unknown>) {
     item.icon
   ];
   for (const candidate of directCandidates) {
-    const found = pickImageFromUnknown(candidate);
+    const found = pickImageFromUnknown(candidate, true);
     if (found) {
       return found;
     }
@@ -767,7 +770,7 @@ function extractImageUrl(item: Record<string, unknown>) {
     item.attachments
   ];
   for (const candidate of arrayCandidates) {
-    const found = pickImageFromUnknown(candidate);
+    const found = pickImageFromUnknown(candidate, true);
     if (found) {
       return found;
     }
@@ -791,7 +794,7 @@ function extractImageUrl(item: Record<string, unknown>) {
     if (!candidate || typeof candidate !== "object") {
       continue;
     }
-    const found = pickImageFromUnknown(candidate);
+    const found = pickImageFromUnknown(candidate, true);
     if (found) {
       return found;
     }
