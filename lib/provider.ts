@@ -657,10 +657,10 @@ function pickImageFromUnknown(value: unknown, permissive = false): string {
     if (!normalized) {
       return "";
     }
-    if (permissive) {
+    if (isLikelyImageUrl(normalized)) {
       return normalized;
     }
-    return isLikelyImageUrl(normalized) ? normalized : "";
+    return permissive ? "" : "";
   }
 
   if (Array.isArray(value)) {
@@ -709,13 +709,21 @@ function pickImageFromUnknown(value: unknown, permissive = false): string {
   for (const [key, entry] of Object.entries(record)) {
     const lower = key.toLowerCase();
     if (
+      lower.includes("avatar") ||
+      lower.includes("seller") ||
+      lower.includes("profile") ||
+      lower.includes("user") ||
+      lower.includes("logo")
+    ) {
+      continue;
+    }
+    if (
       lower.includes("image") ||
       lower.includes("img") ||
       lower.includes("photo") ||
       lower.includes("preview") ||
       lower.includes("cover") ||
       lower.includes("thumb") ||
-      lower.includes("avatar") ||
       lower.includes("attachment") ||
       lower.includes("media") ||
       lower.includes("gallery")
@@ -745,18 +753,17 @@ function extractImageUrl(item: Record<string, unknown>) {
     item.image,
     item.image_url,
     item.imageUrl,
-    item.avatar,
-    item.avatar_url,
-    item.img,
-    item.cover,
-    item.cover_url,
     item.preview,
     item.preview_url,
+    item.thumbnail,
+    item.thumbnail_url,
+    item.cover,
+    item.cover_url,
     item.photo,
-    item.icon
+    item.img
   ];
   for (const candidate of directCandidates) {
-    const found = pickImageFromUnknown(candidate, true);
+    const found = pickImageFromUnknown(candidate);
     if (found) {
       return found;
     }
@@ -770,7 +777,7 @@ function extractImageUrl(item: Record<string, unknown>) {
     item.attachments
   ];
   for (const candidate of arrayCandidates) {
-    const found = pickImageFromUnknown(candidate, true);
+    const found = pickImageFromUnknown(candidate);
     if (found) {
       return found;
     }
@@ -794,7 +801,7 @@ function extractImageUrl(item: Record<string, unknown>) {
     if (!candidate || typeof candidate !== "object") {
       continue;
     }
-    const found = pickImageFromUnknown(candidate, true);
+    const found = pickImageFromUnknown(candidate);
     if (found) {
       return found;
     }
@@ -1280,8 +1287,9 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "media_platform"
   ]);
   if (normalizedQuery) {
-    url.searchParams.set("title", normalizedQuery);
     url.searchParams.set("q", normalizedQuery);
+    url.searchParams.set("query", normalizedQuery);
+    url.searchParams.set("search", normalizedQuery);
   }
   url.searchParams.set("order_by", resolveSupplierSort(options.sort));
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
@@ -1517,7 +1525,8 @@ function hasRealDescription(value: string) {
 }
 
 function hasRealImage(url: string) {
-  const normalized = url.trim().toLowerCase();
+  const normalizedSource = normalizeImageUrl(url);
+  const normalized = normalizedSource.trim().toLowerCase();
   if (!normalized) {
     return false;
   }
@@ -1528,11 +1537,7 @@ function hasRealImage(url: string) {
   ) {
     return false;
   }
-  return (
-    normalized.startsWith("http://") ||
-    normalized.startsWith("https://") ||
-    normalized.startsWith("data:image/")
-  );
+  return isLikelyImageUrl(normalizedSource);
 }
 
 function mergeListing(base: MarketListing, detail: MarketListing | null) {
@@ -1657,6 +1662,85 @@ function applyLocalFilters(
     twitter: ["twitter", "x.com", "икс", "твиттер"],
     snapchat: ["snapchat", "снапчат"]
   };
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9а-яё]+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const queryTokens = Array.from(
+    new Set(
+      normalizeText(queryTerm)
+        .split(" ")
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2)
+    )
+  );
+  const normalizedQuery = queryTokens.join(" ");
+  const compactQuery = queryTokens.join("");
+  const isSubsequence = (haystack: string, needle: string) => {
+    if (!needle) {
+      return true;
+    }
+    let pointer = 0;
+    for (const char of haystack) {
+      if (char === needle[pointer]) {
+        pointer += 1;
+        if (pointer === needle.length) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  const tokenMatchesText = (
+    normalizedHaystack: string,
+    compactHaystack: string,
+    token: string
+  ) => {
+    if (normalizedHaystack.includes(token)) {
+      return true;
+    }
+    const words = normalizedHaystack.split(" ");
+    if (words.some((word) => word.startsWith(token) || token.startsWith(word))) {
+      return true;
+    }
+    if (token.length >= 4 && isSubsequence(compactHaystack, token)) {
+      return true;
+    }
+    return false;
+  };
+  const matchesKeywordQuery = (item: MarketListing) => {
+    if (queryTokens.length === 0) {
+      return true;
+    }
+    const normalizedHaystack = normalizeText(
+      `${item.title} ${item.description} ${item.game} ${item.category} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+    if (!normalizedHaystack) {
+      return false;
+    }
+    const compactHaystack = normalizedHaystack.replace(/\s+/g, "");
+    if (normalizedQuery && normalizedHaystack.includes(normalizedQuery)) {
+      return true;
+    }
+    if (compactQuery.length >= 5 && compactHaystack.includes(compactQuery)) {
+      return true;
+    }
+    let matches = 0;
+    for (const token of queryTokens) {
+      if (tokenMatchesText(normalizedHaystack, compactHaystack, token)) {
+        matches += 1;
+      }
+    }
+    const requiredMatches =
+      queryTokens.length <= 2
+        ? queryTokens.length
+        : Math.max(2, Math.ceil(queryTokens.length * 0.67));
+    return matches >= requiredMatches;
+  };
 
   const matchesGameToken = (item: MarketListing, token: string) => {
     const haystack = `${item.game} ${item.title} ${item.category} ${item.description}`.toLowerCase();
@@ -1684,7 +1768,6 @@ function applyLocalFilters(
     }
     return haystack.includes(token);
   };
-  const normalizeText = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
   const parseCompactNumber = (raw: string) => {
     const text = raw.toLowerCase().replace(/\s+/g, "").replace(",", ".");
     const match = text.match(/(\d+(?:\.\d+)?)(k|m|b)?/);
@@ -1825,6 +1908,9 @@ function applyLocalFilters(
   }
   if ((hasKeywordQuery || forceScopeMatch) && categoryFilter) {
     output = output.filter((item) => matchesGameToken(item, categoryFilter));
+  }
+  if (hasKeywordQuery) {
+    output = output.filter((item) => matchesKeywordQuery(item));
   }
   if (categoryFilter in mediaPlatformKeywords) {
     const platformTokens = mediaPlatformKeywords[categoryFilter] ?? [];
@@ -2004,6 +2090,41 @@ function withMarkup(listings: MarketListing[], markupPercent: number) {
   });
 }
 
+function buildSupplierQueryVariants(query: string) {
+  const normalized = query.trim();
+  if (!normalized) {
+    return [""];
+  }
+
+  const tokens = Array.from(
+    new Set(
+      normalized
+        .toLowerCase()
+        .split(/[^a-z0-9а-яё]+/gi)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2)
+    )
+  );
+
+  const variants = new Set<string>([normalized]);
+  if (tokens.length > 0) {
+    variants.add(tokens.join(" "));
+  }
+  for (const token of tokens) {
+    if (token.length >= 3) {
+      variants.add(token);
+    }
+  }
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const pair = `${tokens[index]} ${tokens[index + 1]}`.trim();
+    if (pair.length >= 4) {
+      variants.add(pair);
+    }
+  }
+
+  return Array.from(variants).filter(Boolean).slice(0, 3);
+}
+
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
   const store = await readStore();
   const endpoint = getSearchEndpoint();
@@ -2034,10 +2155,35 @@ export async function searchListings(query: string, options: SearchOptions = {})
   }
 
   try {
+    const fetchFromEndpointForQueries = async (
+      endpointTarget: string,
+      pageOptions: SearchOptions,
+      supplierQueries: string[]
+    ) => {
+      const normalizedQueries = supplierQueries.length > 0 ? supplierQueries : [""];
+      const settled = await Promise.allSettled(
+        normalizedQueries.map((supplierQuery) =>
+          fetchListingsFromEndpoint({
+            endpoint: endpointTarget,
+            token,
+            query: supplierQuery,
+            options: pageOptions
+          })
+        )
+      );
+      return settled
+        .filter(
+          (entry): entry is PromiseFulfilledResult<MarketListing[]> =>
+            entry.status === "fulfilled"
+        )
+        .flatMap((entry) => entry.value);
+    };
+
     const loadFilteredPage = async (
       targetPage: number,
       broadMode = false,
-      forceScopeMatch = false
+      forceScopeMatch = false,
+      supplierQueries: string[] = [trimmedQuery]
     ) => {
       const pageOptions: SearchOptions = {
         ...normalizedOptions,
@@ -2045,12 +2191,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       };
       const shouldFetchPrimary = broadMode || (Boolean(trimmedQuery) && !hasBrowseScope);
       const primary = shouldFetchPrimary
-        ? await fetchListingsFromEndpoint({
-            endpoint,
-            token,
-            query: trimmedQuery,
-            options: pageOptions
-          })
+        ? await fetchFromEndpointForQueries(endpoint, pageOptions, supplierQueries)
         : [];
       const endpointScope = broadMode
         ? {
@@ -2062,12 +2203,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope);
       const categoryResultsSettled = await Promise.allSettled(
         categoryEndpoints.map((categoryEndpoint) =>
-          fetchListingsFromEndpoint({
-            endpoint: categoryEndpoint,
-            token,
-            query: trimmedQuery,
-            options: pageOptions
-          })
+          fetchFromEndpointForQueries(categoryEndpoint, pageOptions, supplierQueries)
         )
       );
       const categoryResults = categoryResultsSettled
@@ -2081,9 +2217,41 @@ export async function searchListings(query: string, options: SearchOptions = {})
       return applyLocalFilters(combined, options, trimmedQuery, forceScopeMatch);
     };
 
+    let activeSupplierQueries = [trimmedQuery];
     let filteredCurrentPage = await loadFilteredPage(page);
     let usingBroadFallback = false;
     let usingScopeMatchFallback = false;
+    if (filteredCurrentPage.length === 0 && trimmedQuery) {
+      const keywordVariants = buildSupplierQueryVariants(trimmedQuery);
+      if (keywordVariants.length > 1) {
+        activeSupplierQueries = keywordVariants;
+        filteredCurrentPage = await loadFilteredPage(
+          page,
+          false,
+          false,
+          activeSupplierQueries
+        );
+      }
+      if (filteredCurrentPage.length === 0) {
+        usingBroadFallback = true;
+        usingScopeMatchFallback = hasBrowseScope;
+        filteredCurrentPage = await loadFilteredPage(
+          page,
+          true,
+          usingScopeMatchFallback,
+          activeSupplierQueries
+        );
+        if (filteredCurrentPage.length === 0 && usingScopeMatchFallback) {
+          usingScopeMatchFallback = false;
+          filteredCurrentPage = await loadFilteredPage(
+            page,
+            true,
+            usingScopeMatchFallback,
+            activeSupplierQueries
+          );
+        }
+      }
+    }
     if (filteredCurrentPage.length === 0 && hasBrowseScope && !trimmedQuery) {
       filteredCurrentPage = await loadFilteredPage(page, true, true);
       usingBroadFallback = true;
@@ -2099,7 +2267,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const filteredNextPage = await loadFilteredPage(
         page + 1,
         usingBroadFallback,
-        usingScopeMatchFallback
+        usingScopeMatchFallback,
+        activeSupplierQueries
       );
       hasMore = filteredNextPage.length > 0;
     }

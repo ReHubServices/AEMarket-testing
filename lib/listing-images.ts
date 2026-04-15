@@ -26,6 +26,44 @@ function normalizeUrl(raw: string | null | undefined) {
   return "";
 }
 
+function isLikelyDisplayImage(url: string) {
+  const normalized = url.toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized.startsWith("data:image/")) {
+    return true;
+  }
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)) {
+    return true;
+  }
+  if (
+    normalized.includes("/image") ||
+    normalized.includes("/images/") ||
+    normalized.includes("/photo") ||
+    normalized.includes("/thumb") ||
+    normalized.includes("/preview") ||
+    normalized.includes("/attachment") ||
+    normalized.includes("nztcdn.com/files/")
+  ) {
+    return true;
+  }
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    if (host.includes("nztcdn.com") || host.includes("lztcdn.com")) {
+      return true;
+    }
+    if (path.includes("/attachments/") || path.includes("/uploads/")) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function listingKeywords(listing: Pick<MarketListing, "title" | "game" | "category">) {
   return `${listing.title} ${listing.game} ${listing.category}`.toLowerCase();
 }
@@ -60,6 +98,9 @@ export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title
   const lower = normalized.toLowerCase();
   const blocked = BROKEN_IMAGE_HINTS.some((hint) => lower.includes(hint));
   if (blocked) {
+    return getPresetListingImage(listing);
+  }
+  if (!isLikelyDisplayImage(normalized)) {
     return getPresetListingImage(listing);
   }
   return normalized;
