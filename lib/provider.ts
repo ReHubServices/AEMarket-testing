@@ -1643,28 +1643,15 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
         const detail = await fetchListingDetailFromApi(listing.id, token);
         return {
           id: listing.id,
-          detail,
-          blocked: false
+          detail
         };
       } catch (error) {
-        if (error instanceof Error && error.message === "BLOCKED_LISTING") {
-          return {
-            id: listing.id,
-            detail: null,
-            blocked: true
-          };
-        }
         return {
           id: listing.id,
-          detail: null,
-          blocked: false
+          detail: null
         };
       }
     })
-  );
-
-  const blockedIds = new Set(
-    detailStates.filter((state) => state.blocked).map((state) => state.id)
   );
 
   const detailById = new Map<string, MarketListing>();
@@ -1674,9 +1661,7 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
     }
   }
 
-  return output
-    .filter((listing) => !blockedIds.has(listing.id))
-    .map((listing) => mergeListing(listing, detailById.get(listing.id) ?? null));
+  return output.map((listing) => mergeListing(listing, detailById.get(listing.id) ?? null));
 }
 
 function applyLocalFilters(
@@ -1804,9 +1789,9 @@ function applyLocalFilters(
       }
     }
     const requiredMatches =
-      queryTokens.length <= 2
-        ? queryTokens.length
-        : Math.max(2, Math.ceil(queryTokens.length * 0.67));
+      queryTokens.length <= 1
+        ? 1
+        : Math.max(1, Math.ceil(queryTokens.length * 0.5));
     return matches >= requiredMatches;
   };
   const matchesSelectedTerm = (item: MarketListing, term: string) => {
