@@ -1291,6 +1291,16 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     url.searchParams.set("query", normalizedQuery);
     url.searchParams.set("search", normalizedQuery);
   }
+  const normalizedGame = options.game?.trim();
+  const normalizedCategory = options.category?.trim();
+  if (normalizedGame) {
+    url.searchParams.set("game", normalizedGame);
+    url.searchParams.set("platform", normalizedGame);
+  }
+  if (normalizedCategory) {
+    url.searchParams.set("category", normalizedCategory);
+    url.searchParams.set("cat", normalizedCategory);
+  }
   url.searchParams.set("order_by", resolveSupplierSort(options.sort));
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
   const pageSize = Number.isFinite(options.pageSize ?? NaN)
@@ -1747,6 +1757,20 @@ function applyLocalFilters(
     if (token === "social" || token === "media") {
       return socialKeywords.some((keyword) => haystack.includes(keyword));
     }
+    if (token === "fortnite") {
+      return [
+        "fortnite",
+        "fn",
+        "epicgames",
+        "epic games",
+        "save the world",
+        "stw",
+        "vbucks",
+        "v-bucks",
+        "battle pass",
+        "leviathan"
+      ].some((keyword) => haystack.includes(keyword));
+    }
     if (token === "steam") {
       return (
         haystack.includes("steam") ||
@@ -1765,6 +1789,33 @@ function applyLocalFilters(
     }
     if (token === "valorant") {
       return haystack.includes("valorant") || haystack.includes("riot");
+    }
+    if (token === "battlenet") {
+      return (
+        haystack.includes("battlenet") ||
+        haystack.includes("battle.net") ||
+        haystack.includes("blizzard") ||
+        haystack.includes("overwatch") ||
+        haystack.includes("warzone") ||
+        haystack.includes("call of duty") ||
+        haystack.includes("diablo") ||
+        haystack.includes("world of warcraft") ||
+        haystack.includes("wow")
+      );
+    }
+    if (token === "telegram") {
+      return haystack.includes("telegram") || haystack.includes("телеграм");
+    }
+    if (token === "discord") {
+      return haystack.includes("discord") || haystack.includes("дискорд");
+    }
+    if (token === "cs2") {
+      return (
+        haystack.includes("cs2") ||
+        haystack.includes("counter-strike") ||
+        haystack.includes("counter strike") ||
+        haystack.includes("csgo")
+      );
     }
     return haystack.includes(token);
   };
@@ -2189,10 +2240,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ...normalizedOptions,
         page: targetPage
       };
-      const shouldFetchPrimary = broadMode || (Boolean(trimmedQuery) && !hasBrowseScope);
-      const primary = shouldFetchPrimary
-        ? await fetchFromEndpointForQueries(endpoint, pageOptions, supplierQueries)
-        : [];
+      const primary = await fetchFromEndpointForQueries(endpoint, pageOptions, supplierQueries);
       const endpointScope = broadMode
         ? {
             ...options,
@@ -2218,9 +2266,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
     };
 
     let activeSupplierQueries = [trimmedQuery];
-    let filteredCurrentPage = await loadFilteredPage(page);
+    const initialForceScope = hasBrowseScope && !trimmedQuery;
+    let filteredCurrentPage = await loadFilteredPage(page, false, initialForceScope);
     let usingBroadFallback = false;
-    let usingScopeMatchFallback = false;
+    let usingScopeMatchFallback = initialForceScope;
     if (filteredCurrentPage.length === 0 && trimmedQuery) {
       const keywordVariants = buildSupplierQueryVariants(trimmedQuery);
       if (keywordVariants.length > 1) {
