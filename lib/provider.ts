@@ -1349,7 +1349,19 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
       if (!normalizedKey || !normalizedValue) {
         continue;
       }
-      if (localOnlySupplierKeys.has(normalizedKey)) {
+      if (
+        localOnlySupplierKeys.has(normalizedKey) ||
+        normalizedKey.startsWith("riot_") ||
+        normalizedKey.startsWith("lol_") ||
+        normalizedKey.startsWith("valorant_") ||
+        normalizedKey.startsWith("siege_") ||
+        normalizedKey.startsWith("media_") ||
+        normalizedKey.startsWith("telegram_") ||
+        normalizedKey.startsWith("discord_") ||
+        normalizedKey.startsWith("steam_") ||
+        normalizedKey.startsWith("cs2_") ||
+        normalizedKey.startsWith("battlenet_")
+      ) {
         continue;
       }
       url.searchParams.set(normalizedKey, normalizedValue);
@@ -1559,9 +1571,13 @@ function mergeUnique(listings: MarketListing[]) {
   const byFingerprint = new Map<string, MarketListing>();
   for (const listing of listings) {
     const normalizedTitle = listing.title.trim().toLowerCase();
+    const normalizedDescription = listing.description.trim().toLowerCase().slice(0, 180);
+    const normalizedImage = listing.imageUrl.trim().toLowerCase();
     const fingerprint = [
       listing.id.trim().toLowerCase(),
       normalizedTitle,
+      normalizedDescription,
+      normalizedImage,
       String(Math.round(listing.basePrice * 100) / 100),
       listing.currency.trim().toLowerCase(),
       listing.category.trim().toLowerCase(),
@@ -1676,6 +1692,145 @@ function applyLocalFilters(
   const hasKeywordQuery = Boolean(queryTerm.trim());
   const mediaFollowersMin = Number(options.supplierFilters?.media_followers_min ?? NaN);
   const mediaVerified = options.supplierFilters?.media_verified?.trim() ?? "";
+  const mediaPlatform = (options.supplierFilters?.media_platform ?? "").trim().toLowerCase();
+  const fortniteSkinCountMin = Number(options.supplierFilters?.fortnite_skin_count_min ?? NaN);
+  const fortniteSkinCountMax = Number(options.supplierFilters?.fortnite_skin_count_max ?? NaN);
+  const fortnitePickaxeCountMin = Number(options.supplierFilters?.fortnite_pickaxe_count_min ?? NaN);
+  const fortnitePickaxeCountMax = Number(options.supplierFilters?.fortnite_pickaxe_count_max ?? NaN);
+  const fortniteEmoteCountMin = Number(options.supplierFilters?.fortnite_emote_count_min ?? NaN);
+  const fortniteEmoteCountMax = Number(options.supplierFilters?.fortnite_emote_count_max ?? NaN);
+  const fortniteGliderCountMin = Number(options.supplierFilters?.fortnite_glider_count_min ?? NaN);
+  const fortniteGliderCountMax = Number(options.supplierFilters?.fortnite_glider_count_max ?? NaN);
+  const fortniteLevelMin = Number(options.supplierFilters?.fortnite_level_min ?? NaN);
+  const fortniteLevelMax = Number(options.supplierFilters?.fortnite_level_max ?? NaN);
+  const fortniteLifetimeWinsMin = Number(
+    options.supplierFilters?.fortnite_lifetime_wins_min ?? NaN
+  );
+  const fortniteLifetimeWinsMax = Number(
+    options.supplierFilters?.fortnite_lifetime_wins_max ?? NaN
+  );
+  const fortniteVbucksMin = Number(options.supplierFilters?.fortnite_vbucks_min ?? NaN);
+  const fortniteVbucksMax = Number(options.supplierFilters?.fortnite_vbucks_max ?? NaN);
+  const fortnitePaidSkinCountMin = Number(options.supplierFilters?.fortnite_paid_skin_count_min ?? NaN);
+  const fortnitePaidSkinCountMax = Number(options.supplierFilters?.fortnite_paid_skin_count_max ?? NaN);
+  const fortnitePaidPickaxeCountMin = Number(
+    options.supplierFilters?.fortnite_paid_pickaxe_count_min ?? NaN
+  );
+  const fortnitePaidPickaxeCountMax = Number(
+    options.supplierFilters?.fortnite_paid_pickaxe_count_max ?? NaN
+  );
+  const fortnitePaidEmoteCountMin = Number(options.supplierFilters?.fortnite_paid_emote_count_min ?? NaN);
+  const fortnitePaidEmoteCountMax = Number(options.supplierFilters?.fortnite_paid_emote_count_max ?? NaN);
+  const fortnitePaidGliderCountMin = Number(options.supplierFilters?.fortnite_paid_glider_count_min ?? NaN);
+  const fortnitePaidGliderCountMax = Number(options.supplierFilters?.fortnite_paid_glider_count_max ?? NaN);
+  const fortniteBattlePassLevelMin = Number(
+    options.supplierFilters?.fortnite_battle_pass_level_min ?? NaN
+  );
+  const fortniteBattlePassLevelMax = Number(
+    options.supplierFilters?.fortnite_battle_pass_level_max ?? NaN
+  );
+  const fortniteLastActivityDaysMax = Number(
+    options.supplierFilters?.fortnite_last_activity_days_max ?? NaN
+  );
+  const fortniteLastTransactionYearsMin = Number(
+    options.supplierFilters?.fortnite_last_transaction_years_min ?? NaN
+  );
+  const fortniteRegisteredYearsMin = Number(
+    options.supplierFilters?.fortnite_registered_years_min ?? NaN
+  );
+  const fortniteBattlePass = options.supplierFilters?.fortnite_battle_pass?.trim() ?? "";
+  const fortniteNoTransactions = options.supplierFilters?.fortnite_no_transactions?.trim() ?? "";
+  const fortnitePlatformRaw = options.supplierFilters?.fortnite_platform ?? "";
+  const fortniteAccountOriginRaw = options.supplierFilters?.fortnite_account_origin ?? "";
+  const fortniteExcludeAccountOriginRaw =
+    options.supplierFilters?.fortnite_exclude_account_origin ?? "";
+  const fortniteAccountLoginRaw = options.supplierFilters?.fortnite_account_login ?? "";
+  const fortniteEmailDomainRaw = options.supplierFilters?.fortnite_email_domain ?? "";
+  const fortniteExcludeMailDomainRaw = options.supplierFilters?.fortnite_exclude_mail_domain ?? "";
+  const fortniteMailProviderRaw = options.supplierFilters?.fortnite_mail_provider ?? "";
+  const fortniteExcludeMailProviderRaw =
+    options.supplierFilters?.fortnite_exclude_mail_provider ?? "";
+  const fortniteCountryRaw = options.supplierFilters?.fortnite_country ?? "";
+  const fortniteExcludeCountryRaw = options.supplierFilters?.fortnite_exclude_country ?? "";
+  const fortniteStwEditionRaw = options.supplierFilters?.fortnite_stw_edition ?? "";
+  const fortniteExcludeStwEditionRaw = options.supplierFilters?.fortnite_exclude_stw_edition ?? "";
+  const riotAccountOriginRaw = options.supplierFilters?.riot_account_origin ?? "";
+  const riotExcludeAccountOriginRaw = options.supplierFilters?.riot_exclude_account_origin ?? "";
+  const riotCountryRaw = options.supplierFilters?.riot_country ?? "";
+  const riotExcludeCountryRaw = options.supplierFilters?.riot_exclude_country ?? "";
+  const riotEmailDomainRaw = options.supplierFilters?.riot_email_domain ?? "";
+  const riotExcludeMailDomainRaw = options.supplierFilters?.riot_exclude_mail_domain ?? "";
+  const riotMailProviderRaw = options.supplierFilters?.riot_mail_provider ?? "";
+  const riotExcludeMailProviderRaw = options.supplierFilters?.riot_exclude_mail_provider ?? "";
+  const riotLastActivityDaysMax = Number(options.supplierFilters?.riot_last_activity_days_max ?? NaN);
+  const riotEmailLinked = options.supplierFilters?.riot_email_linked?.trim() ?? "";
+  const riotPhoneLinked = options.supplierFilters?.riot_phone_linked?.trim() ?? "";
+  const riotNotSoldBefore = options.supplierFilters?.riot_not_sold_before?.trim() ?? "";
+  const riotSoldBefore = options.supplierFilters?.riot_sold_before?.trim() ?? "";
+  const riotNotSoldBeforeByMe = options.supplierFilters?.riot_not_sold_before_by_me?.trim() ?? "";
+  const riotSoldBeforeByMe = options.supplierFilters?.riot_sold_before_by_me?.trim() ?? "";
+  const valorantSkinCountMin = Number(options.supplierFilters?.valorant_skin_count_min ?? NaN);
+  const valorantSkinCountMax = Number(options.supplierFilters?.valorant_skin_count_max ?? NaN);
+  const valorantAgentsCountMin = Number(options.supplierFilters?.valorant_agents_count_min ?? NaN);
+  const valorantAgentsCountMax = Number(options.supplierFilters?.valorant_agents_count_max ?? NaN);
+  const valorantKnifeCountMin = Number(options.supplierFilters?.valorant_knife_count_min ?? NaN);
+  const valorantKnifeCountMax = Number(options.supplierFilters?.valorant_knife_count_max ?? NaN);
+  const valorantGunBuddiesMin = Number(options.supplierFilters?.valorant_gunbuddies_count_min ?? NaN);
+  const valorantGunBuddiesMax = Number(options.supplierFilters?.valorant_gunbuddies_count_max ?? NaN);
+  const valorantLevelMin = Number(options.supplierFilters?.valorant_level_min ?? NaN);
+  const valorantLevelMax = Number(options.supplierFilters?.valorant_level_max ?? NaN);
+  const valorantVpMin = Number(options.supplierFilters?.valorant_vp_min ?? NaN);
+  const valorantVpMax = Number(options.supplierFilters?.valorant_vp_max ?? NaN);
+  const valorantInventoryValueMin = Number(
+    options.supplierFilters?.valorant_inventory_value_min ?? NaN
+  );
+  const valorantInventoryValueMax = Number(
+    options.supplierFilters?.valorant_inventory_value_max ?? NaN
+  );
+  const valorantRpMin = Number(options.supplierFilters?.valorant_rp_min ?? NaN);
+  const valorantRpMax = Number(options.supplierFilters?.valorant_rp_max ?? NaN);
+  const valorantFreeAgentsMin = Number(options.supplierFilters?.valorant_free_agents_min ?? NaN);
+  const valorantFreeAgentsMax = Number(options.supplierFilters?.valorant_free_agents_max ?? NaN);
+  const valorantHasKnife = options.supplierFilters?.valorant_has_knife?.trim() ?? "";
+  const valorantRegionRaw = options.supplierFilters?.valorant_region ?? "";
+  const valorantExcludeRegionRaw = options.supplierFilters?.valorant_exclude_region ?? "";
+  const valorantRank = (options.supplierFilters?.valorant_rank ?? "").trim().toLowerCase();
+  const valorantRankMin = (options.supplierFilters?.valorant_rank_min ?? "").trim().toLowerCase();
+  const valorantRankMax = (options.supplierFilters?.valorant_rank_max ?? "").trim().toLowerCase();
+  const valorantPreviousRankMin = (options.supplierFilters?.valorant_previous_rank_min ?? "")
+    .trim()
+    .toLowerCase();
+  const valorantPreviousRankMax = (options.supplierFilters?.valorant_previous_rank_max ?? "")
+    .trim()
+    .toLowerCase();
+  const valorantLastRankMin = (options.supplierFilters?.valorant_last_rank_min ?? "")
+    .trim()
+    .toLowerCase();
+  const valorantLastRankMax = (options.supplierFilters?.valorant_last_rank_max ?? "")
+    .trim()
+    .toLowerCase();
+  const lolSkinCountMin = Number(options.supplierFilters?.lol_skin_count_min ?? NaN);
+  const lolSkinCountMax = Number(options.supplierFilters?.lol_skin_count_max ?? NaN);
+  const lolChampionsMin = Number(options.supplierFilters?.lol_champions_count_min ?? NaN);
+  const lolChampionsMax = Number(options.supplierFilters?.lol_champions_count_max ?? NaN);
+  const lolLevelMin = Number(options.supplierFilters?.lol_level_min ?? NaN);
+  const lolLevelMax = Number(options.supplierFilters?.lol_level_max ?? NaN);
+  const lolWinrateMin = Number(options.supplierFilters?.lol_winrate_min ?? NaN);
+  const lolWinrateMax = Number(options.supplierFilters?.lol_winrate_max ?? NaN);
+  const lolBlueEssenceMin = Number(options.supplierFilters?.lol_blue_essence_min ?? NaN);
+  const lolBlueEssenceMax = Number(options.supplierFilters?.lol_blue_essence_max ?? NaN);
+  const lolOrangeEssenceMin = Number(options.supplierFilters?.lol_orange_essence_min ?? NaN);
+  const lolOrangeEssenceMax = Number(options.supplierFilters?.lol_orange_essence_max ?? NaN);
+  const lolMythicEssenceMin = Number(options.supplierFilters?.lol_mythic_essence_min ?? NaN);
+  const lolMythicEssenceMax = Number(options.supplierFilters?.lol_mythic_essence_max ?? NaN);
+  const lolRiotPointsMin = Number(options.supplierFilters?.lol_riot_points_min ?? NaN);
+  const lolRiotPointsMax = Number(options.supplierFilters?.lol_riot_points_max ?? NaN);
+  const lolRegionRaw = options.supplierFilters?.lol_region ?? "";
+  const lolExcludeRegionRaw = options.supplierFilters?.lol_exclude_region ?? "";
+  const lolRank = (options.supplierFilters?.lol_rank ?? "").trim().toLowerCase();
+  const steamGameCountMin = Number(options.supplierFilters?.steam_game_count_min ?? NaN);
+  const cs2Prime = options.supplierFilters?.cs2_prime?.trim() ?? "";
+  const cs2Rank = (options.supplierFilters?.cs2_rank ?? "").trim().toLowerCase();
   const parseMultiSelect = (raw: string | undefined) =>
     (raw ?? "")
       .split(",")
@@ -1721,6 +1876,47 @@ function applyLocalFilters(
       .replace(/[^a-z0-9а-яё]+/gi, " ")
       .replace(/\s+/g, " ")
       .trim();
+  const fortnitePlatform = normalizeText(fortnitePlatformRaw);
+  const fortniteAccountOrigin = normalizeText(fortniteAccountOriginRaw);
+  const fortniteExcludeAccountOrigin = normalizeText(fortniteExcludeAccountOriginRaw);
+  const fortniteAccountLogin = normalizeText(fortniteAccountLoginRaw);
+  const fortniteEmailDomain = normalizeText(fortniteEmailDomainRaw);
+  const fortniteExcludeMailDomain = normalizeText(fortniteExcludeMailDomainRaw);
+  const fortniteMailProvider = normalizeText(fortniteMailProviderRaw);
+  const fortniteExcludeMailProvider = normalizeText(fortniteExcludeMailProviderRaw);
+  const fortniteCountry = normalizeText(fortniteCountryRaw);
+  const fortniteExcludeCountry = normalizeText(fortniteExcludeCountryRaw);
+  const fortniteStwEdition = normalizeText(fortniteStwEditionRaw);
+  const fortniteExcludeStwEdition = normalizeText(fortniteExcludeStwEditionRaw);
+  const riotAccountOrigin = normalizeText(riotAccountOriginRaw);
+  const riotExcludeAccountOrigin = normalizeText(riotExcludeAccountOriginRaw);
+  const riotCountry = normalizeText(riotCountryRaw);
+  const riotExcludeCountry = normalizeText(riotExcludeCountryRaw);
+  const riotEmailDomain = normalizeText(riotEmailDomainRaw);
+  const riotExcludeMailDomain = normalizeText(riotExcludeMailDomainRaw);
+  const riotMailProvider = normalizeText(riotMailProviderRaw);
+  const riotExcludeMailProvider = normalizeText(riotExcludeMailProviderRaw);
+  const valorantRegion = normalizeText(valorantRegionRaw);
+  const valorantExcludeRegion = normalizeText(valorantExcludeRegionRaw);
+  const lolRegion = normalizeText(lolRegionRaw);
+  const lolExcludeRegion = normalizeText(lolExcludeRegionRaw);
+  const toFilterTokens = (raw: string) =>
+    normalizeText(raw)
+      .split(" ")
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2);
+  const matchesTokens = (haystack: string, tokens: string[]) => {
+    if (tokens.length === 0) {
+      return true;
+    }
+    return tokens.every((token) => haystack.includes(token));
+  };
+  const itemSearchText = (item: MarketListing) =>
+    normalizeText(
+      `${item.title} ${item.description} ${item.game} ${item.category} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
   const queryTokens = Array.from(
     new Set(
       normalizeText(queryTerm)
@@ -1794,6 +1990,46 @@ function applyLocalFilters(
         : Math.max(1, Math.ceil(queryTokens.length * 0.5));
     return matches >= requiredMatches;
   };
+  const scoreKeywordMatch = (item: MarketListing) => {
+    if (queryTokens.length === 0) {
+      return 0;
+    }
+    const haystack = normalizeText(
+      `${item.title} ${item.description} ${item.game} ${item.category} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+    if (!haystack) {
+      return 0;
+    }
+    const compactHaystack = haystack.replace(/\s+/g, "");
+    let score = 0;
+
+    if (normalizedQuery && haystack.includes(normalizedQuery)) {
+      score += 160;
+    }
+    if (compactQuery.length >= 5 && compactHaystack.includes(compactQuery)) {
+      score += 120;
+    }
+
+    const words = haystack.split(" ");
+    for (const token of queryTokens) {
+      if (haystack.includes(token)) {
+        score += 28;
+      }
+      if (words.some((word) => word.startsWith(token) || token.startsWith(word))) {
+        score += 18;
+      }
+      if (token.length >= 4 && isSubsequence(compactHaystack, token)) {
+        score += 10;
+      }
+    }
+
+    if (matchesKeywordQuery(item)) {
+      score += 24;
+    }
+    return score;
+  };
   const matchesSelectedTerm = (item: MarketListing, term: string) => {
     const normalizedTerm = normalizeText(term);
     if (!normalizedTerm) {
@@ -1814,7 +2050,14 @@ function applyLocalFilters(
     if (termTokens.length === 0) {
       return false;
     }
-    return termTokens.every((token) => haystack.includes(token));
+    let matchedTokens = 0;
+    for (const token of termTokens) {
+      if (haystack.includes(token)) {
+        matchedTokens += 1;
+      }
+    }
+    const requiredTokens = Math.max(1, Math.ceil(termTokens.length * 0.5));
+    return matchedTokens >= requiredTokens;
   };
 
   const matchesGameToken = (item: MarketListing, token: string) => {
@@ -1901,6 +2144,51 @@ function applyLocalFilters(
     const multiplier =
       suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
     return Math.round(base * multiplier);
+  };
+  const parseLooseNumber = (raw: string) => {
+    const compact = parseCompactNumber(raw);
+    if (compact > 0) {
+      return compact;
+    }
+    const normalized = raw.replace(/[^\d]/g, "");
+    if (!normalized) {
+      return 0;
+    }
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const extractMetricValue = (item: MarketListing, aliases: string[]) => {
+    let max = 0;
+    const sources = [
+      item.title,
+      item.description,
+      ...item.specs.map((spec) => `${spec.label}: ${spec.value}`)
+    ];
+
+    for (const source of sources) {
+      const lower = source.toLowerCase();
+      for (const alias of aliases) {
+        const normalizedAlias = alias.toLowerCase();
+        if (!lower.includes(normalizedAlias)) {
+          continue;
+        }
+        const nearMatches = source.match(
+          new RegExp(`${normalizedAlias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}[^\\d]{0,12}(\\d[\\d\\s.,kmb]*)`, "gi")
+        ) ?? [];
+        for (const match of nearMatches) {
+          max = Math.max(max, parseLooseNumber(match));
+        }
+      }
+    }
+
+    for (const spec of item.specs) {
+      const label = spec.label.toLowerCase();
+      if (aliases.some((alias) => label.includes(alias.toLowerCase()))) {
+        max = Math.max(max, parseLooseNumber(spec.value));
+      }
+    }
+
+    return max;
   };
   const extractFollowers = (item: MarketListing) => {
     const sources = [
@@ -2015,6 +2303,196 @@ function applyLocalFilters(
       return ["1", "yes", "true", "on", "available"].includes(value);
     });
   };
+  const hasCs2Prime = (item: MarketListing) => {
+    const text = normalizeText(
+      `${item.title} ${item.description} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+    if (/\b(no prime|without prime|non prime|non-prime)\b/.test(text)) {
+      return false;
+    }
+    return /\bprime\b/.test(text);
+  };
+  const isVacClean = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    if (
+      text.includes("vac ban") ||
+      text.includes("banned by vac") ||
+      text.includes("not vac clean")
+    ) {
+      return false;
+    }
+    return text.includes("vac clean") || text.includes("without vac") || text.includes("no vac");
+  };
+  const hasBattlePass = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    if (
+      text.includes("without battle pass") ||
+      text.includes("no battle pass") ||
+      text.includes("battle pass no") ||
+      text.includes("battlepass no")
+    ) {
+      return false;
+    }
+    return text.includes("battle pass") || text.includes("battlepass");
+  };
+  const hasNoTransactionsData = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    return (
+      text.includes("no transactions") ||
+      text.includes("without transactions") ||
+      text.includes("without purchases") ||
+      text.includes("нет транзак")
+    );
+  };
+  const applyMetricRange = (aliases: string[], min: number, max: number) => {
+    if (Number.isFinite(min) && min > 0) {
+      output = output.filter((item) => extractMetricValue(item, aliases) >= min);
+    }
+    if (Number.isFinite(max) && max > 0) {
+      output = output.filter((item) => extractMetricValue(item, aliases) <= max);
+    }
+  };
+  const applyIncludeTokens = (raw: string) => {
+    const tokens = toFilterTokens(raw);
+    if (tokens.length === 0) {
+      return;
+    }
+    output = output.filter((item) => matchesTokens(itemSearchText(item), tokens));
+  };
+  const applyExcludeTokens = (raw: string) => {
+    const tokens = toFilterTokens(raw);
+    if (tokens.length === 0) {
+      return;
+    }
+    output = output.filter((item) => !matchesTokens(itemSearchText(item), tokens));
+  };
+  const fortnitePlatformAliases: Record<string, string[]> = {
+    pc: ["pc", "computer", "windows"],
+    xbox: ["xbox"],
+    psn: ["playstation", "psn", "ps4", "ps5"],
+    switch: ["switch", "nintendo"],
+    mobile: ["mobile", "android", "ios", "iphone"]
+  };
+  const valorantRankOrder = [
+    "iron",
+    "bronze",
+    "silver",
+    "gold",
+    "platinum",
+    "diamond",
+    "ascendant",
+    "immortal",
+    "radiant"
+  ];
+  const lolRankOrder = [
+    "iron",
+    "bronze",
+    "silver",
+    "gold",
+    "platinum",
+    "emerald",
+    "diamond",
+    "master",
+    "grandmaster",
+    "challenger"
+  ];
+  const rankIndex = (rank: string, order: string[]) => {
+    if (!rank) {
+      return 0;
+    }
+    const normalizedRank = normalizeText(rank);
+    const foundIndex = order.findIndex((entry) => normalizedRank.includes(entry));
+    return foundIndex >= 0 ? foundIndex + 1 : 0;
+  };
+  const extractRankIndexFromItem = (item: MarketListing, order: string[]) => {
+    const text = itemSearchText(item);
+    let maxRank = 0;
+    for (const [index, entry] of order.entries()) {
+      if (text.includes(entry)) {
+        maxRank = Math.max(maxRank, index + 1);
+      }
+    }
+    return maxRank;
+  };
+  const hasLinkedEmail = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    if (
+      text.includes("email unlinked") ||
+      text.includes("mail unlinked") ||
+      text.includes("without email") ||
+      text.includes("without mail")
+    ) {
+      return false;
+    }
+    return (
+      text.includes("email linked") ||
+      text.includes("mail linked") ||
+      text.includes("linked email") ||
+      text.includes("linked mail")
+    );
+  };
+  const hasLinkedPhone = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    if (
+      text.includes("phone unlinked") ||
+      text.includes("without phone") ||
+      text.includes("no phone linked")
+    ) {
+      return false;
+    }
+    return text.includes("phone linked") || text.includes("linked phone");
+  };
+  const hasValorantKnife = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    return text.includes("knife") || text.includes("melee");
+  };
+  const hasSoldBefore = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    return text.includes("sold before") || text.includes("resold") || text.includes("перепрод");
+  };
+  const isNotSoldBefore = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    return text.includes("not sold before") || text.includes("first sale") || text.includes("не продав");
+  };
+  const getRawFilter = (key: string) => options.supplierFilters?.[key] ?? "";
+  const getNumberFilter = (key: string) => Number(options.supplierFilters?.[key] ?? NaN);
+  const getFlagFilter = (key: string) => options.supplierFilters?.[key]?.trim() ?? "";
+  const applyRangeByKeys = (minKey: string, maxKey: string, aliases: string[]) => {
+    applyMetricRange(aliases, getNumberFilter(minKey), getNumberFilter(maxKey));
+  };
+  const applyPrefixCommonFilters = (prefix: string) => {
+    applyIncludeTokens(getRawFilter(`${prefix}_account_origin`));
+    applyExcludeTokens(getRawFilter(`${prefix}_exclude_account_origin`));
+    applyIncludeTokens(getRawFilter(`${prefix}_country`));
+    applyExcludeTokens(getRawFilter(`${prefix}_exclude_country`));
+    applyIncludeTokens(getRawFilter(`${prefix}_email_domain`));
+    applyExcludeTokens(getRawFilter(`${prefix}_exclude_mail_domain`));
+    applyIncludeTokens(getRawFilter(`${prefix}_mail_provider`));
+    applyExcludeTokens(getRawFilter(`${prefix}_exclude_mail_provider`));
+
+    const lastActivityMax = getNumberFilter(`${prefix}_last_activity_days_max`);
+    if (Number.isFinite(lastActivityMax) && lastActivityMax > 0) {
+      output = output.filter((item) => {
+        const activity = extractMetricValue(item, ["last activity", "active", "activity days"]);
+        return activity <= lastActivityMax || activity === 0;
+      });
+    }
+
+    if (getFlagFilter(`${prefix}_not_sold_before`) === "1") {
+      output = output.filter((item) => isNotSoldBefore(item));
+    }
+    if (getFlagFilter(`${prefix}_sold_before`) === "1") {
+      output = output.filter((item) => hasSoldBefore(item));
+    }
+    if (getFlagFilter(`${prefix}_not_sold_before_by_me`) === "1") {
+      output = output.filter((item) => isNotSoldBefore(item));
+    }
+    if (getFlagFilter(`${prefix}_sold_before_by_me`) === "1") {
+      output = output.filter((item) => hasSoldBefore(item));
+    }
+  };
 
   if (Number.isFinite(options.minPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice >= Number(options.minPrice));
@@ -2029,10 +2507,27 @@ function applyLocalFilters(
     output = output.filter((item) => matchesGameToken(item, categoryFilter));
   }
   if (hasKeywordQuery) {
-    output = output.filter((item) => matchesKeywordQuery(item));
+    const ranked = output.map((item) => ({
+      item,
+      score: scoreKeywordMatch(item)
+    }));
+    const matched = ranked
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.item);
+    const unmatched = ranked
+      .filter((entry) => entry.score <= 0)
+      .map((entry) => entry.item);
+    output = [...matched, ...unmatched];
   }
-  if (categoryFilter in mediaPlatformKeywords) {
-    const platformTokens = mediaPlatformKeywords[categoryFilter] ?? [];
+  const resolvedMediaPlatform =
+    mediaPlatform && mediaPlatform in mediaPlatformKeywords
+      ? mediaPlatform
+      : categoryFilter in mediaPlatformKeywords
+        ? categoryFilter
+        : "";
+  if (resolvedMediaPlatform) {
+    const platformTokens = mediaPlatformKeywords[resolvedMediaPlatform] ?? [];
     output = output.filter((item) => {
       const haystack = `${item.title} ${item.description} ${item.game} ${item.category}`.toLowerCase();
       return platformTokens.some((token) => haystack.includes(token));
@@ -2041,6 +2536,417 @@ function applyLocalFilters(
   if (Number.isFinite(mediaFollowersMin) && mediaFollowersMin > 0) {
     output = output.filter((item) => extractFollowers(item) >= mediaFollowersMin);
   }
+  if (fortnitePlatform) {
+    const platformTokens = fortnitePlatformAliases[fortnitePlatform] ?? [fortnitePlatform];
+    output = output.filter((item) => {
+      const text = itemSearchText(item);
+      return platformTokens.some((token) => text.includes(token));
+    });
+  }
+  applyIncludeTokens(fortniteAccountOrigin);
+  applyExcludeTokens(fortniteExcludeAccountOrigin);
+  applyIncludeTokens(fortniteAccountLogin);
+  applyIncludeTokens(fortniteEmailDomain);
+  applyExcludeTokens(fortniteExcludeMailDomain);
+  applyIncludeTokens(fortniteMailProvider);
+  applyExcludeTokens(fortniteExcludeMailProvider);
+  applyIncludeTokens(fortniteCountry);
+  applyExcludeTokens(fortniteExcludeCountry);
+  applyIncludeTokens(fortniteStwEdition);
+  applyExcludeTokens(fortniteExcludeStwEdition);
+  applyMetricRange(
+    ["skins", "skin", "outfits", "outfit", "locker"],
+    fortniteSkinCountMin,
+    fortniteSkinCountMax
+  );
+  applyMetricRange(
+    ["pickaxes", "pickaxe", "harvesting tool", "axe"],
+    fortnitePickaxeCountMin,
+    fortnitePickaxeCountMax
+  );
+  applyMetricRange(
+    ["emotes", "emote", "dances", "dance"],
+    fortniteEmoteCountMin,
+    fortniteEmoteCountMax
+  );
+  applyMetricRange(
+    ["gliders", "glider"],
+    fortniteGliderCountMin,
+    fortniteGliderCountMax
+  );
+  applyMetricRange(
+    ["level", "lvl", "account level"],
+    fortniteLevelMin,
+    fortniteLevelMax
+  );
+  applyMetricRange(
+    ["wins", "lifetime wins", "victories"],
+    fortniteLifetimeWinsMin,
+    fortniteLifetimeWinsMax
+  );
+  applyMetricRange(
+    ["vbucks", "v bucks", "v-bucks"],
+    fortniteVbucksMin,
+    fortniteVbucksMax
+  );
+  applyMetricRange(
+    ["paid outfits", "paid skins", "paid skin", "paid outfit"],
+    fortnitePaidSkinCountMin,
+    fortnitePaidSkinCountMax
+  );
+  applyMetricRange(
+    ["paid pickaxes", "paid pickaxe", "paid harvesting tool", "paid axe"],
+    fortnitePaidPickaxeCountMin,
+    fortnitePaidPickaxeCountMax
+  );
+  applyMetricRange(
+    ["paid emotes", "paid emote", "paid dances", "paid dance"],
+    fortnitePaidEmoteCountMin,
+    fortnitePaidEmoteCountMax
+  );
+  applyMetricRange(
+    ["paid gliders", "paid glider"],
+    fortnitePaidGliderCountMin,
+    fortnitePaidGliderCountMax
+  );
+  applyMetricRange(
+    ["battle pass level", "bp level"],
+    fortniteBattlePassLevelMin,
+    fortniteBattlePassLevelMax
+  );
+  if (Number.isFinite(fortniteLastActivityDaysMax) && fortniteLastActivityDaysMax > 0) {
+    output = output.filter((item) => {
+      const activity = extractMetricValue(item, ["last activity", "active", "activity days"]);
+      return activity <= fortniteLastActivityDaysMax || activity === 0;
+    });
+  }
+  if (Number.isFinite(fortniteLastTransactionYearsMin) && fortniteLastTransactionYearsMin > 0) {
+    output = output.filter((item) => {
+      const years = extractMetricValue(item, ["last transaction", "transaction", "purchase"]);
+      return years >= fortniteLastTransactionYearsMin || years === 0;
+    });
+  }
+  if (Number.isFinite(fortniteRegisteredYearsMin) && fortniteRegisteredYearsMin > 0) {
+    output = output.filter((item) => {
+      const years = extractMetricValue(item, ["registered", "reg date", "registration"]);
+      return years >= fortniteRegisteredYearsMin || years === 0;
+    });
+  }
+  if (fortniteNoTransactions === "1") {
+    output = output.filter((item) => hasNoTransactionsData(item));
+  }
+  if (fortniteBattlePass === "1") {
+    output = output.filter((item) => hasBattlePass(item));
+  }
+  if (fortniteBattlePass === "0") {
+    output = output.filter((item) => !hasBattlePass(item));
+  }
+  applyIncludeTokens(riotAccountOrigin);
+  applyExcludeTokens(riotExcludeAccountOrigin);
+  applyIncludeTokens(riotCountry);
+  applyExcludeTokens(riotExcludeCountry);
+  applyIncludeTokens(riotEmailDomain);
+  applyExcludeTokens(riotExcludeMailDomain);
+  applyIncludeTokens(riotMailProvider);
+  applyExcludeTokens(riotExcludeMailProvider);
+  if (Number.isFinite(riotLastActivityDaysMax) && riotLastActivityDaysMax > 0) {
+    output = output.filter((item) => {
+      const activity = extractMetricValue(item, ["last activity", "active", "activity days"]);
+      return activity <= riotLastActivityDaysMax || activity === 0;
+    });
+  }
+  if (riotEmailLinked === "1") {
+    output = output.filter((item) => hasLinkedEmail(item));
+  }
+  if (riotEmailLinked === "0") {
+    output = output.filter((item) => !hasLinkedEmail(item));
+  }
+  if (riotPhoneLinked === "1") {
+    output = output.filter((item) => hasLinkedPhone(item));
+  }
+  if (riotPhoneLinked === "0") {
+    output = output.filter((item) => !hasLinkedPhone(item));
+  }
+  if (riotNotSoldBefore === "1") {
+    output = output.filter((item) => isNotSoldBefore(item));
+  }
+  if (riotSoldBefore === "1") {
+    output = output.filter((item) => hasSoldBefore(item));
+  }
+  if (riotNotSoldBeforeByMe === "1") {
+    output = output.filter((item) => isNotSoldBefore(item));
+  }
+  if (riotSoldBeforeByMe === "1") {
+    output = output.filter((item) => hasSoldBefore(item));
+  }
+  applyMetricRange(
+    ["skins", "skin", "inventory", "collection"],
+    valorantSkinCountMin,
+    valorantSkinCountMax
+  );
+  applyMetricRange(
+    ["agents", "agent"],
+    valorantAgentsCountMin,
+    valorantAgentsCountMax
+  );
+  applyMetricRange(
+    ["knives", "knife", "melee"],
+    valorantKnifeCountMin,
+    valorantKnifeCountMax
+  );
+  applyMetricRange(
+    ["gun buddy", "gunbuddies", "buddies"],
+    valorantGunBuddiesMin,
+    valorantGunBuddiesMax
+  );
+  applyMetricRange(
+    ["level", "account level"],
+    valorantLevelMin,
+    valorantLevelMax
+  );
+  applyMetricRange(
+    ["vp", "valorant points"],
+    valorantVpMin,
+    valorantVpMax
+  );
+  applyMetricRange(
+    ["inventory value", "collection value", "inventory"],
+    valorantInventoryValueMin,
+    valorantInventoryValueMax
+  );
+  applyMetricRange(
+    ["rp", "radianite", "radianite points"],
+    valorantRpMin,
+    valorantRpMax
+  );
+  applyMetricRange(
+    ["free agents", "unlocked agents"],
+    valorantFreeAgentsMin,
+    valorantFreeAgentsMax
+  );
+  applyIncludeTokens(valorantRegion);
+  applyExcludeTokens(valorantExcludeRegion);
+  if (valorantRank) {
+    output = output.filter((item) => itemSearchText(item).includes(valorantRank));
+  }
+  if (valorantHasKnife === "1") {
+    output = output.filter((item) => hasValorantKnife(item));
+  }
+  if (valorantRankMin) {
+    const target = rankIndex(valorantRankMin, valorantRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => extractRankIndexFromItem(item, valorantRankOrder) >= target);
+    }
+  }
+  if (valorantRankMax) {
+    const target = rankIndex(valorantRankMax, valorantRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => {
+        const rank = extractRankIndexFromItem(item, valorantRankOrder);
+        return rank > 0 && rank <= target;
+      });
+    }
+  }
+  if (valorantPreviousRankMin) {
+    const target = rankIndex(valorantPreviousRankMin, valorantRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => extractRankIndexFromItem(item, valorantRankOrder) >= target);
+    }
+  }
+  if (valorantPreviousRankMax) {
+    const target = rankIndex(valorantPreviousRankMax, valorantRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => {
+        const rank = extractRankIndexFromItem(item, valorantRankOrder);
+        return rank > 0 && rank <= target;
+      });
+    }
+  }
+  if (valorantLastRankMin) {
+    const target = rankIndex(valorantLastRankMin, valorantRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => extractRankIndexFromItem(item, valorantRankOrder) >= target);
+    }
+  }
+  if (valorantLastRankMax) {
+    const target = rankIndex(valorantLastRankMax, valorantRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => {
+        const rank = extractRankIndexFromItem(item, valorantRankOrder);
+        return rank > 0 && rank <= target;
+      });
+    }
+  }
+  applyMetricRange(
+    ["lol skins", "league skins", "skins"],
+    lolSkinCountMin,
+    lolSkinCountMax
+  );
+  applyMetricRange(
+    ["champions", "champs"],
+    lolChampionsMin,
+    lolChampionsMax
+  );
+  applyMetricRange(
+    ["level", "summoner level"],
+    lolLevelMin,
+    lolLevelMax
+  );
+  applyMetricRange(
+    ["winrate", "win rate"],
+    lolWinrateMin,
+    lolWinrateMax
+  );
+  applyMetricRange(
+    ["blue essence", "be"],
+    lolBlueEssenceMin,
+    lolBlueEssenceMax
+  );
+  applyMetricRange(
+    ["orange essence"],
+    lolOrangeEssenceMin,
+    lolOrangeEssenceMax
+  );
+  applyMetricRange(
+    ["mythic essence"],
+    lolMythicEssenceMin,
+    lolMythicEssenceMax
+  );
+  applyMetricRange(
+    ["riot points", "rp"],
+    lolRiotPointsMin,
+    lolRiotPointsMax
+  );
+  applyIncludeTokens(lolRegion);
+  applyExcludeTokens(lolExcludeRegion);
+  if (lolRank) {
+    const target = rankIndex(lolRank, lolRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => extractRankIndexFromItem(item, lolRankOrder) >= target);
+    } else {
+      output = output.filter((item) => itemSearchText(item).includes(lolRank));
+    }
+  }
+  for (const prefix of [
+    "siege",
+    "media",
+    "telegram",
+    "discord",
+    "steam",
+    "cs2",
+    "battlenet"
+  ]) {
+    applyPrefixCommonFilters(prefix);
+  }
+
+  applyIncludeTokens(getRawFilter("siege_platform"));
+  applyIncludeTokens(getRawFilter("siege_rank"));
+  applyIncludeTokens(getRawFilter("siege_region"));
+  applyExcludeTokens(getRawFilter("siege_exclude_region"));
+  applyRangeByKeys("siege_level_min", "siege_level_max", ["level", "account level"]);
+  applyRangeByKeys("siege_operators_min", "siege_operators_max", ["operators", "operator"]);
+  applyRangeByKeys("siege_skins_min", "siege_skins_max", ["skins", "skin"]);
+  applyRangeByKeys("siege_credits_min", "siege_credits_max", ["credits", "r6 credits"]);
+  applyRangeByKeys("siege_kd_min", "siege_kd_max", ["kd", "k d"]);
+  applyRangeByKeys("siege_winrate_min", "siege_winrate_max", ["winrate", "win rate"]);
+
+  applyRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
+  applyRangeByKeys("media_following_min", "media_following_max", ["following"]);
+  applyRangeByKeys("media_posts_min", "media_posts_max", ["posts"]);
+  applyRangeByKeys("media_age_days_min", "media_age_days_max", ["age days", "days old", "registered"]);
+  applyRangeByKeys("media_engagement_min", "media_engagement_max", ["engagement", "er"]);
+  applyIncludeTokens(getRawFilter("media_account_type"));
+
+  if (getFlagFilter("telegram_premium") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("premium"));
+  }
+  if (getFlagFilter("telegram_premium") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("premium"));
+  }
+  applyRangeByKeys("telegram_dialogs_min", "telegram_dialogs_max", ["dialogs", "chats", "messages"]);
+  applyRangeByKeys("telegram_channels_min", "telegram_channels_max", ["channels", "channel"]);
+  applyRangeByKeys("telegram_groups_min", "telegram_groups_max", ["groups", "group"]);
+  applyRangeByKeys("telegram_sessions_min", "telegram_sessions_max", ["sessions", "devices"]);
+  applyRangeByKeys("telegram_stars_min", "telegram_stars_max", ["stars"]);
+  applyRangeByKeys("telegram_age_days_min", "telegram_age_days_max", ["age days", "days old", "registered"]);
+
+  if (getFlagFilter("discord_nitro") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("nitro"));
+  }
+  if (getFlagFilter("discord_nitro") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("nitro"));
+  }
+  if (getFlagFilter("discord_phone_verified") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("phone verified"));
+  }
+  if (getFlagFilter("discord_phone_verified") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("phone verified"));
+  }
+  if (getFlagFilter("discord_email_verified") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("email verified"));
+  }
+  if (getFlagFilter("discord_email_verified") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("email verified"));
+  }
+  applyRangeByKeys("discord_friends_min", "discord_friends_max", ["friends", "friend"]);
+  applyRangeByKeys("discord_servers_min", "discord_servers_max", ["servers", "guilds"]);
+  applyRangeByKeys("discord_age_days_min", "discord_age_days_max", ["age days", "days old", "registered"]);
+  applyRangeByKeys("discord_badges_min", "discord_badges_max", ["badges", "badge"]);
+
+  if (Number.isFinite(steamGameCountMin) && steamGameCountMin > 0) {
+    output = output.filter(
+      (item) => extractMetricValue(item, ["games", "owned games", "game count"]) >= steamGameCountMin
+    );
+  }
+  applyRangeByKeys("steam_game_count_min", "steam_game_count_max", ["games", "owned games", "game count"]);
+  applyRangeByKeys("steam_level_min", "steam_level_max", ["steam level", "level"]);
+  applyRangeByKeys("steam_inventory_value_min", "steam_inventory_value_max", ["inventory", "inventory value"]);
+  applyRangeByKeys("steam_hours_min", "steam_hours_max", ["hours", "playtime"]);
+  applyIncludeTokens(getRawFilter("steam_rank"));
+  applyIncludeTokens(getRawFilter("steam_region"));
+  applyExcludeTokens(getRawFilter("steam_exclude_region"));
+  if (getFlagFilter("steam_vac") === "1") {
+    output = output.filter((item) => isVacClean(item));
+  }
+  if (getFlagFilter("steam_vac") === "0") {
+    output = output.filter((item) => !isVacClean(item));
+  }
+
+  if (cs2Prime === "1") {
+    output = output.filter((item) => hasCs2Prime(item));
+  }
+  if (cs2Prime === "0") {
+    output = output.filter((item) => !hasCs2Prime(item));
+  }
+  if (cs2Rank) {
+    output = output.filter((item) =>
+      normalizeText(
+        `${item.title} ${item.description} ${item.specs
+          .map((spec) => `${spec.label} ${spec.value}`)
+          .join(" ")}`
+      ).includes(cs2Rank)
+    );
+  }
+  applyRangeByKeys("cs2_faceit_level_min", "cs2_faceit_level_max", ["faceit level", "faceit"]);
+  applyRangeByKeys("cs2_premier_rating_min", "cs2_premier_rating_max", ["premier rating", "premier"]);
+  applyRangeByKeys("cs2_wins_min", "cs2_wins_max", ["wins", "victories"]);
+  applyRangeByKeys("cs2_hours_min", "cs2_hours_max", ["hours", "playtime"]);
+  applyRangeByKeys("cs2_inventory_value_min", "cs2_inventory_value_max", ["inventory", "inventory value"]);
+  if (getFlagFilter("cs2_vac") === "1") {
+    output = output.filter((item) => isVacClean(item));
+  }
+  if (getFlagFilter("cs2_vac") === "0") {
+    output = output.filter((item) => !isVacClean(item));
+  }
+
+  applyIncludeTokens(getRawFilter("battlenet_region"));
+  applyExcludeTokens(getRawFilter("battlenet_exclude_region"));
+  applyIncludeTokens(getRawFilter("battlenet_rank"));
+  applyRangeByKeys("battlenet_level_min", "battlenet_level_max", ["level"]);
+  applyRangeByKeys("battlenet_games_min", "battlenet_games_max", ["games", "owned games"]);
+  applyRangeByKeys("battlenet_cod_cp_min", "battlenet_cod_cp_max", ["cp", "cod points"]);
+  applyRangeByKeys("battlenet_wow_ilvl_min", "battlenet_wow_ilvl_max", ["ilvl", "item level"]);
+
   if (mediaVerified === "1") {
     output = output.filter((item) => isVerifiedMedia(item));
   }
@@ -2436,20 +3342,32 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
     const aggregated: MarketListing[] = [];
-    const seenIds = new Set<string>();
+    const seenFingerprints = new Set<string>();
     const preloadedByLogicalPage = new Map<number, MarketListing[]>([[page, filteredCurrentPage]]);
     const pushChunkUnique = (chunk: MarketListing[]) => {
       for (const item of chunk) {
-        if (!item.id || seenIds.has(item.id)) {
+        if (!item.id) {
           continue;
         }
-        seenIds.add(item.id);
+        const fingerprint = [
+          item.id.trim().toLowerCase(),
+          item.title.trim().toLowerCase(),
+          String(Math.round(item.basePrice * 100) / 100),
+          item.currency.trim().toLowerCase(),
+          item.category.trim().toLowerCase(),
+          item.game.trim().toLowerCase(),
+          item.imageUrl.trim().toLowerCase()
+        ].join("::");
+        if (seenFingerprints.has(fingerprint)) {
+          continue;
+        }
+        seenFingerprints.add(fingerprint);
         aggregated.push(item);
       }
     };
 
     let logicalCursor = 1;
-    const maxLogicalPages = Math.max(page + 14, 20);
+    const maxLogicalPages = Math.max(page + 20, 50);
     let consecutiveEmpty = 0;
 
     while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {

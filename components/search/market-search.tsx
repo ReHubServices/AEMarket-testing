@@ -74,47 +74,21 @@ const GAME_TOGGLE_FILTERS: Record<
   Exclude<GameFilterTarget, "all">,
   Array<{ key: string; label: string }>
 > = {
-  fortnite: [
-    { key: "first_owner", label: "First Owner" },
-    { key: "ma", label: "Mail Access" }
-  ],
-  valorant: [
-    { key: "ma", label: "Mail Access" }
-  ],
-  siege: [
-    { key: "ma", label: "Mail Access" }
-  ],
-  media: [
-    { key: "ma", label: "Mail Access" }
-  ],
-  telegram: [
-    { key: "ma", label: "Mail Access" },
-    { key: "online", label: "Online Access" }
-  ],
-  discord: [
-    { key: "ma", label: "Mail Access" },
-    { key: "online", label: "Online Access" }
-  ],
-  steam: [
-    { key: "first_owner", label: "First Owner" },
-    { key: "ma", label: "Mail Access" },
-    { key: "vac", label: "VAC Clean" }
-  ],
-  cs2: [
-    { key: "first_owner", label: "First Owner" },
-    { key: "ma", label: "Mail Access" },
-    { key: "vac", label: "VAC Clean" }
-  ],
-  battlenet: [
-    { key: "ma", label: "Mail Access" },
-    { key: "online", label: "Online Access" }
-  ]
+  fortnite: [],
+  valorant: [],
+  siege: [],
+  media: [],
+  telegram: [],
+  discord: [],
+  steam: [],
+  cs2: [],
+  battlenet: []
 };
 
 const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
   all: [
     "Fortnite",
-    "Valorant",
+    "Riot Client",
     "Steam",
     "CS2",
     "Telegram",
@@ -312,7 +286,7 @@ const GLOBAL_SUGGESTION_POOL = [
   "Season 1",
   "Season 2",
   "Save The World",
-  "Valorant",
+  "Riot Client",
   "Radiant",
   "Immortal",
   "Ascendant",
@@ -496,6 +470,378 @@ const FORTNITE_SELECTOR_CONFIG: FortniteSelectorConfig[] = [
       "Arcana"
     ]
   }
+];
+
+type FilterOption = {
+  value: string;
+  label: string;
+};
+
+type RangeFilterConfig = {
+  label: string;
+  minKey: string;
+  maxKey: string;
+  minPlaceholder: string;
+  maxPlaceholder: string;
+};
+
+type TextFilterConfig = {
+  label: string;
+  key: string;
+  placeholder: string;
+};
+
+type TriStateFilterConfig = {
+  label: string;
+  key: string;
+  options: FilterOption[];
+};
+
+const ANY_YES_NO_OPTIONS: FilterOption[] = [
+  { value: "", label: "No matter" },
+  { value: "1", label: "Yes" },
+  { value: "0", label: "No" }
+];
+
+const ANY_MAYBE_NO_OPTIONS: FilterOption[] = [
+  { value: "", label: "No matter" },
+  { value: "maybe", label: "Maybe" },
+  { value: "0", label: "No" }
+];
+
+const FORTNITE_LEFT_TEXT_FILTERS: TextFilterConfig[] = [
+  { label: "Account origin", key: "fortnite_account_origin", placeholder: "Any" },
+  {
+    label: "Exclude account origin",
+    key: "fortnite_exclude_account_origin",
+    placeholder: "Exclude"
+  },
+  { label: "Account login", key: "fortnite_account_login", placeholder: "Any" },
+  { label: "Email domain", key: "fortnite_email_domain", placeholder: "Any" },
+  {
+    label: "Exclude mail domain",
+    key: "fortnite_exclude_mail_domain",
+    placeholder: "Exclude"
+  },
+  { label: "Mail provider", key: "fortnite_mail_provider", placeholder: "Any" },
+  {
+    label: "Exclude mail provider",
+    key: "fortnite_exclude_mail_provider",
+    placeholder: "Exclude"
+  }
+];
+
+const FORTNITE_LEFT_FLAGS: Array<{ key: string; label: string }> = [
+  { key: "fortnite_not_sold_before", label: "Not sold before" },
+  { key: "fortnite_sold_before", label: "Sold before" },
+  { key: "fortnite_not_sold_before_by_me", label: "Not sold before by me" },
+  { key: "fortnite_sold_before_by_me", label: "Sold before by me" },
+  {
+    key: "fortnite_rocket_league_purchases",
+    label: "There are Rocket League purchases"
+  }
+];
+
+const FORTNITE_CORE_RANGE_FILTERS: RangeFilterConfig[] = [
+  {
+    label: "Outfits",
+    minKey: "fortnite_skin_count_min",
+    maxKey: "fortnite_skin_count_max",
+    minPlaceholder: "Min outfits",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Pickaxes",
+    minKey: "fortnite_pickaxe_count_min",
+    maxKey: "fortnite_pickaxe_count_max",
+    minPlaceholder: "Pickaxes, from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Dances",
+    minKey: "fortnite_emote_count_min",
+    maxKey: "fortnite_emote_count_max",
+    minPlaceholder: "Dances, from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Gliders",
+    minKey: "fortnite_glider_count_min",
+    maxKey: "fortnite_glider_count_max",
+    minPlaceholder: "Gliders, from",
+    maxPlaceholder: "up to"
+  }
+];
+
+const FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS: RangeFilterConfig[] = [
+  {
+    label: "Outfits",
+    minKey: "fortnite_vbucks_cost_outfits_min",
+    maxKey: "fortnite_vbucks_cost_outfits_max",
+    minPlaceholder: "Min outfits",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Pickaxes",
+    minKey: "fortnite_vbucks_cost_pickaxes_min",
+    maxKey: "fortnite_vbucks_cost_pickaxes_max",
+    minPlaceholder: "Pickaxes, from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Dances",
+    minKey: "fortnite_vbucks_cost_emotes_min",
+    maxKey: "fortnite_vbucks_cost_emotes_max",
+    minPlaceholder: "Dances, from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Gliders",
+    minKey: "fortnite_vbucks_cost_gliders_min",
+    maxKey: "fortnite_vbucks_cost_gliders_max",
+    minPlaceholder: "Gliders, from",
+    maxPlaceholder: "up to"
+  }
+];
+
+const FORTNITE_PAID_RANGE_FILTERS: RangeFilterConfig[] = [
+  {
+    label: "Outfits",
+    minKey: "fortnite_paid_skin_count_min",
+    maxKey: "fortnite_paid_skin_count_max",
+    minPlaceholder: "Min outfits",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Pickaxes",
+    minKey: "fortnite_paid_pickaxe_count_min",
+    maxKey: "fortnite_paid_pickaxe_count_max",
+    minPlaceholder: "Pickaxes, from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Dances",
+    minKey: "fortnite_paid_emote_count_min",
+    maxKey: "fortnite_paid_emote_count_max",
+    minPlaceholder: "Dances, from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Gliders",
+    minKey: "fortnite_paid_glider_count_min",
+    maxKey: "fortnite_paid_glider_count_max",
+    minPlaceholder: "Gliders, from",
+    maxPlaceholder: "up to"
+  }
+];
+
+const FORTNITE_TRI_STATE_FILTERS: TriStateFilterConfig[] = [
+  {
+    label: "Changeable email",
+    key: "fortnite_changeable_email",
+    options: ANY_YES_NO_OPTIONS
+  },
+  {
+    label: "XBOX linkable",
+    key: "fortnite_xbox_linkable",
+    options: ANY_MAYBE_NO_OPTIONS
+  },
+  {
+    label: "PSN linkable",
+    key: "fortnite_psn_linkable",
+    options: ANY_MAYBE_NO_OPTIONS
+  },
+  {
+    label: "Battle Pass",
+    key: "fortnite_battle_pass",
+    options: ANY_YES_NO_OPTIONS
+  }
+];
+
+const RIOT_SHARED_TEXT_FILTERS: TextFilterConfig[] = [
+  { label: "Account origin", key: "riot_account_origin", placeholder: "Any" },
+  { label: "Exclude account origin", key: "riot_exclude_account_origin", placeholder: "Exclude" },
+  { label: "Country", key: "riot_country", placeholder: "Any" },
+  { label: "Exclude country", key: "riot_exclude_country", placeholder: "Exclude" },
+  { label: "Email domain", key: "riot_email_domain", placeholder: "Any" },
+  { label: "Exclude mail domain", key: "riot_exclude_mail_domain", placeholder: "Exclude" },
+  { label: "Mail provider", key: "riot_mail_provider", placeholder: "Any" },
+  { label: "Exclude mail provider", key: "riot_exclude_mail_provider", placeholder: "Exclude" }
+];
+
+const RIOT_SHARED_FLAGS: Array<{ key: string; label: string }> = [
+  { key: "riot_not_sold_before", label: "Not sold before" },
+  { key: "riot_sold_before", label: "Sold before" },
+  { key: "riot_not_sold_before_by_me", label: "Not sold before by me" },
+  { key: "riot_sold_before_by_me", label: "Sold before by me" }
+];
+
+const VALORANT_RANK_OPTIONS = [
+  "",
+  "iron",
+  "bronze",
+  "silver",
+  "gold",
+  "platinum",
+  "diamond",
+  "ascendant",
+  "immortal",
+  "radiant"
+];
+
+const LOL_RANK_OPTIONS = [
+  "",
+  "iron",
+  "bronze",
+  "silver",
+  "gold",
+  "platinum",
+  "emerald",
+  "diamond",
+  "master",
+  "grandmaster",
+  "challenger"
+];
+
+const VALORANT_RANGE_FILTERS: RangeFilterConfig[] = [
+  {
+    label: "Skins",
+    minKey: "valorant_skin_count_min",
+    maxKey: "valorant_skin_count_max",
+    minPlaceholder: "Skins from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Knives",
+    minKey: "valorant_knife_count_min",
+    maxKey: "valorant_knife_count_max",
+    minPlaceholder: "Knives from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Gunbuddies",
+    minKey: "valorant_gunbuddies_count_min",
+    maxKey: "valorant_gunbuddies_count_max",
+    minPlaceholder: "Gunbuddies from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Agents",
+    minKey: "valorant_agents_count_min",
+    maxKey: "valorant_agents_count_max",
+    minPlaceholder: "Agents from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Level",
+    minKey: "valorant_level_min",
+    maxKey: "valorant_level_max",
+    minPlaceholder: "Level from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "VP",
+    minKey: "valorant_vp_min",
+    maxKey: "valorant_vp_max",
+    minPlaceholder: "VP from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Inventory value",
+    minKey: "valorant_inventory_value_min",
+    maxKey: "valorant_inventory_value_max",
+    minPlaceholder: "from, VP",
+    maxPlaceholder: "up to, VP"
+  },
+  {
+    label: "RP",
+    minKey: "valorant_rp_min",
+    maxKey: "valorant_rp_max",
+    minPlaceholder: "RP from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Free Agents",
+    minKey: "valorant_free_agents_min",
+    maxKey: "valorant_free_agents_max",
+    minPlaceholder: "Free Agents from",
+    maxPlaceholder: "up to"
+  }
+];
+
+const LOL_RANGE_FILTERS: RangeFilterConfig[] = [
+  {
+    label: "Skins",
+    minKey: "lol_skin_count_min",
+    maxKey: "lol_skin_count_max",
+    minPlaceholder: "Skins from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Champions",
+    minKey: "lol_champions_count_min",
+    maxKey: "lol_champions_count_max",
+    minPlaceholder: "Champions from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Level",
+    minKey: "lol_level_min",
+    maxKey: "lol_level_max",
+    minPlaceholder: "Level from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "WinRate",
+    minKey: "lol_winrate_min",
+    maxKey: "lol_winrate_max",
+    minPlaceholder: "WinRate from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Blue essence",
+    minKey: "lol_blue_essence_min",
+    maxKey: "lol_blue_essence_max",
+    minPlaceholder: "Blue essence from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Orange essence",
+    minKey: "lol_orange_essence_min",
+    maxKey: "lol_orange_essence_max",
+    minPlaceholder: "Orange essence from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Mythic essence",
+    minKey: "lol_mythic_essence_min",
+    maxKey: "lol_mythic_essence_max",
+    minPlaceholder: "Mythic essence from",
+    maxPlaceholder: "up to"
+  },
+  {
+    label: "Riot Points",
+    minKey: "lol_riot_points_min",
+    maxKey: "lol_riot_points_max",
+    minPlaceholder: "Riot Points from",
+    maxPlaceholder: "up to"
+  }
+];
+
+type LztSharedPrefix =
+  | "siege"
+  | "media"
+  | "telegram"
+  | "discord"
+  | "steam"
+  | "cs2"
+  | "battlenet";
+
+const LZT_SHARED_FLAGS: Array<{ suffix: string; label: string }> = [
+  { suffix: "not_sold_before", label: "Not sold before" },
+  { suffix: "sold_before", label: "Sold before" },
+  { suffix: "not_sold_before_by_me", label: "Not sold before by me" },
+  { suffix: "sold_before_by_me", label: "Sold before by me" }
 ];
 
 function parseSelectedValues(raw: string | undefined) {
@@ -845,6 +1191,129 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
     }));
   }
 
+  function renderRangePair(
+    minKey: string,
+    maxKey: string,
+    minPlaceholder: string,
+    maxPlaceholder = "up to"
+  ) {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          type="number"
+          min={0}
+          value={gameFilters[minKey] ?? ""}
+          onChange={(event) => setGameFilter(minKey, event.target.value)}
+          placeholder={minPlaceholder}
+          className="h-9"
+        />
+        <Input
+          type="number"
+          min={0}
+          value={gameFilters[maxKey] ?? ""}
+          onChange={(event) => setGameFilter(maxKey, event.target.value)}
+          placeholder={maxPlaceholder}
+          className="h-9"
+        />
+      </div>
+    );
+  }
+
+  function renderLztSharedColumn(prefix: LztSharedPrefix) {
+    const key = (suffix: string) => `${prefix}_${suffix}`;
+
+    return (
+      <div className="space-y-2">
+        <Input
+          value={gameFilters[key("account_origin")] ?? ""}
+          onChange={(event) => setGameFilter(key("account_origin"), event.target.value)}
+          placeholder="Account origin"
+          className="h-9"
+        />
+        <Input
+          value={gameFilters[key("exclude_account_origin")] ?? ""}
+          onChange={(event) => setGameFilter(key("exclude_account_origin"), event.target.value)}
+          placeholder="Exclude account origin"
+          className="h-9"
+        />
+        <Input
+          value={gameFilters[key("country")] ?? ""}
+          onChange={(event) => setGameFilter(key("country"), event.target.value)}
+          placeholder="Country"
+          className="h-9"
+        />
+        <Input
+          value={gameFilters[key("exclude_country")] ?? ""}
+          onChange={(event) => setGameFilter(key("exclude_country"), event.target.value)}
+          placeholder="Exclude country"
+          className="h-9"
+        />
+        <Input
+          type="number"
+          min={0}
+          value={gameFilters[key("last_activity_days_max")] ?? ""}
+          onChange={(event) => setGameFilter(key("last_activity_days_max"), event.target.value)}
+          placeholder="Last activity in days"
+          className="h-9"
+        />
+        <label className="space-y-1 text-xs text-zinc-400">
+          Access to email
+          <select
+            value={gameFilters.ma ?? ""}
+            onChange={(event) => setGameFilter("ma", event.target.value)}
+            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            <option value="">No matter</option>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </label>
+        <Input
+          value={gameFilters[key("email_domain")] ?? ""}
+          onChange={(event) => setGameFilter(key("email_domain"), event.target.value)}
+          placeholder="Email domain"
+          className="h-9"
+        />
+        <Input
+          value={gameFilters[key("exclude_mail_domain")] ?? ""}
+          onChange={(event) => setGameFilter(key("exclude_mail_domain"), event.target.value)}
+          placeholder="Exclude mail domain"
+          className="h-9"
+        />
+        <Input
+          value={gameFilters[key("mail_provider")] ?? ""}
+          onChange={(event) => setGameFilter(key("mail_provider"), event.target.value)}
+          placeholder="Mail provider"
+          className="h-9"
+        />
+        <Input
+          value={gameFilters[key("exclude_mail_provider")] ?? ""}
+          onChange={(event) => setGameFilter(key("exclude_mail_provider"), event.target.value)}
+          placeholder="Exclude mail provider"
+          className="h-9"
+        />
+        <div className="space-y-1.5 pt-1">
+          {LZT_SHARED_FLAGS.map((flag) => (
+            <label
+              key={flag.suffix}
+              className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
+            >
+              <input
+                type="checkbox"
+                checked={(gameFilters[key(flag.suffix)] ?? "") === "1"}
+                onChange={(event) =>
+                  setGameFilter(key(flag.suffix), event.target.checked ? "1" : "")
+                }
+                className="h-4 w-4"
+              />
+              {flag.label}
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function openFortniteSelector(key: FortniteSelectorKey) {
     setFortniteSelectorOpen(key);
     setFortniteSelectorSearch("");
@@ -1088,7 +1557,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               >
                 <option value="all">All Categories</option>
                 <option value="fortnite">Fortnite</option>
-                <option value="valorant">Valorant</option>
+                <option value="valorant">Riot Client</option>
                 <option value="siege">Rainbow Six Siege</option>
                 <option value="media">Media Accounts</option>
                 <option value="steam">Steam</option>
@@ -1170,74 +1639,101 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               <div className="mt-3 grid max-h-[68vh] gap-3 overflow-y-auto pr-1 xl:max-h-none xl:grid-cols-2">
                 {selectedGame !== "all" && (
                   <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3 xl:col-span-2">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
-                      Category Filters
-                    </p>
-
-                    <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-                      {selectedGameToggles.map((toggle) => (
-                        <label
-                          key={`${selectedGame}_${toggle.key}`}
-                          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={(gameFilters[toggle.key] ?? "") === "1"}
-                            onChange={(event) =>
-                              setGameFilter(toggle.key, event.target.checked ? "1" : "")
-                            }
-                            className="h-4 w-4"
-                          />
-                          {toggle.label}
-                        </label>
-                      ))}
-                    </div>
+                    {selectedGameToggles.length > 0 && (
+                      <>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
+                          Quick Flags
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                          {selectedGameToggles.map((toggle) => (
+                            <label
+                              key={`${selectedGame}_${toggle.key}`}
+                              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={(gameFilters[toggle.key] ?? "") === "1"}
+                                onChange={(event) =>
+                                  setGameFilter(toggle.key, event.target.checked ? "1" : "")
+                                }
+                                className="h-4 w-4"
+                              />
+                              {toggle.label}
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    )}
 
                     {selectedGame === "fortnite" && (
-                      <div className="space-y-2">
-                        <div className="grid gap-2 md:grid-cols-3">
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        <div className="space-y-2">
                           <label className="space-y-1 text-xs text-zinc-400">
-                            Skins From
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_skin_count_min ?? ""}
+                            Platform
+                            <select
+                              value={gameFilters.fortnite_platform ?? ""}
                               onChange={(event) =>
-                                setGameFilter("fortnite_skin_count_min", event.target.value)
+                                setGameFilter("fortnite_platform", event.target.value)
                               }
-                              placeholder="0"
-                              className="h-10"
-                            />
+                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              <option value="">Any platform</option>
+                              <option value="pc">PC</option>
+                              <option value="xbox">Xbox</option>
+                              <option value="psn">PlayStation</option>
+                              <option value="switch">Nintendo Switch</option>
+                              <option value="mobile">Mobile</option>
+                            </select>
                           </label>
+
                           <label className="space-y-1 text-xs text-zinc-400">
-                            Level From
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_level_min ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_level_min", event.target.value)
-                              }
-                              placeholder="0"
-                              className="h-10"
-                            />
+                            Access to email
+                            <select
+                              value={gameFilters.ma ?? ""}
+                              onChange={(event) => setGameFilter("ma", event.target.value)}
+                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              <option value="">No matter</option>
+                              <option value="1">Yes</option>
+                              <option value="0">No</option>
+                            </select>
                           </label>
-                          <label className="space-y-1 text-xs text-zinc-400">
-                            Wins From
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_lifetime_wins_min ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_lifetime_wins_min", event.target.value)
-                              }
-                              placeholder="0"
-                              className="h-10"
-                            />
-                          </label>
+
+                          {FORTNITE_LEFT_TEXT_FILTERS.map((field) => (
+                            <label key={field.key} className="space-y-1 text-xs text-zinc-400">
+                              {field.label}
+                              <Input
+                                value={gameFilters[field.key] ?? ""}
+                                onChange={(event) =>
+                                  setGameFilter(field.key, event.target.value)
+                                }
+                                placeholder={field.placeholder}
+                                className="h-10"
+                              />
+                            </label>
+                          ))}
+
+                          <div className="space-y-1.5 pt-1">
+                            {FORTNITE_LEFT_FLAGS.map((flag) => (
+                              <label
+                                key={flag.key}
+                                className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={(gameFilters[flag.key] ?? "") === "1"}
+                                  onChange={(event) =>
+                                    setGameFilter(flag.key, event.target.checked ? "1" : "")
+                                  }
+                                  className="h-4 w-4"
+                                />
+                                {flag.label}
+                              </label>
+                            ))}
+                          </div>
                         </div>
 
-                        <div className="grid gap-2 md:grid-cols-2">
+                        <div className="space-y-2">
                           {FORTNITE_SELECTOR_CONFIG.map((selector) => {
                             const selectedValues = parseSelectedValues(gameFilters[selector.key]);
                             const selectedLabel =
@@ -1249,100 +1745,753 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                                 key={selector.key}
                                 type="button"
                                 onClick={() => openFortniteSelector(selector.key)}
-                                className="h-11 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-left text-sm text-zinc-200 transition hover:border-white/30 hover:text-white"
+                                className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-left text-sm text-zinc-200 transition hover:border-white/30 hover:text-white"
                               >
                                 {selectedLabel}
                               </button>
                             );
                           })}
+
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Guarantee length
+                            <select
+                              value={gameFilters.fortnite_guarantee_length ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_guarantee_length", event.target.value)
+                              }
+                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              <option value="">Any</option>
+                              <option value="7">7 days</option>
+                              <option value="14">14 days</option>
+                              <option value="30">30 days</option>
+                              <option value="90">90 days</option>
+                            </select>
+                          </label>
+
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Last activity in days
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_last_activity_days_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_last_activity_days_max", event.target.value)
+                              }
+                              placeholder="x"
+                              className="h-10"
+                            />
+                          </label>
+
+                          {FORTNITE_TRI_STATE_FILTERS.slice(0, 3).map((field) => (
+                            <div key={field.key} className="space-y-1 text-xs text-zinc-400">
+                              <p>{field.label}</p>
+                              <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/15 bg-black/35 p-1">
+                                {field.options.map((option) => (
+                                  <button
+                                    key={`${field.key}_${option.value || "any"}`}
+                                    type="button"
+                                    onClick={() => setGameFilter(field.key, option.value)}
+                                    className={cn(
+                                      "h-8 rounded-lg px-2 text-xs transition",
+                                      (gameFilters[field.key] ?? "") === option.value
+                                        ? "bg-emerald-500/20 text-emerald-300"
+                                        : "text-zinc-300 hover:bg-white/10"
+                                    )}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+
+                          <div className="space-y-1 rounded-xl border border-white/10 bg-black/25 p-2">
+                            <p className="text-xs font-medium text-zinc-300">Total cost in V-Bucks</p>
+                            {FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS.map((field) => (
+                              <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={gameFilters[field.minKey] ?? ""}
+                                  onChange={(event) =>
+                                    setGameFilter(field.minKey, event.target.value)
+                                  }
+                                  placeholder={field.minPlaceholder}
+                                  className="h-9"
+                                />
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={gameFilters[field.maxKey] ?? ""}
+                                  onChange={(event) =>
+                                    setGameFilter(field.maxKey, event.target.value)
+                                  }
+                                  placeholder={field.maxPlaceholder}
+                                  className="h-9"
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_refund_credits_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_refund_credits_min", event.target.value)
+                              }
+                              placeholder="Refund credits from"
+                              className="h-9"
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_refund_credits_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_refund_credits_max", event.target.value)
+                              }
+                              placeholder="up to"
+                              className="h-9"
+                            />
+                          </div>
+
+                          <Input
+                            value={gameFilters.fortnite_stw_edition ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_stw_edition", event.target.value)
+                            }
+                            placeholder="STW edition"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.fortnite_exclude_stw_edition ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_exclude_stw_edition", event.target.value)
+                            }
+                            placeholder="Exclude STW edition"
+                            className="h-9"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          {FORTNITE_CORE_RANGE_FILTERS.map((field) => (
+                            <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.minKey] ?? ""}
+                                onChange={(event) =>
+                                  setGameFilter(field.minKey, event.target.value)
+                                }
+                                placeholder={field.minPlaceholder}
+                                className="h-9"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.maxKey] ?? ""}
+                                onChange={(event) =>
+                                  setGameFilter(field.maxKey, event.target.value)
+                                }
+                                placeholder={field.maxPlaceholder}
+                                className="h-9"
+                              />
+                            </div>
+                          ))}
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_vbucks_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_vbucks_min", event.target.value)
+                              }
+                              placeholder="Min V-Bucks"
+                              className="h-9"
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_vbucks_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_vbucks_max", event.target.value)
+                              }
+                              placeholder="up to"
+                              className="h-9"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_level_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_level_min", event.target.value)
+                              }
+                              placeholder="Level, from"
+                              className="h-9"
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_level_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_level_max", event.target.value)
+                              }
+                              placeholder="up to"
+                              className="h-9"
+                            />
+                          </div>
+
+                          <div className="space-y-1 rounded-xl border border-white/10 bg-black/25 p-2">
+                            <p className="text-xs font-medium text-zinc-300">Paid Items</p>
+                            {FORTNITE_PAID_RANGE_FILTERS.map((field) => (
+                              <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={gameFilters[field.minKey] ?? ""}
+                                  onChange={(event) =>
+                                    setGameFilter(field.minKey, event.target.value)
+                                  }
+                                  placeholder={field.minPlaceholder}
+                                  className="h-9"
+                                />
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={gameFilters[field.maxKey] ?? ""}
+                                  onChange={(event) =>
+                                    setGameFilter(field.maxKey, event.target.value)
+                                  }
+                                  placeholder={field.maxPlaceholder}
+                                  className="h-9"
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="space-y-1 text-xs text-zinc-400">
+                            <p>Battle Pass</p>
+                            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/15 bg-black/35 p-1">
+                              {FORTNITE_TRI_STATE_FILTERS[3].options.map((option) => (
+                                <button
+                                  key={`fortnite_battle_pass_${option.value || "any"}`}
+                                  type="button"
+                                  onClick={() =>
+                                    setGameFilter("fortnite_battle_pass", option.value)
+                                  }
+                                  className={cn(
+                                    "h-8 rounded-lg px-2 text-xs transition",
+                                    (gameFilters.fortnite_battle_pass ?? "") === option.value
+                                      ? "bg-emerald-500/20 text-emerald-300"
+                                      : "text-zinc-300 hover:bg-white/10"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_battle_pass_level_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_battle_pass_level_min", event.target.value)
+                              }
+                              placeholder="Battle Pass level from"
+                              className="h-9"
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_battle_pass_level_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_battle_pass_level_max", event.target.value)
+                              }
+                              placeholder="up to"
+                              className="h-9"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_last_transaction_years_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter(
+                                  "fortnite_last_transaction_years_min",
+                                  event.target.value
+                                )
+                              }
+                              placeholder="Last transaction >"
+                              className="h-9"
+                            />
+                            <Input value="years ago" disabled className="h-9 opacity-80" />
+                          </div>
+
+                          <label className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200">
+                            <input
+                              type="checkbox"
+                              checked={(gameFilters.fortnite_no_transactions ?? "") === "1"}
+                              onChange={(event) =>
+                                setGameFilter(
+                                  "fortnite_no_transactions",
+                                  event.target.checked ? "1" : ""
+                                )
+                              }
+                              className="h-4 w-4"
+                            />
+                            No transactions
+                          </label>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.fortnite_registered_years_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("fortnite_registered_years_min", event.target.value)
+                              }
+                              placeholder="Registered earlier"
+                              className="h-9"
+                            />
+                            <Input value="years ago" disabled className="h-9 opacity-80" />
+                          </div>
+
+                          <Input
+                            value={gameFilters.fortnite_country ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_country", event.target.value)
+                            }
+                            placeholder="Country"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.fortnite_exclude_country ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("fortnite_exclude_country", event.target.value)
+                            }
+                            placeholder="Exclude country"
+                            className="h-9"
+                          />
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "valorant" && (
-                      <div className="grid gap-2 md:grid-cols-3">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Rank
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        <div className="space-y-2">
+                          {RIOT_SHARED_TEXT_FILTERS.slice(0, 4).map((field) => (
+                            <label key={field.key} className="space-y-1 text-xs text-zinc-400">
+                              {field.label}
+                              <Input
+                                value={gameFilters[field.key] ?? ""}
+                                onChange={(event) => setGameFilter(field.key, event.target.value)}
+                                placeholder={field.placeholder}
+                                className="h-10"
+                              />
+                            </label>
+                          ))}
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Last activity in days
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.riot_last_activity_days_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("riot_last_activity_days_max", event.target.value)
+                              }
+                              placeholder="x"
+                              className="h-10"
+                            />
+                          </label>
+                          <div className="space-y-1 text-xs text-zinc-400">
+                            <p>Email linked</p>
+                            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/15 bg-black/35 p-1">
+                              {ANY_YES_NO_OPTIONS.map((option) => (
+                                <button
+                                  key={`riot_email_linked_${option.value || "any"}`}
+                                  type="button"
+                                  onClick={() => setGameFilter("riot_email_linked", option.value)}
+                                  className={cn(
+                                    "h-8 rounded-lg px-2 text-xs transition",
+                                    (gameFilters.riot_email_linked ?? "") === option.value
+                                      ? "bg-emerald-500/20 text-emerald-300"
+                                      : "text-zinc-300 hover:bg-white/10"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-1 text-xs text-zinc-400">
+                            <p>Phone linked</p>
+                            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/15 bg-black/35 p-1">
+                              {ANY_YES_NO_OPTIONS.map((option) => (
+                                <button
+                                  key={`riot_phone_linked_${option.value || "any"}`}
+                                  type="button"
+                                  onClick={() => setGameFilter("riot_phone_linked", option.value)}
+                                  className={cn(
+                                    "h-8 rounded-lg px-2 text-xs transition",
+                                    (gameFilters.riot_phone_linked ?? "") === option.value
+                                      ? "bg-emerald-500/20 text-emerald-300"
+                                      : "text-zinc-300 hover:bg-white/10"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <label className="space-y-1 text-xs text-zinc-400">
+                            Access to email
+                            <select
+                              value={gameFilters.ma ?? ""}
+                              onChange={(event) => setGameFilter("ma", event.target.value)}
+                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              <option value="">No matter</option>
+                              <option value="1">Yes</option>
+                              <option value="0">No</option>
+                            </select>
+                          </label>
+                          {RIOT_SHARED_TEXT_FILTERS.slice(4).map((field) => (
+                            <label key={field.key} className="space-y-1 text-xs text-zinc-400">
+                              {field.label}
+                              <Input
+                                value={gameFilters[field.key] ?? ""}
+                                onChange={(event) => setGameFilter(field.key, event.target.value)}
+                                placeholder={field.placeholder}
+                                className="h-10"
+                              />
+                            </label>
+                          ))}
+                          <div className="space-y-1.5 pt-1">
+                            {RIOT_SHARED_FLAGS.map((flag) => (
+                              <label
+                                key={flag.key}
+                                className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={(gameFilters[flag.key] ?? "") === "1"}
+                                  onChange={(event) =>
+                                    setGameFilter(flag.key, event.target.checked ? "1" : "")
+                                  }
+                                  className="h-4 w-4"
+                                />
+                                {flag.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Riot Client</p>
+                          {VALORANT_RANGE_FILTERS.slice(0, 1).map((field) => (
+                            <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.minKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.minKey, event.target.value)}
+                                placeholder={field.minPlaceholder}
+                                className="h-9"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.maxKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.maxKey, event.target.value)}
+                                placeholder={field.maxPlaceholder}
+                                className="h-9"
+                              />
+                            </div>
+                          ))}
+                          <label className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200">
+                            <input
+                              type="checkbox"
+                              checked={(gameFilters.valorant_has_knife ?? "") === "1"}
+                              onChange={(event) =>
+                                setGameFilter("valorant_has_knife", event.target.checked ? "1" : "")
+                              }
+                              className="h-4 w-4"
+                            />
+                            Has any knife
+                          </label>
+                          {VALORANT_RANGE_FILTERS.slice(1, 4).map((field) => (
+                            <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.minKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.minKey, event.target.value)}
+                                placeholder={field.minPlaceholder}
+                                className="h-9"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.maxKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.maxKey, event.target.value)}
+                                placeholder={field.maxPlaceholder}
+                                className="h-9"
+                              />
+                            </div>
+                          ))}
+                          <Input
+                            value={gameFilters.valorant_region ?? ""}
+                            onChange={(event) => setGameFilter("valorant_region", event.target.value)}
+                            placeholder="Region"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.valorant_exclude_region ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("valorant_exclude_region", event.target.value)
+                            }
+                            placeholder="Exclude region"
+                            className="h-9"
+                          />
                           <Input
                             value={gameFilters.valorant_rank ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("valorant_rank", event.target.value)
-                            }
-                            placeholder="Iron, Gold, Immortal..."
-                            className="h-10"
+                            onChange={(event) => setGameFilter("valorant_rank", event.target.value)}
+                            placeholder="Rank"
+                            className="h-9"
                           />
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Skins From
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={gameFilters.valorant_rank_min ?? ""}
+                              onChange={(event) => setGameFilter("valorant_rank_min", event.target.value)}
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {VALORANT_RANK_OPTIONS.map((rank) => (
+                                <option key={`valorant_rank_min_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "Rank from"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={gameFilters.valorant_rank_max ?? ""}
+                              onChange={(event) => setGameFilter("valorant_rank_max", event.target.value)}
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {VALORANT_RANK_OPTIONS.map((rank) => (
+                                <option key={`valorant_rank_max_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "up to"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <p className="text-xs font-medium text-zinc-300">Previous Season Rank</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={gameFilters.valorant_previous_rank_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("valorant_previous_rank_min", event.target.value)
+                              }
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {VALORANT_RANK_OPTIONS.map((rank) => (
+                                <option key={`valorant_prev_min_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "from"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={gameFilters.valorant_previous_rank_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("valorant_previous_rank_max", event.target.value)
+                              }
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {VALORANT_RANK_OPTIONS.map((rank) => (
+                                <option key={`valorant_prev_max_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "up to"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <p className="text-xs font-medium text-zinc-300">Last Rank</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={gameFilters.valorant_last_rank_min ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("valorant_last_rank_min", event.target.value)
+                              }
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {VALORANT_RANK_OPTIONS.map((rank) => (
+                                <option key={`valorant_last_min_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "from"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={gameFilters.valorant_last_rank_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("valorant_last_rank_max", event.target.value)
+                              }
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {VALORANT_RANK_OPTIONS.map((rank) => (
+                                <option key={`valorant_last_max_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "up to"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {VALORANT_RANGE_FILTERS.slice(4).map((field) => (
+                            <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.minKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.minKey, event.target.value)}
+                                placeholder={field.minPlaceholder}
+                                className="h-9"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.maxKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.maxKey, event.target.value)}
+                                placeholder={field.maxPlaceholder}
+                                className="h-9"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">League of Legends</p>
+                          {LOL_RANGE_FILTERS.slice(0, 2).map((field) => (
+                            <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.minKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.minKey, event.target.value)}
+                                placeholder={field.minPlaceholder}
+                                className="h-9"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.maxKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.maxKey, event.target.value)}
+                                placeholder={field.maxPlaceholder}
+                                className="h-9"
+                              />
+                            </div>
+                          ))}
                           <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.valorant_skin_count_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("valorant_skin_count_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
+                            value={gameFilters.lol_region ?? ""}
+                            onChange={(event) => setGameFilter("lol_region", event.target.value)}
+                            placeholder="Region"
+                            className="h-9"
                           />
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Agents From
                           <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.valorant_agents_count_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("valorant_agents_count_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
+                            value={gameFilters.lol_exclude_region ?? ""}
+                            onChange={(event) => setGameFilter("lol_exclude_region", event.target.value)}
+                            placeholder="Exclude region"
+                            className="h-9"
                           />
-                        </label>
+                          <Input
+                            value={gameFilters.lol_rank ?? ""}
+                            onChange={(event) => setGameFilter("lol_rank", event.target.value)}
+                            placeholder="Rank"
+                            className="h-9"
+                          />
+                          {LOL_RANGE_FILTERS.slice(2).map((field) => (
+                            <div key={field.minKey} className="grid grid-cols-2 gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.minKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.minKey, event.target.value)}
+                                placeholder={field.minPlaceholder}
+                                className="h-9"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                value={gameFilters[field.maxKey] ?? ""}
+                                onChange={(event) => setGameFilter(field.maxKey, event.target.value)}
+                                placeholder={field.maxPlaceholder}
+                                className="h-9"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {selectedGame === "telegram" && (
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Country
-                          <Input
-                            value={gameFilters.telegram_country ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("telegram_country", event.target.value)
-                            }
-                            placeholder="US, GB, DE..."
-                            className="h-10"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Premium
+                    {selectedGame === "siege" && (
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("siege")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Siege Accounts</p>
                           <select
-                            value={gameFilters.telegram_premium ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("telegram_premium", event.target.value)
-                            }
-                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            value={gameFilters.siege_platform ?? ""}
+                            onChange={(event) => setGameFilter("siege_platform", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">Any</option>
-                            <option value="1">Only Premium</option>
-                            <option value="0">Without Premium</option>
+                            <option value="">Platform</option>
+                            <option value="pc">PC</option>
+                            <option value="xbox">Xbox</option>
+                            <option value="psn">PlayStation</option>
                           </select>
-                        </label>
+                          <Input
+                            value={gameFilters.siege_rank ?? ""}
+                            onChange={(event) => setGameFilter("siege_rank", event.target.value)}
+                            placeholder="Rank"
+                            className="h-9"
+                          />
+                          {renderRangePair("siege_level_min", "siege_level_max", "Level from")}
+                          {renderRangePair("siege_operators_min", "siege_operators_max", "Operators from")}
+                          {renderRangePair("siege_skins_min", "siege_skins_max", "Skins from")}
+                        </div>
+                        <div className="space-y-2">
+                          <Input
+                            value={gameFilters.siege_region ?? ""}
+                            onChange={(event) => setGameFilter("siege_region", event.target.value)}
+                            placeholder="Region"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.siege_exclude_region ?? ""}
+                            onChange={(event) => setGameFilter("siege_exclude_region", event.target.value)}
+                            placeholder="Exclude region"
+                            className="h-9"
+                          />
+                          {renderRangePair("siege_credits_min", "siege_credits_max", "R6 Credits from")}
+                          {renderRangePair("siege_kd_min", "siege_kd_max", "KD from")}
+                          {renderRangePair("siege_winrate_min", "siege_winrate_max", "WinRate from")}
+                        </div>
                       </div>
                     )}
 
                     {selectedGame === "media" && (
-                      <div className="grid gap-2 md:grid-cols-3">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Platform
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("media")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Media Accounts</p>
                           <select
                             value={gameFilters.media_platform ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("media_platform", event.target.value)
-                            }
-                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            onChange={(event) => setGameFilter("media_platform", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">All Media Platforms</option>
+                            <option value="">Platform</option>
                             <option value="instagram">Instagram</option>
                             <option value="tiktok">TikTok</option>
                             <option value="facebook">Facebook</option>
@@ -1351,115 +2500,242 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                             <option value="youtube">YouTube</option>
                             <option value="twitter">X / Twitter</option>
                           </select>
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Min Followers
-                          <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.media_followers_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("media_followers_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Verified
+                          {renderRangePair("media_followers_min", "media_followers_max", "Followers from")}
+                          {renderRangePair("media_following_min", "media_following_max", "Following from")}
+                          {renderRangePair("media_posts_min", "media_posts_max", "Posts from")}
+                          {renderRangePair("media_age_days_min", "media_age_days_max", "Age in days from")}
+                        </div>
+                        <div className="space-y-2">
                           <select
                             value={gameFilters.media_verified ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("media_verified", event.target.value)
-                            }
-                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            onChange={(event) => setGameFilter("media_verified", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">Any</option>
-                            <option value="1">Verified Only</option>
-                            <option value="0">Not Verified</option>
+                            <option value="">Verified</option>
+                            <option value="1">Only verified</option>
+                            <option value="0">Not verified</option>
                           </select>
-                        </label>
+                          {renderRangePair("media_engagement_min", "media_engagement_max", "Engagement % from")}
+                          <select
+                            value={gameFilters.media_account_type ?? ""}
+                            onChange={(event) => setGameFilter("media_account_type", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Account type</option>
+                            <option value="personal">Personal</option>
+                            <option value="business">Business</option>
+                            <option value="creator">Creator</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedGame === "telegram" && (
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("telegram")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Telegram Accounts</p>
+                          <select
+                            value={gameFilters.telegram_premium ?? ""}
+                            onChange={(event) => setGameFilter("telegram_premium", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Premium</option>
+                            <option value="1">Only premium</option>
+                            <option value="0">Without premium</option>
+                          </select>
+                          {renderRangePair("telegram_dialogs_min", "telegram_dialogs_max", "Dialogs from")}
+                          {renderRangePair("telegram_channels_min", "telegram_channels_max", "Channels from")}
+                          {renderRangePair("telegram_groups_min", "telegram_groups_max", "Groups from")}
+                        </div>
+                        <div className="space-y-2">
+                          {renderRangePair("telegram_sessions_min", "telegram_sessions_max", "Sessions from")}
+                          {renderRangePair("telegram_stars_min", "telegram_stars_max", "Stars from")}
+                          {renderRangePair("telegram_age_days_min", "telegram_age_days_max", "Age in days from")}
+                        </div>
                       </div>
                     )}
 
                     {selectedGame === "discord" && (
-                      <div className="grid gap-2 md:grid-cols-1">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Nitro
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("discord")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Discord Accounts</p>
                           <select
                             value={gameFilters.discord_nitro ?? ""}
                             onChange={(event) => setGameFilter("discord_nitro", event.target.value)}
-                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">Any</option>
-                            <option value="1">Only Nitro</option>
-                            <option value="0">Without Nitro</option>
+                            <option value="">Nitro</option>
+                            <option value="1">Only nitro</option>
+                            <option value="0">Without nitro</option>
                           </select>
-                        </label>
+                          {renderRangePair("discord_friends_min", "discord_friends_max", "Friends from")}
+                          {renderRangePair("discord_servers_min", "discord_servers_max", "Servers from")}
+                          {renderRangePair("discord_age_days_min", "discord_age_days_max", "Age in days from")}
+                        </div>
+                        <div className="space-y-2">
+                          <select
+                            value={gameFilters.discord_phone_verified ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("discord_phone_verified", event.target.value)
+                            }
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Phone verified</option>
+                            <option value="1">Yes</option>
+                            <option value="0">No</option>
+                          </select>
+                          <select
+                            value={gameFilters.discord_email_verified ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("discord_email_verified", event.target.value)
+                            }
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Email verified</option>
+                            <option value="1">Yes</option>
+                            <option value="0">No</option>
+                          </select>
+                          {renderRangePair("discord_badges_min", "discord_badges_max", "Badges from")}
+                        </div>
                       </div>
                     )}
 
                     {selectedGame === "steam" && (
-                      <div className="grid gap-2 md:grid-cols-1">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Games From
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("steam")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Steam Accounts</p>
+                          {renderRangePair("steam_game_count_min", "steam_game_count_max", "Games from")}
+                          {renderRangePair("steam_level_min", "steam_level_max", "Level from")}
+                          {renderRangePair(
+                            "steam_inventory_value_min",
+                            "steam_inventory_value_max",
+                            "Inventory value from"
+                          )}
+                          {renderRangePair("steam_hours_min", "steam_hours_max", "Hours from")}
+                        </div>
+                        <div className="space-y-2">
                           <Input
-                            type="number"
-                            min={0}
-                            value={gameFilters.steam_game_count_min ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("steam_game_count_min", event.target.value)
-                            }
-                            placeholder="0"
-                            className="h-10"
+                            value={gameFilters.steam_rank ?? ""}
+                            onChange={(event) => setGameFilter("steam_rank", event.target.value)}
+                            placeholder="Rank / status"
+                            className="h-9"
                           />
-                        </label>
+                          <Input
+                            value={gameFilters.steam_region ?? ""}
+                            onChange={(event) => setGameFilter("steam_region", event.target.value)}
+                            placeholder="Region"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.steam_exclude_region ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("steam_exclude_region", event.target.value)
+                            }
+                            placeholder="Exclude region"
+                            className="h-9"
+                          />
+                          <select
+                            value={gameFilters.steam_vac ?? ""}
+                            onChange={(event) => setGameFilter("steam_vac", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">VAC status</option>
+                            <option value="1">VAC clean</option>
+                            <option value="0">Has VAC</option>
+                          </select>
+                        </div>
                       </div>
                     )}
 
                     {selectedGame === "cs2" && (
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Prime
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("cs2")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Counter-Strike 2</p>
                           <select
                             value={gameFilters.cs2_prime ?? ""}
                             onChange={(event) => setGameFilter("cs2_prime", event.target.value)}
-                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">Any</option>
-                            <option value="1">Prime Only</option>
-                            <option value="0">No Prime</option>
+                            <option value="">Prime status</option>
+                            <option value="1">Prime only</option>
+                            <option value="0">No prime</option>
                           </select>
-                        </label>
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Rank
                           <Input
                             value={gameFilters.cs2_rank ?? ""}
                             onChange={(event) => setGameFilter("cs2_rank", event.target.value)}
-                            placeholder="Global, Faceit, etc."
-                            className="h-10"
+                            placeholder="Rank"
+                            className="h-9"
                           />
-                        </label>
+                          {renderRangePair("cs2_faceit_level_min", "cs2_faceit_level_max", "Faceit level from")}
+                          {renderRangePair(
+                            "cs2_premier_rating_min",
+                            "cs2_premier_rating_max",
+                            "Premier rating from"
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          {renderRangePair("cs2_wins_min", "cs2_wins_max", "Wins from")}
+                          {renderRangePair("cs2_hours_min", "cs2_hours_max", "Hours from")}
+                          {renderRangePair(
+                            "cs2_inventory_value_min",
+                            "cs2_inventory_value_max",
+                            "Inventory value from"
+                          )}
+                          <select
+                            value={gameFilters.cs2_vac ?? ""}
+                            onChange={(event) => setGameFilter("cs2_vac", event.target.value)}
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">VAC status</option>
+                            <option value="1">VAC clean</option>
+                            <option value="0">Has VAC</option>
+                          </select>
+                        </div>
                       </div>
                     )}
 
                     {selectedGame === "battlenet" && (
-                      <div className="grid gap-2 md:grid-cols-1">
-                        <label className="space-y-1 text-xs text-zinc-400">
-                          Region
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("battlenet")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Battle.net Accounts</p>
                           <select
                             value={gameFilters.battlenet_region ?? ""}
                             onChange={(event) =>
                               setGameFilter("battlenet_region", event.target.value)
                             }
-                            className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">Any</option>
+                            <option value="">Region</option>
                             <option value="EU">EU</option>
                             <option value="NA">NA</option>
                             <option value="ASIA">Asia</option>
                           </select>
-                        </label>
+                          {renderRangePair("battlenet_level_min", "battlenet_level_max", "Level from")}
+                          {renderRangePair("battlenet_games_min", "battlenet_games_max", "Games from")}
+                        </div>
+                        <div className="space-y-2">
+                          <Input
+                            value={gameFilters.battlenet_rank ?? ""}
+                            onChange={(event) => setGameFilter("battlenet_rank", event.target.value)}
+                            placeholder="Rank / MMR"
+                            className="h-9"
+                          />
+                          {renderRangePair("battlenet_cod_cp_min", "battlenet_cod_cp_max", "COD CP from")}
+                          {renderRangePair("battlenet_wow_ilvl_min", "battlenet_wow_ilvl_max", "WoW iLvl from")}
+                          <Input
+                            value={gameFilters.battlenet_exclude_region ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("battlenet_exclude_region", event.target.value)
+                            }
+                            placeholder="Exclude region"
+                            className="h-9"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
