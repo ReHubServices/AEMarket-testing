@@ -381,12 +381,20 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
     source.title_en ?? source.title ?? source.item_title ?? source.name ?? source.heading,
     "Untitled listing"
   );
+  const imageUrl = extractImageUrl(source);
+  const game = resolveGameLabel(source);
+  const category = resolveCategoryLabel(source, game);
+  const specs = extractSpecs(source);
+  const description = extractDescription(source) || buildDescriptionFallback(source, specs);
   const fallbackIdSource = [
     extractText(source.url ?? source.link ?? source.href ?? source.permalink, ""),
     extractText(source.slug ?? source.code ?? source.uuid, ""),
     extractText(source.post_id ?? source.thread_id ?? source.offer_id ?? source.listing_id, ""),
     title,
-    String(basePrice || 0)
+    String(basePrice || 0),
+    imageUrl,
+    description.slice(0, 180),
+    JSON.stringify(source).slice(0, 1200)
   ]
     .join("|")
     .trim();
@@ -407,12 +415,7 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
       source.slug ??
       source.id,
     ""
-  ) || `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 28)}`;
-  const imageUrl = extractImageUrl(source);
-  const game = resolveGameLabel(source);
-  const category = resolveCategoryLabel(source, game);
-  const specs = extractSpecs(source);
-  const description = extractDescription(source) || buildDescriptionFallback(source, specs);
+  ) || `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 52)}`;
 
   return {
     id,
@@ -1568,26 +1571,17 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
 }
 
 function mergeUnique(listings: MarketListing[]) {
-  const byFingerprint = new Map<string, MarketListing>();
+  const byId = new Map<string, MarketListing>();
   for (const listing of listings) {
-    const normalizedTitle = listing.title.trim().toLowerCase();
-    const normalizedDescription = listing.description.trim().toLowerCase().slice(0, 180);
-    const normalizedImage = listing.imageUrl.trim().toLowerCase();
-    const fingerprint = [
-      listing.id.trim().toLowerCase(),
-      normalizedTitle,
-      normalizedDescription,
-      normalizedImage,
-      String(Math.round(listing.basePrice * 100) / 100),
-      listing.currency.trim().toLowerCase(),
-      listing.category.trim().toLowerCase(),
-      listing.game.trim().toLowerCase()
-    ].join("::");
-    if (!byFingerprint.has(fingerprint)) {
-      byFingerprint.set(fingerprint, listing);
+    const normalizedId = listing.id.trim().toLowerCase();
+    if (!normalizedId) {
+      continue;
+    }
+    if (!byId.has(normalizedId)) {
+      byId.set(normalizedId, listing);
     }
   }
-  return Array.from(byFingerprint.values());
+  return Array.from(byId.values());
 }
 
 function normalizeMoney(value: number) {
@@ -2503,7 +2497,11 @@ function applyLocalFilters(
   if (forceScopeMatch && gameFilter) {
     output = output.filter((item) => matchesGameToken(item, gameFilter));
   }
-  if (forceScopeMatch && categoryFilter) {
+  if (
+    forceScopeMatch &&
+    categoryFilter &&
+    (!gameFilter || categoryFilter === gameFilter)
+  ) {
     output = output.filter((item) => matchesGameToken(item, categoryFilter));
   }
   if (hasKeywordQuery) {
@@ -3342,26 +3340,18 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
     const aggregated: MarketListing[] = [];
-    const seenFingerprints = new Set<string>();
+    const seenIds = new Set<string>();
     const preloadedByLogicalPage = new Map<number, MarketListing[]>([[page, filteredCurrentPage]]);
     const pushChunkUnique = (chunk: MarketListing[]) => {
       for (const item of chunk) {
         if (!item.id) {
           continue;
         }
-        const fingerprint = [
-          item.id.trim().toLowerCase(),
-          item.title.trim().toLowerCase(),
-          String(Math.round(item.basePrice * 100) / 100),
-          item.currency.trim().toLowerCase(),
-          item.category.trim().toLowerCase(),
-          item.game.trim().toLowerCase(),
-          item.imageUrl.trim().toLowerCase()
-        ].join("::");
-        if (seenFingerprints.has(fingerprint)) {
+        const normalizedId = item.id.trim().toLowerCase();
+        if (seenIds.has(normalizedId)) {
           continue;
         }
-        seenFingerprints.add(fingerprint);
+        seenIds.add(normalizedId);
         aggregated.push(item);
       }
     };
@@ -3402,7 +3392,6 @@ export async function searchListings(query: string, options: SearchOptions = {})
       aggregated.sort((a, b) => b.id.localeCompare(a.id));
     }
 
-    const visibleWindow = aggregated.slice(targetStart, targetEnd);
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
       const probeLimit = 2;
@@ -3414,12 +3403,29 @@ export async function searchListings(query: string, options: SearchOptions = {})
           usingScopeMatchFallback,
           activeSupplierQueries
         );
-        if (probeChunk.length > 0) {
-          hasMore = true;
-          break;
+        if (probeChunk.length === 0) {
+          continue;
+        }
+
+        const beforeCount = aggregated.length;
+        pushChunkUnique(probeChunk);
+        if (aggregated.length > beforeCount) {
+          if (options.sort === "price_asc") {
+            aggregated.sort((a, b) => a.basePrice - b.basePrice);
+          } else if (options.sort === "price_desc") {
+            aggregated.sort((a, b) => b.basePrice - a.basePrice);
+          } else if (options.sort === "newest") {
+            aggregated.sort((a, b) => b.id.localeCompare(a.id));
+          }
+
+          hasMore = aggregated.length > targetEnd;
+          if (hasMore) {
+            break;
+          }
         }
       }
     }
+    const visibleWindow = aggregated.slice(targetStart, targetEnd);
     const enriched = await enrichListingsWithDetails(visibleWindow, token);
     const translated = await translateListingsToEnglish(enriched);
     const pagedListings = withMarkup(translated, store.settings.markupPercent);
