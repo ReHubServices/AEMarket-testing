@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getViewerFromCookies } from "@/lib/viewer";
 import { getUserOrders } from "@/lib/order-flow";
@@ -19,6 +20,7 @@ export default async function DashboardPage() {
   }
 
   const orders = await getUserOrders(viewer.id);
+  const latestCompleted = orders.find((order) => order.status === "completed");
 
   return (
     <main className="space-y-6">
@@ -44,6 +46,21 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      {latestCompleted && (
+        <section className="glass-panel rounded-2xl border border-emerald-300/20 bg-emerald-950/20 p-4">
+          <p className="text-sm text-emerald-100">
+            Latest purchase delivered. Open{" "}
+            <Link
+              href={`/dashboard/orders/${encodeURIComponent(latestCompleted.id)}`}
+              className="font-semibold underline underline-offset-2"
+            >
+              View Order
+            </Link>{" "}
+            to see full delivered items.
+          </p>
+        </section>
+      )}
+
       <section className="glass-panel rounded-3xl p-5 md:p-6">
         <h2 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
           Orders
@@ -63,7 +80,7 @@ export default async function DashboardPage() {
                     {order.title}
                   </p>
                   <p className="text-sm text-zinc-300">
-                    {order.game} · {order.category}
+                    {order.game} - {order.category}
                   </p>
                 </div>
                 <div className="text-left md:text-right">
@@ -74,28 +91,14 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              {order.status === "completed" && order.delivery && (
-                <div className="mt-4 grid gap-3 rounded-xl border border-white/15 bg-black/40 p-4 text-sm md:grid-cols-2">
-                  <div>
-                    <p className="text-zinc-400">Account Username</p>
-                    <p className="font-medium text-white">{order.delivery.accountUsername}</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-400">Account Password</p>
-                    <p className="font-medium text-white">{order.delivery.accountPassword}</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-400">Account Email</p>
-                    <p className="font-medium text-white">
-                      {order.delivery.accountEmail || "Not provided"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-400">Notes</p>
-                    <p className="font-medium text-white">
-                      {order.delivery.notes || "No additional notes"}
-                    </p>
-                  </div>
+              {order.status === "completed" && (
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/40 px-4 py-3">
+                  <p className="text-sm text-zinc-300">
+                    Delivery ready
+                  </p>
+                  <Link href={`/dashboard/orders/${encodeURIComponent(order.id)}`}>
+                    <Button className="h-9 px-3 text-sm">View Order</Button>
+                  </Link>
                 </div>
               )}
 

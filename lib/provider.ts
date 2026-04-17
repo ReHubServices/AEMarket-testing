@@ -1817,8 +1817,7 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
 function applyLocalFilters(
   listings: MarketListing[],
   options: SearchOptions,
-  queryTerm: string,
-  forceScopeMatch = false
+  queryTerm: string
 ) {
   let output = listings.slice();
   const gameFilter = options.game?.trim().toLowerCase() ?? "";
@@ -2272,6 +2271,13 @@ function applyLocalFilters(
     }
     return haystack.includes(normalizedToken);
   };
+  const itemScopeHaystack = (item: MarketListing) =>
+    normalizeText(`${item.game} ${item.title} ${item.category} ${item.description}`);
+  const hasSocialKeyword = (item: MarketListing) => {
+    const haystack = itemScopeHaystack(item);
+    return socialKeywords.some((keyword) => haystack.includes(normalizeText(keyword)));
+  };
+  const hasFortniteKeyword = (item: MarketListing) => matchesGameToken(item, "fortnite");
   const parseCompactNumber = (raw: string) => {
     const text = raw.toLowerCase().replace(/\s+/g, "").replace(",", ".");
     const match = text.match(/(\d+(?:\.\d+)?)(k|m|b)?/);
@@ -2643,13 +2649,27 @@ function applyLocalFilters(
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
   if (gameFilter) {
-    output = output.filter((item) => matchesGameToken(item, gameFilter));
+    const scoped = output.filter((item) => matchesGameToken(item, gameFilter));
+    if (scoped.length > 0) {
+      output = scoped;
+    } else if (gameFilter === "fortnite") {
+      const fallbackFortnite = output.filter((item) => !hasSocialKeyword(item));
+      if (fallbackFortnite.length > 0) {
+        output = fallbackFortnite;
+      }
+    }
+  }
+  if (gameFilter === "fortnite") {
+    output = output.filter((item) => hasFortniteKeyword(item) || !hasSocialKeyword(item));
   }
   if (
     categoryFilter &&
     (!gameFilter || categoryFilter === gameFilter)
   ) {
-    output = output.filter((item) => matchesGameToken(item, categoryFilter));
+    const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
+    if (scopedByCategory.length > 0) {
+      output = scopedByCategory;
+    }
   }
   if (hasKeywordQuery) {
     const ranked = output.map((item) => ({
@@ -3381,7 +3401,6 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const loadFilteredPage = async (
       targetPage: number,
       broadMode = false,
-      forceScopeMatch = false,
       supplierQueries: string[] = [trimmedQuery]
     ) => {
       const pageOptions: SearchOptions = {
@@ -3424,43 +3443,32 @@ export async function searchListings(query: string, options: SearchOptions = {})
         .map((entry) => entry.value);
 
       const combined = mergeUnique([primary, ...categoryResults].flat());
-      return applyLocalFilters(combined, options, trimmedQuery, forceScopeMatch);
+      return applyLocalFilters(combined, options, trimmedQuery);
     };
 
     let activeSupplierQueries = trimmedQuery
       ? buildSupplierQueryVariants(trimmedQuery)
       : [trimmedQuery];
-    const initialForceScope = false;
     let filteredCurrentPage = await loadFilteredPage(
       page,
       false,
-      initialForceScope,
       activeSupplierQueries
     );
     let usingBroadFallback = false;
-    let usingScopeMatchFallback = initialForceScope;
     if (trimmedQuery) {
       if (filteredCurrentPage.length < pageSize) {
         usingBroadFallback = true;
-        usingScopeMatchFallback = hasBrowseScope;
         const broadScoped = await loadFilteredPage(
           page,
           true,
-          usingScopeMatchFallback,
           activeSupplierQueries
         );
         if (broadScoped.length > filteredCurrentPage.length) {
           filteredCurrentPage = broadScoped;
         }
 
-        if (filteredCurrentPage.length < pageSize && usingScopeMatchFallback) {
-          usingScopeMatchFallback = false;
-          const broadUnscoped = await loadFilteredPage(
-            page,
-            true,
-            usingScopeMatchFallback,
-            activeSupplierQueries
-          );
+        if (filteredCurrentPage.length < pageSize && hasBrowseScope) {
+          const broadUnscoped = await loadFilteredPage(page, true, activeSupplierQueries);
           if (broadUnscoped.length > filteredCurrentPage.length) {
             filteredCurrentPage = broadUnscoped;
           }
@@ -3468,19 +3476,17 @@ export async function searchListings(query: string, options: SearchOptions = {})
       }
     }
     if (hasBrowseScope && !trimmedQuery) {
-      const broadScoped = await loadFilteredPage(page, true, true, activeSupplierQueries);
+      const broadScoped = await loadFilteredPage(page, true, activeSupplierQueries);
       if (broadScoped.length > filteredCurrentPage.length) {
         filteredCurrentPage = broadScoped;
         usingBroadFallback = true;
-        usingScopeMatchFallback = true;
       }
 
       if (filteredCurrentPage.length < pageSize) {
-        const broadUnscoped = await loadFilteredPage(page, true, false, activeSupplierQueries);
+        const broadUnscoped = await loadFilteredPage(page, true, activeSupplierQueries);
         if (broadUnscoped.length > filteredCurrentPage.length) {
           filteredCurrentPage = broadUnscoped;
           usingBroadFallback = true;
-          usingScopeMatchFallback = false;
         }
       }
     }
@@ -3510,12 +3516,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {
       let chunk = preloadedByLogicalPage.get(logicalCursor);
       if (!chunk) {
-        chunk = await loadFilteredPage(
-          logicalCursor,
-          usingBroadFallback,
-          usingScopeMatchFallback,
-          activeSupplierQueries
-        );
+        chunk = await loadFilteredPage(logicalCursor, usingBroadFallback, activeSupplierQueries);
       }
 
       if (chunk.length === 0) {
@@ -3544,12 +3545,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const probeLimit = 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
-        const probeChunk = await loadFilteredPage(
-          probePage,
-          usingBroadFallback,
-          usingScopeMatchFallback,
-          activeSupplierQueries
-        );
+        const probeChunk = await loadFilteredPage(probePage, usingBroadFallback, activeSupplierQueries);
         if (probeChunk.length === 0) {
           continue;
         }
@@ -3634,13 +3630,17 @@ export async function buyFromSupplier(listingId: string) {
   const token = await getLztAccessToken();
 
   if (!token) {
+    const simulatedDelivery = {
+      accountUsername: `account_${Math.floor(Math.random() * 90000 + 10000)}`,
+      accountPassword: randomReadableSecret(),
+      accountEmail: null,
+      notes: "Delivered automatically"
+    };
     return {
       supplierOrderId: `sim_${listingId}_${Date.now()}`,
       delivery: {
-        accountUsername: `account_${Math.floor(Math.random() * 90000 + 10000)}`,
-        accountPassword: randomReadableSecret(),
-        accountEmail: null,
-        notes: "Delivered automatically"
+        ...simulatedDelivery,
+        deliveredItems: buildDeliveredItems(simulatedDelivery)
       }
     };
   }
@@ -3661,15 +3661,150 @@ export async function buyFromSupplier(listingId: string) {
   }
 
   const data = (await response.json()) as Record<string, unknown>;
+  const deliverySource =
+    data.delivery && typeof data.delivery === "object"
+      ? ((data.delivery as Record<string, unknown>) ?? {})
+      : data;
+
+  const accountUsername = extractText(
+    deliverySource.username ??
+      deliverySource.login ??
+      deliverySource.account_username ??
+      deliverySource.accountUsername ??
+      data.username ??
+      data.login,
+    ""
+  );
+  const accountPassword = extractText(
+    deliverySource.password ??
+      deliverySource.pass ??
+      deliverySource.account_password ??
+      deliverySource.accountPassword ??
+      data.password ??
+      data.pass,
+    ""
+  );
+  const accountEmailRaw =
+    deliverySource.email ??
+    deliverySource.mail ??
+    deliverySource.account_email ??
+    deliverySource.accountEmail ??
+    data.email ??
+    data.mail;
+  const notes = extractText(
+    deliverySource.note ??
+      deliverySource.notes ??
+      deliverySource.comment ??
+      deliverySource.additional ??
+      data.note ??
+      data.notes,
+    ""
+  );
+
+  const deliveredItems = buildDeliveredItems(deliverySource);
+
   return {
     supplierOrderId: extractText(data.orderId ?? data.id, `ord_${Date.now()}`),
     delivery: {
-      accountUsername: extractText(data.username ?? data.login, ""),
-      accountPassword: extractText(data.password, ""),
-      accountEmail: data.email == null ? null : extractText(data.email),
-      notes: data.note == null ? null : extractText(data.note)
+      accountUsername,
+      accountPassword,
+      accountEmail: accountEmailRaw == null ? null : extractText(accountEmailRaw),
+      notes: notes || null,
+      deliveredItems
     }
   };
+}
+
+function formatDeliveryLabel(path: string) {
+  return path
+    .replace(/\[(\d+)\]/g, " $1 ")
+    .replace(/[._-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function toDeliveryValue(value: unknown): string {
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const flattened = value
+      .map((entry) => toDeliveryValue(entry))
+      .filter(Boolean)
+      .join(" | ");
+    return flattened;
+  }
+  if (typeof value === "object") {
+    try {
+      const serialized = JSON.stringify(value);
+      return serialized.length > 1500 ? `${serialized.slice(0, 1500)}...` : serialized;
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function collectDeliveryFields(
+  value: unknown,
+  path: string,
+  output: Array<{ label: string; value: string }>,
+  depth: number
+) {
+  if (value == null || depth > 4 || output.length >= 80) {
+    return;
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    const normalized = toDeliveryValue(value);
+    if (!normalized) {
+      return;
+    }
+    const label = formatDeliveryLabel(path || "value");
+    if (!output.some((item) => item.label === label && item.value === normalized)) {
+      output.push({ label, value: normalized });
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      collectDeliveryFields(value[index], `${path}[${index}]`, output, depth + 1);
+    }
+    return;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const [key, entry] of Object.entries(record)) {
+      if (!key) {
+        continue;
+      }
+      const nextPath = path ? `${path}.${key}` : key;
+      collectDeliveryFields(entry, nextPath, output, depth + 1);
+      if (output.length >= 80) {
+        break;
+      }
+    }
+  }
+}
+
+function buildDeliveredItems(source: Record<string, unknown>) {
+  const items: Array<{ label: string; value: string }> = [];
+  collectDeliveryFields(source, "", items, 0);
+  return items;
 }
 
 function randomReadableSecret() {

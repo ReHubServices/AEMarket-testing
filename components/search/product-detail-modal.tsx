@@ -106,7 +106,7 @@ export function ProductDetailModal({
             <div className="sticky bottom-0 -mx-4 border-t border-white/15 bg-black/65 p-4 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-0">
               <div className="flex flex-col gap-2">
                 <Button onClick={() => onBuy(listing.id)} disabled={buying}>
-                  {buying ? "Redirecting..." : viewer ? "Buy Now" : "Login To Buy"}
+                  {buying ? "Processing..." : viewer ? "Buy Now" : "Login To Buy"}
                 </Button>
                 <Button variant="ghost" onClick={onClose}>
                   Close

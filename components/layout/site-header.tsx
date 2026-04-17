@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import Link from "next/link";
 import { getViewerFromCookies } from "@/lib/viewer";
 import { LogoutButton } from "@/components/layout/logout-button";
@@ -7,25 +5,17 @@ import { Button } from "@/components/ui/button";
 
 export async function SiteHeader() {
   const viewer = await getViewerFromCookies();
-  const logoExists = existsSync(path.join(process.cwd(), "public", "Logo.png"));
 
   return (
     <header className="glass-panel sticky top-3 z-30 mb-5 rounded-2xl px-2.5 py-2.5 sm:px-3 sm:py-3 md:top-4 md:mb-7 md:px-6">
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-8">
           <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-            {logoExists && (
-              <img
-                src="/Logo.png"
-                alt="AE Empire Accounts"
-                className="h-8 w-8 rounded-lg object-cover sm:h-9 sm:w-9"
-              />
-            )}
-            {!logoExists && (
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white text-xs font-bold text-black sm:h-9 sm:w-9 sm:text-sm">
-                AE
-              </span>
-            )}
+            <img
+              src="/Logo.png"
+              alt="AE Empire Accounts"
+              className="h-8 w-8 rounded-lg object-cover sm:h-9 sm:w-9"
+            />
             <span className="hidden font-[var(--font-space-grotesk)] text-lg font-bold text-white sm:inline">
               AE Empire Accounts
             </span>

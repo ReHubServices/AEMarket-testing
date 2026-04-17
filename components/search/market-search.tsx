@@ -1160,18 +1160,21 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         })
       });
 
-      const payload = (await response.json()) as { checkoutUrl?: string; error?: string };
+      const payload = (await response.json()) as { orderId?: string; error?: string };
       if (!response.ok) {
         throw new Error(payload.error || "Unable to start purchase");
       }
-      if (!payload.checkoutUrl) {
-        throw new Error("Checkout URL missing");
+      if (payload.orderId) {
+        router.push(`/dashboard?order=${encodeURIComponent(payload.orderId)}`);
+      } else {
+        router.push("/dashboard");
       }
-      window.location.assign(payload.checkoutUrl);
+      router.refresh();
     } catch (purchaseError) {
       const message =
         purchaseError instanceof Error ? purchaseError.message : "Purchase failed";
       setError(message);
+    } finally {
       setBuying(false);
     }
   }

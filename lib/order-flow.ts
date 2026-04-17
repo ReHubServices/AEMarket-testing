@@ -2,13 +2,7 @@ import { createId } from "@/lib/ids";
 import { buyFromSupplier, getListingById } from "@/lib/provider";
 import { normalizeMoney } from "@/lib/pricing";
 import { readStore, updateStore } from "@/lib/store";
-import { DeliveryPayload, OrderRecord, TransactionRecord, UserRecord } from "@/lib/types";
-
-type PaymentResult = {
-  user: UserRecord;
-  order: OrderRecord;
-  transaction: TransactionRecord;
-};
+import { DeliveryPayload, OrderRecord, TransactionRecord } from "@/lib/types";
 
 type PaymentReservation =
   | {
@@ -22,7 +16,7 @@ type PaymentReservation =
       orderId: string;
     };
 
-export async function createPendingOrder(input: { userId: string; listingId: string }) {
+export async function createOrderFromBalance(input: { userId: string; listingId: string }) {
   const listing = await getListingById(input.listingId);
   if (!listing) {
     throw new Error("Listing not found");
@@ -32,11 +26,16 @@ export async function createPendingOrder(input: { userId: string; listingId: str
   const orderId = createId("ord");
   const transactionId = createId("txn");
 
-  const result = await updateStore((store) => {
+  return updateStore((store) => {
     const user = store.users.find((item) => item.id === input.userId);
     if (!user) {
       throw new Error("User not found");
     }
+    if (user.balance < listing.price) {
+      throw new Error("INSUFFICIENT_BALANCE");
+    }
+
+    user.balance = normalizeMoney(user.balance - listing.price);
 
     const order: OrderRecord = {
       id: orderId,
@@ -49,7 +48,7 @@ export async function createPendingOrder(input: { userId: string; listingId: str
       basePrice: listing.basePrice,
       finalPrice: listing.price,
       currency: listing.currency,
-      status: "pending_payment",
+      status: "processing",
       transactionId,
       supplierOrderId: null,
       delivery: null,
@@ -62,13 +61,13 @@ export async function createPendingOrder(input: { userId: string; listingId: str
       id: transactionId,
       userId: user.id,
       orderId: order.id,
-      type: "payment_credit",
-      status: "pending",
+      type: "purchase_debit",
+      status: "completed",
       amount: listing.price,
       currency: listing.currency,
       providerPaymentId: null,
       checkoutUrl: null,
-      details: "Waiting for payment confirmation",
+      details: "Balance deducted for account purchase",
       createdAt: now,
       updatedAt: now
     };
@@ -77,8 +76,6 @@ export async function createPendingOrder(input: { userId: string; listingId: str
     store.transactions.push(transaction);
     return { order, transaction, user };
   });
-
-  return result;
 }
 
 export async function attachCheckoutToTransaction(input: {
@@ -346,6 +343,12 @@ export async function getUserOrders(userId: string) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function getUserOrderById(userId: string, orderId: string) {
+  const store = await readStore();
+  const target = store.orders.find((order) => order.userId === userId && order.id === orderId);
+  return target ?? null;
+}
+
 export async function getAdminOverview() {
   const store = await readStore();
   const totalVolume = store.transactions
@@ -385,18 +388,31 @@ export async function updateMarkupPercent(markupPercent: number) {
 }
 
 function sanitizeDelivery(payload: DeliveryPayload) {
+  const deliveredItems = Array.isArray(payload.deliveredItems)
+    ? payload.deliveredItems
+        .map((item) => ({
+          label: String(item?.label ?? "").trim(),
+          value: String(item?.value ?? "").trim()
+        }))
+        .filter((item) => item.label && item.value)
+        .slice(0, 120)
+    : [];
+
+  if (deliveredItems.length === 0) {
+    const fallbackItems = [
+      { label: "Account Username", value: payload.accountUsername || "N/A" },
+      { label: "Account Password", value: payload.accountPassword || "N/A" },
+      payload.accountEmail ? { label: "Account Email", value: payload.accountEmail } : null,
+      payload.notes ? { label: "Notes", value: payload.notes } : null
+    ].filter((item): item is { label: string; value: string } => Boolean(item));
+    deliveredItems.push(...fallbackItems);
+  }
+
   return {
     accountUsername: payload.accountUsername || "N/A",
     accountPassword: payload.accountPassword || "N/A",
     accountEmail: payload.accountEmail || null,
-    notes: payload.notes || null
-  };
-}
-
-export function toPaymentResult(input: PaymentResult) {
-  return {
-    userId: input.user.id,
-    orderId: input.order.id,
-    transactionId: input.transaction.id
+    notes: payload.notes || null,
+    deliveredItems
   };
 }
