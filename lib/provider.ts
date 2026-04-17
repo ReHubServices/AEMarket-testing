@@ -1108,7 +1108,16 @@ function extractSpecs(item: Record<string, unknown>) {
     "wins",
     "hours",
     "followers",
-    "friends"
+    "friends",
+    "fortnite_skin_count",
+    "fortnite_pickaxe_count",
+    "fortnite_dance_count",
+    "fortnite_emote_count",
+    "fortnite_glider_count",
+    "fortnite_paid_skin_count",
+    "fortnite_paid_pickaxe_count",
+    "fortnite_paid_emote_count",
+    "fortnite_paid_glider_count"
   ];
 
   for (const key of directSpecKeys) {
@@ -2481,14 +2490,19 @@ function applyLocalFilters(
 
     return max;
   };
+  type FortniteMetricKey = "outfits" | "pickaxes" | "emotes" | "gliders";
   const extractFortniteCountStrict = (
     item: MarketListing,
-    aliases: string[],
+    metric: FortniteMetricKey,
     mode: "core" | "paid"
   ) => {
-    const normalizedAliases = aliases
-      .map((alias) => normalizeText(alias))
-      .filter(Boolean);
+    const metricAliases: Record<FortniteMetricKey, string[]> = {
+      outfits: ["skins", "skin", "outfits", "outfit", "locker"],
+      pickaxes: ["pickaxes", "pickaxe", "harvesting tool", "axe"],
+      emotes: ["emotes", "emote", "dances", "dance"],
+      gliders: ["gliders", "glider"]
+    };
+    const normalizedAliases = metricAliases[metric].map((alias) => normalizeText(alias)).filter(Boolean);
     if (normalizedAliases.length === 0) {
       return 0;
     }
@@ -2516,9 +2530,39 @@ function applyLocalFilters(
       }
       return tokens[0];
     };
+    const labelGroups: Record<FortniteMetricKey, string[]> = {
+      outfits: ["fortnite skin count", "skin count", "skins", "outfit count", "outfits"],
+      pickaxes: ["fortnite pickaxe count", "pickaxe count", "pickaxes", "harvesting tool"],
+      emotes: ["fortnite emote count", "fortnite dance count", "emote count", "emotes", "dance count", "dances"],
+      gliders: ["fortnite glider count", "glider count", "gliders"]
+    };
     const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     let max = 0;
+    const preferredLabels = labelGroups[metric].map((label) => normalizeText(label));
+    for (const spec of item.specs) {
+      const label = normalizeText(spec.label);
+      const value = normalizeText(spec.value);
+      const combined = `${label} ${value}`.trim();
+      if (!combined) {
+        continue;
+      }
+      if (!preferredLabels.some((entry) => label.includes(entry))) {
+        continue;
+      }
+      const hasPaid = combined.includes("paid");
+      if (mode === "core" && (hasPaid || isCostContext(combined))) {
+        continue;
+      }
+      if (mode === "paid" && !hasPaid) {
+        continue;
+      }
+      max = Math.max(max, pickCountValue(spec.value));
+    }
+    if (max > 0) {
+      return max;
+    }
+
     const scanSource = (sourceRaw: string) => {
       const source = sourceRaw.toLowerCase();
       const sourceNormalized = normalizeText(sourceRaw);
@@ -2587,7 +2631,7 @@ function applyLocalFilters(
     return max;
   };
   const applyFortniteCountRangeStrict = (
-    aliases: string[],
+    metric: FortniteMetricKey,
     min: number,
     max: number,
     mode: "core" | "paid"
@@ -2598,7 +2642,7 @@ function applyLocalFilters(
       return;
     }
     output = output.filter((item) => {
-      const value = extractFortniteCountStrict(item, aliases, mode);
+      const value = extractFortniteCountStrict(item, metric, mode);
       if (value <= 0) {
         return false;
       }
@@ -3036,25 +3080,25 @@ function applyLocalFilters(
   applyIncludeTokens(fortniteStwEdition);
   applyExcludeTokens(fortniteExcludeStwEdition);
   applyFortniteCountRangeStrict(
-    ["skins", "skin", "outfits", "outfit", "locker"],
+    "outfits",
     fortniteSkinCountMin,
     fortniteSkinCountMax,
     "core"
   );
   applyFortniteCountRangeStrict(
-    ["pickaxes", "pickaxe", "harvesting tool", "axe"],
+    "pickaxes",
     fortnitePickaxeCountMin,
     fortnitePickaxeCountMax,
     "core"
   );
   applyFortniteCountRangeStrict(
-    ["emotes", "emote", "dances", "dance"],
+    "emotes",
     fortniteEmoteCountMin,
     fortniteEmoteCountMax,
     "core"
   );
   applyFortniteCountRangeStrict(
-    ["gliders", "glider"],
+    "gliders",
     fortniteGliderCountMin,
     fortniteGliderCountMax,
     "core"
@@ -3075,25 +3119,25 @@ function applyLocalFilters(
     fortniteVbucksMax
   );
   applyFortniteCountRangeStrict(
-    ["paid outfits", "paid skins", "paid skin", "paid outfit"],
+    "outfits",
     fortnitePaidSkinCountMin,
     fortnitePaidSkinCountMax,
     "paid"
   );
   applyFortniteCountRangeStrict(
-    ["paid pickaxes", "paid pickaxe", "paid harvesting tool", "paid axe"],
+    "pickaxes",
     fortnitePaidPickaxeCountMin,
     fortnitePaidPickaxeCountMax,
     "paid"
   );
   applyFortniteCountRangeStrict(
-    ["paid emotes", "paid emote", "paid dances", "paid dance"],
+    "emotes",
     fortnitePaidEmoteCountMin,
     fortnitePaidEmoteCountMax,
     "paid"
   );
   applyFortniteCountRangeStrict(
-    ["paid gliders", "paid glider"],
+    "gliders",
     fortnitePaidGliderCountMin,
     fortnitePaidGliderCountMax,
     "paid"
