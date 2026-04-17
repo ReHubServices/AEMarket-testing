@@ -2501,10 +2501,36 @@ function applyLocalFilters(
     mode: "core" | "paid"
   ) => {
     const metricAliases: Record<FortniteMetricKey, string[]> = {
-      outfits: ["skins", "skin", "outfits", "outfit", "locker"],
-      pickaxes: ["pickaxes", "pickaxe", "harvesting tool", "axe"],
-      emotes: ["emotes", "emote", "dances", "dance"],
-      gliders: ["gliders", "glider"]
+      outfits: [
+        "skins",
+        "skin",
+        "outfits",
+        "outfit",
+        "locker",
+        "скины",
+        "скин",
+        "облики",
+        "облик"
+      ],
+      pickaxes: [
+        "pickaxes",
+        "pickaxe",
+        "harvesting tool",
+        "axe",
+        "кирки",
+        "кирка"
+      ],
+      emotes: [
+        "emotes",
+        "emote",
+        "dances",
+        "dance",
+        "эмоции",
+        "эмоция",
+        "танцы",
+        "танец"
+      ],
+      gliders: ["gliders", "glider", "дельтапланы", "дельтаплан", "глайдеры", "глайдер"]
     };
     const normalizedAliases = metricAliases[metric].map((alias) => normalizeText(alias)).filter(Boolean);
     if (normalizedAliases.length === 0) {
@@ -2535,10 +2561,43 @@ function applyLocalFilters(
       return tokens[0];
     };
     const labelGroups: Record<FortniteMetricKey, string[]> = {
-      outfits: ["fortnite skin count", "skin count", "skins", "outfit count", "outfits"],
-      pickaxes: ["fortnite pickaxe count", "pickaxe count", "pickaxes", "harvesting tool"],
-      emotes: ["fortnite emote count", "fortnite dance count", "emote count", "emotes", "dance count", "dances"],
-      gliders: ["fortnite glider count", "glider count", "gliders"]
+      outfits: [
+        "fortnite skin count",
+        "skin count",
+        "skins",
+        "outfit count",
+        "outfits",
+        "count skins",
+        "количество скинов",
+        "скинов"
+      ],
+      pickaxes: [
+        "fortnite pickaxe count",
+        "pickaxe count",
+        "pickaxes",
+        "harvesting tool",
+        "количество кирок",
+        "кирок"
+      ],
+      emotes: [
+        "fortnite emote count",
+        "fortnite dance count",
+        "emote count",
+        "emotes",
+        "dance count",
+        "dances",
+        "количество эмоций",
+        "эмоций",
+        "танцев"
+      ],
+      gliders: [
+        "fortnite glider count",
+        "glider count",
+        "gliders",
+        "количество дельтапланов",
+        "дельтапланов",
+        "глайдеров"
+      ]
     };
     const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -3012,9 +3071,6 @@ function applyLocalFilters(
       "social media"
     ].map((token) => normalizeText(token));
     output = output.filter((item) => {
-      if (hasFortniteSpecificFilters) {
-        return hasFortniteKeyword(item);
-      }
       if (hasFortniteKeyword(item)) {
         return true;
       }
