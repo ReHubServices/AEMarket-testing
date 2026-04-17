@@ -2478,6 +2478,111 @@ function applyLocalFilters(
 
     return max;
   };
+  const extractFortniteCountStrict = (
+    item: MarketListing,
+    aliases: string[],
+    mode: "core" | "paid"
+  ) => {
+    const normalizedAliases = aliases
+      .map((alias) => normalizeText(alias))
+      .filter(Boolean);
+    if (normalizedAliases.length === 0) {
+      return 0;
+    }
+
+    const isCostContext = (text: string) =>
+      text.includes("vbucks") ||
+      text.includes("v bucks") ||
+      text.includes("v-bucks") ||
+      text.includes("cost") ||
+      text.includes("value");
+    const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    let max = 0;
+    const sources = [
+      item.title,
+      item.description,
+      ...item.specs.map((spec) => `${spec.label}: ${spec.value}`)
+    ];
+
+    for (const sourceRaw of sources) {
+      const source = normalizeText(sourceRaw);
+      if (!source) {
+        continue;
+      }
+      if (!normalizedAliases.some((alias) => source.includes(alias))) {
+        continue;
+      }
+      const hasPaid = source.includes("paid");
+      if (mode === "core" && (hasPaid || isCostContext(source))) {
+        continue;
+      }
+      if (mode === "paid" && !hasPaid) {
+        continue;
+      }
+
+      for (const alias of normalizedAliases) {
+        if (!source.includes(alias)) {
+          continue;
+        }
+        const escapedAlias = escapePattern(alias);
+        const forwardMatches =
+          source.match(new RegExp(`${escapedAlias}[^\\d]{0,12}(\\d[\\d\\s.,kmb]*)`, "gi")) ?? [];
+        const backwardMatches =
+          source.match(new RegExp(`(\\d[\\d\\s.,kmb]*)[^\\d]{0,8}${escapedAlias}`, "gi")) ?? [];
+        for (const match of [...forwardMatches, ...backwardMatches]) {
+          max = Math.max(max, parseLooseNumber(match));
+        }
+      }
+    }
+
+    for (const spec of item.specs) {
+      const label = normalizeText(spec.label);
+      const value = normalizeText(spec.value);
+      const combined = `${label} ${value}`.trim();
+      if (!combined) {
+        continue;
+      }
+      if (!normalizedAliases.some((alias) => combined.includes(alias) || label.includes(alias))) {
+        continue;
+      }
+      const hasPaid = combined.includes("paid");
+      if (mode === "core" && (hasPaid || isCostContext(combined))) {
+        continue;
+      }
+      if (mode === "paid" && !hasPaid) {
+        continue;
+      }
+      max = Math.max(max, parseLooseNumber(spec.value));
+    }
+
+    return max;
+  };
+  const applyFortniteCountRangeStrict = (
+    aliases: string[],
+    min: number,
+    max: number,
+    mode: "core" | "paid"
+  ) => {
+    const hasMin = Number.isFinite(min) && min > 0;
+    const hasMax = Number.isFinite(max) && max > 0;
+    if (!hasMin && !hasMax) {
+      return;
+    }
+    output = output.filter((item) => {
+      const value = extractFortniteCountStrict(item, aliases, mode);
+      if (value <= 0) {
+        return false;
+      }
+      if (hasMin && value < min) {
+        return false;
+      }
+      if (hasMax && value > max) {
+        return false;
+      }
+      return true;
+    });
+  };
   const extractFollowers = (item: MarketListing) => {
     const sources = [
       item.title,
@@ -2902,25 +3007,29 @@ function applyLocalFilters(
   applyExcludeTokens(fortniteExcludeCountry);
   applyIncludeTokens(fortniteStwEdition);
   applyExcludeTokens(fortniteExcludeStwEdition);
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["skins", "skin", "outfits", "outfit", "locker"],
     fortniteSkinCountMin,
-    fortniteSkinCountMax
+    fortniteSkinCountMax,
+    "core"
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["pickaxes", "pickaxe", "harvesting tool", "axe"],
     fortnitePickaxeCountMin,
-    fortnitePickaxeCountMax
+    fortnitePickaxeCountMax,
+    "core"
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["emotes", "emote", "dances", "dance"],
     fortniteEmoteCountMin,
-    fortniteEmoteCountMax
+    fortniteEmoteCountMax,
+    "core"
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["gliders", "glider"],
     fortniteGliderCountMin,
-    fortniteGliderCountMax
+    fortniteGliderCountMax,
+    "core"
   );
   applyMetricRange(
     ["level", "lvl", "account level"],
@@ -2937,25 +3046,29 @@ function applyLocalFilters(
     fortniteVbucksMin,
     fortniteVbucksMax
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["paid outfits", "paid skins", "paid skin", "paid outfit"],
     fortnitePaidSkinCountMin,
-    fortnitePaidSkinCountMax
+    fortnitePaidSkinCountMax,
+    "paid"
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["paid pickaxes", "paid pickaxe", "paid harvesting tool", "paid axe"],
     fortnitePaidPickaxeCountMin,
-    fortnitePaidPickaxeCountMax
+    fortnitePaidPickaxeCountMax,
+    "paid"
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["paid emotes", "paid emote", "paid dances", "paid dance"],
     fortnitePaidEmoteCountMin,
-    fortnitePaidEmoteCountMax
+    fortnitePaidEmoteCountMax,
+    "paid"
   );
-  applyMetricRange(
+  applyFortniteCountRangeStrict(
     ["paid gliders", "paid glider"],
     fortnitePaidGliderCountMin,
-    fortnitePaidGliderCountMax
+    fortnitePaidGliderCountMax,
+    "paid"
   );
   applyMetricRange(
     ["battle pass level", "bp level"],
