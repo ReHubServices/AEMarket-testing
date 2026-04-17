@@ -2747,6 +2747,13 @@ function applyLocalFilters(
   const getRawFilter = (key: string) => options.supplierFilters?.[key] ?? "";
   const getNumberFilter = (key: string) => Number(options.supplierFilters?.[key] ?? NaN);
   const getFlagFilter = (key: string) => options.supplierFilters?.[key]?.trim() ?? "";
+  const hasFortniteSpecificFilters = Object.entries(options.supplierFilters ?? {}).some(
+    ([key, value]) => key.startsWith("fortnite_") && String(value ?? "").trim().length > 0
+  );
+  let effectiveGameFilter = gameFilter;
+  if (hasFortniteSpecificFilters && effectiveGameFilter !== "fortnite") {
+    effectiveGameFilter = "fortnite";
+  }
   const applyRangeByKeys = (minKey: string, maxKey: string, aliases: string[]) => {
     applyMetricRange(aliases, getNumberFilter(minKey), getNumberFilter(maxKey));
   };
@@ -2788,18 +2795,18 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  if (gameFilter) {
-    const scoped = output.filter((item) => matchesGameToken(item, gameFilter));
+  if (effectiveGameFilter) {
+    const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
     if (scoped.length > 0) {
       output = scoped;
-    } else if (gameFilter === "fortnite") {
+    } else if (effectiveGameFilter === "fortnite") {
       const fallbackFortnite = output.filter((item) => !hasSocialKeyword(item));
       if (fallbackFortnite.length > 0) {
         output = fallbackFortnite;
       }
     }
   }
-  if (gameFilter === "fortnite") {
+  if (effectiveGameFilter === "fortnite") {
     const blockedNonFortnite = [
       "telegram",
       "discord",
@@ -2824,6 +2831,9 @@ function applyLocalFilters(
       "social media"
     ].map((token) => normalizeText(token));
     output = output.filter((item) => {
+      if (hasFortniteSpecificFilters) {
+        return hasFortniteKeyword(item);
+      }
       if (hasFortniteKeyword(item)) {
         return true;
       }
@@ -2836,7 +2846,7 @@ function applyLocalFilters(
   }
   if (
     categoryFilter &&
-    (!gameFilter || categoryFilter === gameFilter)
+    (!effectiveGameFilter || categoryFilter === effectiveGameFilter)
   ) {
     const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
     if (scopedByCategory.length > 0) {
@@ -2854,7 +2864,7 @@ function applyLocalFilters(
       .map((entry) => entry.item);
     if (matched.length > 0) {
       output = matched;
-    } else if (!gameFilter && !categoryFilter && !inferredQueryGameFilter) {
+    } else if (!effectiveGameFilter && !categoryFilter && !inferredQueryGameFilter) {
       output = [];
     }
   }
