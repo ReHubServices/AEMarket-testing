@@ -3637,6 +3637,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     let activeSupplierQueries = trimmedQuery
       ? buildSupplierQueryVariants(trimmedQuery)
       : [trimmedQuery];
+    let usingEmptySupplierQueryFallback = false;
     let filteredCurrentPage = await loadFilteredPage(
       page,
       false,
@@ -3678,6 +3679,22 @@ export async function searchListings(query: string, options: SearchOptions = {})
         }
       }
     }
+    if (trimmedQuery && filteredCurrentPage.length === 0 && hasBrowseScope) {
+      const scopeOnly = await loadFilteredPage(page, false, [""]);
+      if (scopeOnly.length > 0) {
+        filteredCurrentPage = scopeOnly;
+        activeSupplierQueries = [""];
+        usingEmptySupplierQueryFallback = true;
+      } else {
+        const broadScopeOnly = await loadFilteredPage(page, true, [""]);
+        if (broadScopeOnly.length > 0) {
+          filteredCurrentPage = broadScopeOnly;
+          activeSupplierQueries = [""];
+          usingBroadFallback = true;
+          usingEmptySupplierQueryFallback = true;
+        }
+      }
+    }
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
     const aggregated: MarketListing[] = [];
@@ -3704,7 +3721,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
     while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {
       let chunk = preloadedByLogicalPage.get(logicalCursor);
       if (!chunk) {
-        chunk = await loadFilteredPage(logicalCursor, usingBroadFallback, activeSupplierQueries);
+        chunk = await loadFilteredPage(
+          logicalCursor,
+          usingBroadFallback,
+          usingEmptySupplierQueryFallback ? [""] : activeSupplierQueries
+        );
       }
 
       if (chunk.length === 0) {
@@ -3733,7 +3754,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const probeLimit = 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
-        const probeChunk = await loadFilteredPage(probePage, usingBroadFallback, activeSupplierQueries);
+        const probeChunk = await loadFilteredPage(
+          probePage,
+          usingBroadFallback,
+          usingEmptySupplierQueryFallback ? [""] : activeSupplierQueries
+        );
         if (probeChunk.length === 0) {
           continue;
         }
