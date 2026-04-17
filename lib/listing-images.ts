@@ -4,7 +4,8 @@ const BROKEN_IMAGE_HINTS = [
   "/listing-placeholder.svg",
   "/logo.png",
   "/logo.svg",
-  "images.unsplash.com"
+  "images.unsplash.com",
+  "unsplash.com"
 ];
 
 function normalizeUrl(raw: string | null | undefined) {
@@ -68,11 +69,62 @@ function listingKeywords(listing: Pick<MarketListing, "title" | "game" | "catego
   return `${listing.title} ${listing.game} ${listing.category}`.toLowerCase();
 }
 
-export function getPresetListingImage(
-  listing: Pick<MarketListing, "title" | "game" | "category">
-) {
+type ListingImageOptions = {
+  forceTheme?: "fortnite";
+};
+
+function isFortniteLikeListing(listing: Pick<MarketListing, "title" | "game" | "category">) {
   const text = listingKeywords(listing);
-  if (text.includes("fortnite")) {
+  return [
+    "fortnite",
+    "epicgames",
+    "epic games",
+    "vbucks",
+    "v-bucks",
+    "battle pass",
+    "save the world",
+    "stw",
+    "pickaxe",
+    "outfit",
+    "emote",
+    "glider",
+    "leviathan"
+  ].some((token) => text.includes(token));
+}
+
+function isTrustedSupplierImage(url: string) {
+  if (!url) {
+    return false;
+  }
+  if (url.startsWith("/")) {
+    return true;
+  }
+  if (url.startsWith("data:image/")) {
+    return true;
+  }
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host.includes("nztcdn.com") ||
+      host.includes("lztcdn.com") ||
+      host.includes("lzt.market") ||
+      host.includes("prod-api.lzt.market")
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function getPresetListingImage(
+  listing: Pick<MarketListing, "title" | "game" | "category">,
+  options: ListingImageOptions = {}
+) {
+  if (options.forceTheme === "fortnite") {
+    return "/fallbacks/fortnite.svg";
+  }
+  const text = listingKeywords(listing);
+  if (isFortniteLikeListing(listing)) {
     return "/fallbacks/fortnite.svg";
   }
   if (text.includes("valorant")) {
@@ -91,17 +143,30 @@ export function getPresetListingImage(
 }
 
 export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title" | "game" | "category">) {
+  return getListingImageWithOptions(listing, {});
+}
+
+export function getListingImageWithOptions(
+  listing: Pick<MarketListing, "imageUrl" | "title" | "game" | "category">,
+  options: ListingImageOptions = {}
+) {
   const normalized = normalizeUrl(listing.imageUrl);
   if (!normalized) {
-    return getPresetListingImage(listing);
+    return getPresetListingImage(listing, options);
   }
   const lower = normalized.toLowerCase();
   const blocked = BROKEN_IMAGE_HINTS.some((hint) => lower.includes(hint));
   if (blocked) {
-    return getPresetListingImage(listing);
+    return getPresetListingImage(listing, options);
   }
   if (!isLikelyDisplayImage(normalized)) {
-    return getPresetListingImage(listing);
+    return getPresetListingImage(listing, options);
+  }
+  if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(normalized)) {
+    return "/fallbacks/fortnite.svg";
+  }
+  if (isFortniteLikeListing(listing) && !isTrustedSupplierImage(normalized)) {
+    return "/fallbacks/fortnite.svg";
   }
   return normalized;
 }

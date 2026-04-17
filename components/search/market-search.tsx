@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { MarketListing, PublicViewer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductDetailModal } from "@/components/search/product-detail-modal";
-import { getListingImage, getPresetListingImage } from "@/lib/listing-images";
+import { getListingImageWithOptions, getPresetListingImage } from "@/lib/listing-images";
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -2782,7 +2782,9 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               >
                 <div className="relative h-44 w-full overflow-hidden">
                   <img
-                    src={getListingImage(listing)}
+                    src={getListingImageWithOptions(listing, {
+                      forceTheme: selectedGame === "fortnite" ? "fortnite" : undefined
+                    })}
                     alt={listing.title}
                     className="h-full w-full object-cover"
                     loading="lazy"
@@ -2790,7 +2792,9 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                     referrerPolicy="no-referrer"
                     onError={(event) => {
                       event.currentTarget.onerror = null;
-                      event.currentTarget.src = getPresetListingImage(listing);
+                      event.currentTarget.src = getPresetListingImage(listing, {
+                        forceTheme: selectedGame === "fortnite" ? "fortnite" : undefined
+                      });
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
@@ -2967,6 +2971,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
         buying={buying}
         descriptionLoading={detailLoading}
         descriptionError={detailError}
+        imageTheme={selectedGame === "fortnite" ? "fortnite" : null}
       />
     </main>
   );

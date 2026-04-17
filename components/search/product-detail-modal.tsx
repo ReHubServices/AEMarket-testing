@@ -3,7 +3,7 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarketListing, PublicViewer } from "@/lib/types";
-import { getListingImage, getPresetListingImage } from "@/lib/listing-images";
+import { getListingImageWithOptions, getPresetListingImage } from "@/lib/listing-images";
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -20,6 +20,7 @@ type ProductDetailModalProps = {
   buying: boolean;
   descriptionLoading?: boolean;
   descriptionError?: string | null;
+  imageTheme?: "fortnite" | null;
 };
 
 export function ProductDetailModal({
@@ -29,7 +30,8 @@ export function ProductDetailModal({
   onBuy,
   buying,
   descriptionLoading = false,
-  descriptionError = null
+  descriptionError = null,
+  imageTheme = null
 }: ProductDetailModalProps) {
   if (!listing) {
     return null;
@@ -50,12 +52,16 @@ export function ProductDetailModal({
 
           <div className="h-56 sm:h-64 md:h-full">
             <img
-              src={getListingImage(listing)}
+              src={getListingImageWithOptions(listing, {
+                forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined
+              })}
               alt={listing.title}
               className="h-full w-full object-cover"
               onError={(event) => {
                 event.currentTarget.onerror = null;
-                event.currentTarget.src = getPresetListingImage(listing);
+                event.currentTarget.src = getPresetListingImage(listing, {
+                  forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined
+                });
               }}
             />
           </div>
