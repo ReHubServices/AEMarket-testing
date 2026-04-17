@@ -1131,7 +1131,58 @@ function extractSpecs(item: Record<string, unknown>) {
     pushSpec(specs, buildSpec(key.replace(/_/g, " "), value));
   }
 
-  return specs.slice(0, 18);
+  const metricKeyMatchers = [
+    "skin",
+    "outfit",
+    "pickaxe",
+    "axe",
+    "harvest",
+    "emote",
+    "dance",
+    "glider",
+    "скин",
+    "облик",
+    "кирк",
+    "эмоц",
+    "танц",
+    "глайдер",
+    "дельтаплан"
+  ];
+  const metricKeyBlockers = [
+    "price",
+    "cost",
+    "value",
+    "vbucks",
+    "v_bucks",
+    "v-bucks",
+    "usd",
+    "eur",
+    "rub",
+    "currency"
+  ];
+
+  for (const [key, rawValue] of Object.entries(item)) {
+    const normalizedKey = key.toLowerCase();
+    if (!metricKeyMatchers.some((entry) => normalizedKey.includes(entry))) {
+      continue;
+    }
+    if (metricKeyBlockers.some((entry) => normalizedKey.includes(entry))) {
+      continue;
+    }
+    if (rawValue == null || typeof rawValue === "object") {
+      continue;
+    }
+    const text = extractText(rawValue, "");
+    if (!text) {
+      continue;
+    }
+    if (!/\d/.test(text)) {
+      continue;
+    }
+    pushSpec(specs, buildSpec(key.replace(/_/g, " "), text));
+  }
+
+  return specs.slice(0, 36);
 }
 
 function toReadableDate(value: unknown) {
@@ -2704,8 +2755,13 @@ function applyLocalFilters(
     if (!hasMin && !hasMax) {
       return;
     }
-    output = output.filter((item) => {
-      const value = extractFortniteCountStrict(item, metric, mode);
+    const values = output.map((item) => extractFortniteCountStrict(item, metric, mode));
+    const parsableCount = values.filter((value) => value > 0).length;
+    if (phase === "final" && parsableCount === 0) {
+      return;
+    }
+    output = output.filter((item, index) => {
+      const value = values[index] ?? 0;
       if (value <= 0) {
         return phase === "pre";
       }
