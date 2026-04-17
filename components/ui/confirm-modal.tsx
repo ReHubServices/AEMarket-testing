@@ -46,8 +46,8 @@ export function ConfirmModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-2 backdrop-blur-md sm:items-center sm:p-4">
+      <div className="glass-panel max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-3xl p-5 sm:p-6">
         <h3 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
           {title}
         </h3>

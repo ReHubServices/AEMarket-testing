@@ -1639,7 +1639,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             </div>
 
             {advancedOpen && (
-              <div className="mt-3 grid max-h-[68vh] gap-3 overflow-y-auto pr-1 xl:max-h-none xl:grid-cols-2">
+              <div className="mt-3 grid max-h-[70dvh] gap-3 overflow-y-auto pr-1 md:max-h-[72dvh] xl:max-h-none xl:grid-cols-2">
                 {selectedGame !== "all" && (
                   <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3 xl:col-span-2">
                     {selectedGameToggles.length > 0 && (
@@ -2836,11 +2836,11 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       </section>
 
       {ready && !loading && (listings.length > 0 || currentPage > 1 || hasMore) && (
-        <div className="flex flex-wrap items-center justify-center gap-2 px-1">
+        <div className="flex items-center justify-start gap-2 overflow-x-auto px-1 sm:justify-center">
           <Button
             type="button"
             variant="ghost"
-            className="h-9 px-3"
+            className="h-9 shrink-0 px-3"
             disabled={currentPage <= 1}
             onClick={() => changePage(currentPage - 1)}
           >
@@ -2851,7 +2851,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               key={pageNumber}
               type="button"
               variant={currentPage === pageNumber ? "solid" : "ghost"}
-              className="h-9 min-w-9 px-3"
+              className="h-9 min-w-9 shrink-0 px-3"
               onClick={() => changePage(pageNumber)}
             >
               {pageNumber}
@@ -2860,7 +2860,7 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
           <Button
             type="button"
             variant="ghost"
-            className="h-9 px-3"
+            className="h-9 shrink-0 px-3"
             disabled={!hasMore}
             onClick={() => changePage(currentPage + 1)}
           >

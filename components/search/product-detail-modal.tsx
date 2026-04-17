@@ -40,8 +40,8 @@ export function ProductDetailModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/65 p-2 backdrop-blur-md md:items-center md:p-6">
-      <div className="glass-panel mx-auto max-h-[96vh] w-full max-w-4xl overflow-hidden rounded-2xl md:max-h-[92vh] md:rounded-3xl">
-        <div className="relative grid max-h-[96vh] gap-0 overflow-y-auto md:max-h-[92vh] md:grid-cols-[1.15fr_1fr]">
+      <div className="glass-panel mx-auto max-h-[96dvh] w-full max-w-4xl overflow-hidden rounded-2xl md:max-h-[92dvh] md:rounded-3xl">
+        <div className="relative grid max-h-[96dvh] gap-0 overflow-y-auto overscroll-contain md:max-h-[92dvh] md:grid-cols-[1.15fr_1fr]">
           <button
             onClick={onClose}
             className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/45 text-zinc-200 transition hover:bg-black/70 md:right-4 md:top-4"

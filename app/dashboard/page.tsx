@@ -92,7 +92,7 @@ export default async function DashboardPage() {
               </div>
 
               {order.status === "completed" && (
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/40 px-4 py-3">
+                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-white/15 bg-black/40 px-4 py-3 sm:flex-row sm:items-center">
                   <p className="text-sm text-zinc-300">
                     Delivery ready
                   </p>
