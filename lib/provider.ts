@@ -1609,6 +1609,146 @@ function hasRealImage(url: string) {
   return isLikelyImageUrl(normalizedSource);
 }
 
+const IMAGE_KEYWORD_STOPWORDS = new Set([
+  "account",
+  "accounts",
+  "acc",
+  "game",
+  "games",
+  "gaming",
+  "item",
+  "items",
+  "digital",
+  "offer",
+  "listing",
+  "service",
+  "with",
+  "without",
+  "the",
+  "and",
+  "for",
+  "from",
+  "your",
+  "this",
+  "that",
+  "steam",
+  "fortnite",
+  "valorant",
+  "social",
+  "media",
+  "bundle",
+  "premium",
+  "ranked",
+  "rank",
+  "skins",
+  "skin"
+]);
+
+function normalizeKeywordText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9а-яё]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeImageKeywords(value: string) {
+  return normalizeKeywordText(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !IMAGE_KEYWORD_STOPWORDS.has(token) &&
+        !/^\d+$/.test(token)
+    );
+}
+
+function listingImageKeywords(listing: MarketListing) {
+  const text = `${listing.title} ${listing.game} ${listing.category} ${listing.specs
+    .map((spec) => `${spec.label} ${spec.value}`)
+    .join(" ")}`;
+  return Array.from(new Set(tokenizeImageKeywords(text))).slice(0, 30);
+}
+
+function applySharedImageFallback(listings: MarketListing[], queryTerm: string) {
+  if (listings.length <= 1) {
+    return listings;
+  }
+
+  const tokenToImages = new Map<string, string[]>();
+  const gameToImage = new Map<string, string>();
+  const queryTokenSet = new Set(tokenizeImageKeywords(queryTerm));
+
+  for (const listing of listings) {
+    if (!hasRealImage(listing.imageUrl)) {
+      continue;
+    }
+
+    const image = normalizeImageUrl(listing.imageUrl);
+    if (!image) {
+      continue;
+    }
+
+    const gameKey = normalizeKeywordText(listing.game);
+    if (gameKey && !gameToImage.has(gameKey)) {
+      gameToImage.set(gameKey, image);
+    }
+
+    for (const token of listingImageKeywords(listing)) {
+      const bucket = tokenToImages.get(token) ?? [];
+      if (!bucket.includes(image)) {
+        bucket.push(image);
+      }
+      tokenToImages.set(token, bucket.slice(0, 6));
+    }
+  }
+
+  return listings.map((listing) => {
+    if (hasRealImage(listing.imageUrl)) {
+      return listing;
+    }
+
+    const scores = new Map<string, number>();
+    for (const token of listingImageKeywords(listing)) {
+      const images = tokenToImages.get(token);
+      if (!images || images.length === 0) {
+        continue;
+      }
+      const weight = queryTokenSet.has(token) ? 3 : 1;
+      for (const image of images) {
+        scores.set(image, (scores.get(image) ?? 0) + weight);
+      }
+    }
+
+    let bestImage = "";
+    let bestScore = 0;
+    for (const [image, score] of scores) {
+      if (score > bestScore) {
+        bestImage = image;
+        bestScore = score;
+      }
+    }
+
+    if (bestImage && bestScore >= 2) {
+      return {
+        ...listing,
+        imageUrl: bestImage
+      };
+    }
+
+    const gameImage = gameToImage.get(normalizeKeywordText(listing.game));
+    if (gameImage) {
+      return {
+        ...listing,
+        imageUrl: gameImage
+      };
+    }
+
+    return listing;
+  });
+}
+
 function mergeListing(base: MarketListing, detail: MarketListing | null) {
   if (!detail) {
     return base;
@@ -3428,7 +3568,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const visibleWindow = aggregated.slice(targetStart, targetEnd);
     const enriched = await enrichListingsWithDetails(visibleWindow, token);
     const translated = await translateListingsToEnglish(enriched);
-    const pagedListings = withMarkup(translated, store.settings.markupPercent);
+    const withSharedImages = applySharedImageFallback(translated, trimmedQuery);
+    const pagedListings = withMarkup(withSharedImages, store.settings.markupPercent);
     return {
       listings: pagedListings,
       hasMore,

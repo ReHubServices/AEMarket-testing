@@ -70,6 +70,7 @@ export type TransactionRecord = {
   amount: number;
   currency: string;
   providerPaymentId: string | null;
+  providerAltPaymentId?: string | null;
   checkoutUrl: string | null;
   details: string | null;
   createdAt: string;

@@ -84,6 +84,7 @@ export async function createPendingOrder(input: { userId: string; listingId: str
 export async function attachCheckoutToTransaction(input: {
   transactionId: string;
   providerPaymentId: string;
+  providerAltPaymentId?: string | null;
   checkoutUrl: string;
 }) {
   await updateStore((store) => {
@@ -92,6 +93,7 @@ export async function attachCheckoutToTransaction(input: {
       throw new Error("Transaction not found");
     }
     transaction.providerPaymentId = input.providerPaymentId;
+    transaction.providerAltPaymentId = input.providerAltPaymentId ?? null;
     transaction.checkoutUrl = input.checkoutUrl;
     transaction.updatedAt = new Date().toISOString();
   });
@@ -183,18 +185,24 @@ export async function confirmPaymentAndReservePurchase(input: {
   currency: string;
 }) {
   return updateStore((store): PaymentReservation | null => {
+    const isMatchingReference = (transaction: TransactionRecord, reference: string) => {
+      const primary = transaction.providerPaymentId?.trim();
+      const alternate = transaction.providerAltPaymentId?.trim();
+      return Boolean(reference && (primary === reference || alternate === reference));
+    };
+
     const transaction = input.transactionId
       ? store.transactions.find((item) => item.id === input.transactionId)
-      : store.transactions.find((item) => item.providerPaymentId === input.providerPaymentId);
+      : store.transactions.find((item) => isMatchingReference(item, input.providerPaymentId));
 
     if (!transaction) {
       throw new Error("Transaction not found for webhook");
     }
 
-    if (
-      transaction.providerPaymentId &&
-      transaction.providerPaymentId !== input.providerPaymentId
-    ) {
+    const hasKnownProviderReference = Boolean(
+      transaction.providerPaymentId?.trim() || transaction.providerAltPaymentId?.trim()
+    );
+    if (hasKnownProviderReference && !isMatchingReference(transaction, input.providerPaymentId)) {
       throw new Error("Payment reference mismatch");
     }
 

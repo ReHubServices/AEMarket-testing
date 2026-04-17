@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/http";
 import { attachCheckoutToTransaction, createTopUpTransaction } from "@/lib/order-flow";
-import { createCheckoutSession } from "@/lib/payment-provider";
+import { createCheckoutSession, isPaymentProviderConfigured } from "@/lib/payment-provider";
 import { getViewerFromRequest } from "@/lib/viewer";
 import { updateStore } from "@/lib/store";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
@@ -28,6 +28,9 @@ export async function POST(request: NextRequest) {
   if (!viewer) {
     return fail("Authentication required", 401);
   }
+  if (!isPaymentProviderConfigured()) {
+    return fail("Payment provider is not configured", 503);
+  }
 
   try {
     const body = (await request.json()) as { amount?: number; currency?: string };
@@ -47,13 +50,16 @@ export async function POST(request: NextRequest) {
         orderId: `wallet_${pending.transaction.id}`,
         transactionId: pending.transaction.id,
         username: viewer.username,
+        customerEmail: viewer.email,
+        itemName: "Wallet Top-up",
         returnUrl: `${request.nextUrl.origin}/dashboard?wallet=1`,
-        webhookUrl: `${request.nextUrl.origin}/api/webhooks/card-setup`
+        webhookUrl: `${request.nextUrl.origin}/api/webhooks/venpayr`
       });
 
       await attachCheckoutToTransaction({
         transactionId: pending.transaction.id,
         providerPaymentId: checkout.providerPaymentId,
+        providerAltPaymentId: checkout.providerAltPaymentId,
         checkoutUrl: checkout.checkoutUrl
       });
 
@@ -76,7 +82,7 @@ export async function POST(request: NextRequest) {
           transaction.updatedAt = new Date().toISOString();
         }
       });
-      if (message.toLowerCase().includes("payment endpoint missing")) {
+      if (message.includes("VENPAYR_NOT_CONFIGURED")) {
         return fail("Payment provider is not configured", 503);
       }
       return fail("Unable to initialize wallet checkout", 502);
