@@ -1912,8 +1912,11 @@ function mergeListing(base: MarketListing, detail: MarketListing | null) {
   };
 }
 
-async function enrichListingsWithDetails(listings: MarketListing[], token: string) {
-  const maxEnrichment = 24;
+async function enrichListingsWithDetails(
+  listings: MarketListing[],
+  token: string,
+  maxEnrichment = 24
+) {
   const output = listings.slice();
   const candidates = output
     .slice(0, maxEnrichment)
@@ -1956,7 +1959,8 @@ async function enrichListingsWithDetails(listings: MarketListing[], token: strin
 function applyLocalFilters(
   listings: MarketListing[],
   options: SearchOptions,
-  queryTerm: string
+  queryTerm: string,
+  phase: "pre" | "final" = "pre"
 ) {
   let output = listings.slice();
   const selectedGameFilter = options.game?.trim().toLowerCase() ?? "";
@@ -2644,7 +2648,7 @@ function applyLocalFilters(
     output = output.filter((item) => {
       const value = extractFortniteCountStrict(item, metric, mode);
       if (value <= 0) {
-        return false;
+        return phase === "pre";
       }
       if (hasMin && value < min) {
         return false;
@@ -3826,7 +3830,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         .map((entry) => entry.value);
 
       const combined = mergeUnique([primary, ...categoryResults].flat());
-      return applyLocalFilters(combined, effectiveOptions, trimmedQuery);
+      return applyLocalFilters(combined, effectiveOptions, trimmedQuery, "pre");
     };
 
     let activeSupplierQueries = trimmedQuery
@@ -3976,13 +3980,42 @@ export async function searchListings(query: string, options: SearchOptions = {})
         }
       }
     }
-    const visibleWindow = aggregated.slice(targetStart, targetEnd);
-    const enriched = await enrichListingsWithDetails(visibleWindow, token);
+    const strictFortniteCountFilterKeys = [
+      "fortnite_skin_count_min",
+      "fortnite_skin_count_max",
+      "fortnite_pickaxe_count_min",
+      "fortnite_pickaxe_count_max",
+      "fortnite_emote_count_min",
+      "fortnite_emote_count_max",
+      "fortnite_glider_count_min",
+      "fortnite_glider_count_max",
+      "fortnite_paid_skin_count_min",
+      "fortnite_paid_skin_count_max",
+      "fortnite_paid_pickaxe_count_min",
+      "fortnite_paid_pickaxe_count_max",
+      "fortnite_paid_emote_count_min",
+      "fortnite_paid_emote_count_max",
+      "fortnite_paid_glider_count_min",
+      "fortnite_paid_glider_count_max"
+    ];
+    const needsStrictFortniteCountFinalPass = strictFortniteCountFilterKeys.some((key) =>
+      Boolean(effectiveOptions.supplierFilters?.[key]?.trim())
+    );
+    const finalPassPoolSize = needsStrictFortniteCountFinalPass
+      ? Math.min(260, Math.max(targetEnd + pageSize * 10, 140))
+      : Math.max(targetEnd + 1, pageSize + 1);
+    const finalPassPool = aggregated.slice(0, finalPassPoolSize);
+    const enriched = await enrichListingsWithDetails(
+      finalPassPool,
+      token,
+      needsStrictFortniteCountFinalPass ? Math.min(finalPassPool.length, 180) : 24
+    );
     const translated = await translateListingsToEnglish(enriched);
     const withSharedImages = applySharedImageFallback(translated, trimmedQuery);
-    const finalFiltered = applyLocalFilters(withSharedImages, effectiveOptions, trimmedQuery);
-    const finalWindow = mergeUnique(finalFiltered).slice(0, pageSize);
-    const finalHasMore = hasMore || finalWindow.length < withSharedImages.length;
+    const finalFiltered = applyLocalFilters(withSharedImages, effectiveOptions, trimmedQuery, "final");
+    const uniqueFinal = mergeUnique(finalFiltered);
+    const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
+    const finalHasMore = hasMore || uniqueFinal.length > targetEnd;
     const pagedListings = withMarkup(finalWindow, store.settings.markupPercent);
     return {
       listings: pagedListings,
