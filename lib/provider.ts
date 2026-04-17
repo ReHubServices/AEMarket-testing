@@ -2195,17 +2195,21 @@ function applyLocalFilters(
   };
 
   const matchesGameToken = (item: MarketListing, token: string) => {
+    const normalizedToken = normalizeText(token);
     const haystack = `${item.game} ${item.title} ${item.category} ${item.description}`.toLowerCase();
-    if (token === "social" || token === "media") {
+    if (
+      normalizedToken === "social" ||
+      normalizedToken === "media" ||
+      normalizedToken === "media account" ||
+      normalizedToken === "media accounts"
+    ) {
       return socialKeywords.some((keyword) => haystack.includes(keyword));
     }
-    if (token === "fortnite") {
+    if (normalizedToken === "fortnite") {
       return [
         "fortnite",
-        "fn",
         "epicgames",
         "epic games",
-        "epic",
         "save the world",
         "stw",
         "vbucks",
@@ -2216,7 +2220,7 @@ function applyLocalFilters(
         "эпик"
       ].some((keyword) => haystack.includes(keyword));
     }
-    if (token === "steam") {
+    if (normalizedToken === "steam") {
       return (
         haystack.includes("steam") ||
         haystack.includes("cs2") ||
@@ -2229,13 +2233,17 @@ function applyLocalFilters(
         haystack.includes("faceit")
       );
     }
-    if (token === "siege") {
+    if (normalizedToken === "siege") {
       return haystack.includes("siege") || haystack.includes("rainbow") || haystack.includes("r6");
     }
-    if (token === "valorant") {
+    if (
+      normalizedToken === "valorant" ||
+      normalizedToken === "riot client" ||
+      normalizedToken === "riot"
+    ) {
       return haystack.includes("valorant") || haystack.includes("riot");
     }
-    if (token === "battlenet") {
+    if (normalizedToken === "battlenet") {
       return (
         haystack.includes("battlenet") ||
         haystack.includes("battle.net") ||
@@ -2248,13 +2256,13 @@ function applyLocalFilters(
         haystack.includes("wow")
       );
     }
-    if (token === "telegram") {
+    if (normalizedToken === "telegram") {
       return haystack.includes("telegram") || haystack.includes("телеграм");
     }
-    if (token === "discord") {
+    if (normalizedToken === "discord") {
       return haystack.includes("discord") || haystack.includes("дискорд");
     }
-    if (token === "cs2") {
+    if (normalizedToken === "cs2") {
       return (
         haystack.includes("cs2") ||
         haystack.includes("counter-strike") ||
@@ -2262,7 +2270,7 @@ function applyLocalFilters(
         haystack.includes("csgo")
       );
     }
-    return haystack.includes(token);
+    return haystack.includes(normalizedToken);
   };
   const parseCompactNumber = (raw: string) => {
     const text = raw.toLowerCase().replace(/\s+/g, "").replace(",", ".");
@@ -2634,11 +2642,10 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  if (forceScopeMatch && gameFilter) {
+  if (gameFilter) {
     output = output.filter((item) => matchesGameToken(item, gameFilter));
   }
   if (
-    forceScopeMatch &&
     categoryFilter &&
     (!gameFilter || categoryFilter === gameFilter)
   ) {
