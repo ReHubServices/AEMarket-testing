@@ -578,28 +578,28 @@ const FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS: RangeFilterConfig[] = [
     label: "Outfits",
     minKey: "fortnite_vbucks_cost_outfits_min",
     maxKey: "fortnite_vbucks_cost_outfits_max",
-    minPlaceholder: "Min outfits",
+    minPlaceholder: "Outfits value from",
     maxPlaceholder: "up to"
   },
   {
     label: "Pickaxes",
     minKey: "fortnite_vbucks_cost_pickaxes_min",
     maxKey: "fortnite_vbucks_cost_pickaxes_max",
-    minPlaceholder: "Pickaxes, from",
+    minPlaceholder: "Pickaxes value from",
     maxPlaceholder: "up to"
   },
   {
     label: "Dances",
     minKey: "fortnite_vbucks_cost_emotes_min",
     maxKey: "fortnite_vbucks_cost_emotes_max",
-    minPlaceholder: "Dances, from",
+    minPlaceholder: "Dances value from",
     maxPlaceholder: "up to"
   },
   {
     label: "Gliders",
     minKey: "fortnite_vbucks_cost_gliders_min",
     maxKey: "fortnite_vbucks_cost_gliders_max",
-    minPlaceholder: "Gliders, from",
+    minPlaceholder: "Gliders value from",
     maxPlaceholder: "up to"
   }
 ];
@@ -1810,29 +1810,34 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                           ))}
 
                           <div className="space-y-1 rounded-xl border border-white/10 bg-black/25 p-2">
-                            <p className="text-xs font-medium text-zinc-300">Total cost in V-Bucks</p>
+                            <p className="text-xs font-medium text-zinc-300">Total Value in V-Bucks</p>
                             {FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS.map((field) => (
-                              <div key={field.minKey} className="grid grid-cols-2 gap-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={gameFilters[field.minKey] ?? ""}
-                                  onChange={(event) =>
-                                    setGameFilter(field.minKey, event.target.value)
-                                  }
-                                  placeholder={field.minPlaceholder}
-                                  className="h-9"
-                                />
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={gameFilters[field.maxKey] ?? ""}
-                                  onChange={(event) =>
-                                    setGameFilter(field.maxKey, event.target.value)
-                                  }
-                                  placeholder={field.maxPlaceholder}
-                                  className="h-9"
-                                />
+                              <div key={field.minKey} className="space-y-1.5">
+                                <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-400">
+                                  {field.label}
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={gameFilters[field.minKey] ?? ""}
+                                    onChange={(event) =>
+                                      setGameFilter(field.minKey, event.target.value)
+                                    }
+                                    placeholder={field.minPlaceholder}
+                                    className="h-9"
+                                  />
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={gameFilters[field.maxKey] ?? ""}
+                                    onChange={(event) =>
+                                      setGameFilter(field.maxKey, event.target.value)
+                                    }
+                                    placeholder={field.maxPlaceholder}
+                                    className="h-9"
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>

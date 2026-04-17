@@ -2434,15 +2434,18 @@ function applyLocalFilters(
     return Math.round(base * multiplier);
   };
   const parseLooseNumber = (raw: string) => {
-    const compact = parseCompactNumber(raw);
-    if (compact > 0) {
-      return compact;
+    const compactToken = raw.match(/\d+(?:[.,]\d+)?\s*[kmb]?/i)?.[0] ?? "";
+    if (compactToken) {
+      const compact = parseCompactNumber(compactToken);
+      if (compact > 0) {
+        return compact;
+      }
     }
-    const normalized = raw.replace(/[^\d]/g, "");
-    if (!normalized) {
+    const fallbackToken = raw.match(/\d[\d\s.,]*/)?.[0] ?? "";
+    if (!fallbackToken) {
       return 0;
     }
-    const parsed = Number(normalized);
+    const parsed = Number(fallbackToken.replace(/[^\d]/g, ""));
     return Number.isFinite(parsed) ? parsed : 0;
   };
   const extractMetricValue = (item: MarketListing, aliases: string[]) => {
@@ -2496,45 +2499,63 @@ function applyLocalFilters(
       text.includes("v-bucks") ||
       text.includes("cost") ||
       text.includes("value");
+    const extractNumberTokens = (text: string) =>
+      Array.from(text.matchAll(/\d+(?:[.,]\d+)?\s*[kmb]?/gi))
+        .map((match) => parseCompactNumber(match[0]))
+        .filter((value) => Number.isFinite(value) && value > 0);
+    const pickCountValue = (text: string) => {
+      const tokens = extractNumberTokens(text);
+      if (tokens.length === 0) {
+        return 0;
+      }
+      if (
+        /\d+(?:[.,]\d+)?\s*[kmb]?\s*[-–—~]\s*\d+(?:[.,]\d+)?\s*[kmb]?/i.test(text) ||
+        /\bfrom\b[^.\n]{0,14}\bto\b/i.test(text)
+      ) {
+        return Math.max(...tokens);
+      }
+      return tokens[0];
+    };
     const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     let max = 0;
-    const sources = [
-      item.title,
-      item.description,
-      ...item.specs.map((spec) => `${spec.label}: ${spec.value}`)
-    ];
-
-    for (const sourceRaw of sources) {
-      const source = normalizeText(sourceRaw);
-      if (!source) {
-        continue;
+    const scanSource = (sourceRaw: string) => {
+      const source = sourceRaw.toLowerCase();
+      const sourceNormalized = normalizeText(sourceRaw);
+      if (!sourceNormalized) {
+        return;
       }
-      if (!normalizedAliases.some((alias) => source.includes(alias))) {
-        continue;
+      if (!normalizedAliases.some((alias) => sourceNormalized.includes(alias))) {
+        return;
       }
-      const hasPaid = source.includes("paid");
-      if (mode === "core" && (hasPaid || isCostContext(source))) {
-        continue;
+      const hasPaid = sourceNormalized.includes("paid");
+      if (mode === "core" && (hasPaid || isCostContext(sourceNormalized))) {
+        return;
       }
       if (mode === "paid" && !hasPaid) {
-        continue;
+        return;
       }
-
       for (const alias of normalizedAliases) {
-        if (!source.includes(alias)) {
+        if (!sourceNormalized.includes(alias)) {
           continue;
         }
         const escapedAlias = escapePattern(alias);
-        const forwardMatches =
-          source.match(new RegExp(`${escapedAlias}[^\\d]{0,12}(\\d[\\d\\s.,kmb]*)`, "gi")) ?? [];
-        const backwardMatches =
-          source.match(new RegExp(`(\\d[\\d\\s.,kmb]*)[^\\d]{0,8}${escapedAlias}`, "gi")) ?? [];
-        for (const match of [...forwardMatches, ...backwardMatches]) {
-          max = Math.max(max, parseLooseNumber(match));
+        const forwardRegex = new RegExp(
+          `${escapedAlias}[^\\d]{0,12}(\\d+(?:[.,]\\d+)?\\s*[kmb]?(?:\\s*[-–—~]\\s*\\d+(?:[.,]\\d+)?\\s*[kmb]?)?)`,
+          "gi"
+        );
+        const backwardRegex = new RegExp(
+          `(\\d+(?:[.,]\\d+)?\\s*[kmb]?(?:\\s*[-–—~]\\s*\\d+(?:[.,]\\d+)?\\s*[kmb]?)?)[^\\d]{0,8}${escapedAlias}`,
+          "gi"
+        );
+        for (const match of source.matchAll(forwardRegex)) {
+          max = Math.max(max, pickCountValue(match[1] ?? ""));
+        }
+        for (const match of source.matchAll(backwardRegex)) {
+          max = Math.max(max, pickCountValue(match[1] ?? ""));
         }
       }
-    }
+    };
 
     for (const spec of item.specs) {
       const label = normalizeText(spec.label);
@@ -2553,8 +2574,15 @@ function applyLocalFilters(
       if (mode === "paid" && !hasPaid) {
         continue;
       }
-      max = Math.max(max, parseLooseNumber(spec.value));
+      max = Math.max(max, pickCountValue(spec.value));
     }
+
+    if (max > 0) {
+      return max;
+    }
+
+    scanSource(item.title);
+    scanSource(item.description);
 
     return max;
   };
