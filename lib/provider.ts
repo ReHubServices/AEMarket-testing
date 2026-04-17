@@ -1467,6 +1467,136 @@ function toSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+const QUERY_INTENT_ALIASES: Record<string, string[]> = {
+  fortnite: [
+    "fortnite",
+    "fortntie",
+    "fornite",
+    "fortinte",
+    "forntite",
+    "fort nit",
+    "fort-nite",
+    "vbucks",
+    "v-bucks",
+    "epic games",
+    "epicgames"
+  ],
+  valorant: ["valorant", "riot", "riot client"],
+  siege: ["siege", "rainbow six", "rainbow-six-siege", "r6"],
+  steam: ["steam", "valve"],
+  cs2: ["cs2", "counter strike", "counter-strike", "csgo"],
+  battlenet: ["battlenet", "battle net", "battle.net", "blizzard"],
+  telegram: ["telegram", "tg"],
+  discord: ["discord", "nitro"],
+  media: ["social media", "social account", "instagram", "tiktok", "youtube", "facebook"]
+};
+
+function normalizeIntentToken(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function hasSmallEditDistance(source: string, target: string, maxDistance: number) {
+  if (!source || !target) {
+    return false;
+  }
+  if (Math.abs(source.length - target.length) > maxDistance) {
+    return false;
+  }
+
+  const rows = source.length + 1;
+  const cols = target.length + 1;
+  const matrix: number[][] = Array.from({ length: rows }, () => new Array(cols).fill(0));
+
+  for (let row = 0; row < rows; row += 1) {
+    matrix[row][0] = row;
+  }
+  for (let col = 0; col < cols; col += 1) {
+    matrix[0][col] = col;
+  }
+
+  for (let row = 1; row < rows; row += 1) {
+    let rowMin = Number.POSITIVE_INFINITY;
+    for (let col = 1; col < cols; col += 1) {
+      const cost = source[row - 1] === target[col - 1] ? 0 : 1;
+      matrix[row][col] = Math.min(
+        matrix[row - 1][col] + 1,
+        matrix[row][col - 1] + 1,
+        matrix[row - 1][col - 1] + cost
+      );
+      rowMin = Math.min(rowMin, matrix[row][col]);
+    }
+    if (rowMin > maxDistance) {
+      return false;
+    }
+  }
+
+  return matrix[source.length][target.length] <= maxDistance;
+}
+
+function detectQueryIntent(query: string) {
+  const normalized = query
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const tokens = normalized.split(" ").filter((token) => token.length >= 2);
+  const compact = normalizeIntentToken(normalized);
+  const priorities = [
+    "fortnite",
+    "valorant",
+    "siege",
+    "cs2",
+    "steam",
+    "battlenet",
+    "telegram",
+    "discord",
+    "media"
+  ];
+
+  for (const canonical of priorities) {
+    const aliases = Array.from(
+      new Set([canonical, ...(QUERY_INTENT_ALIASES[canonical] ?? [])].map(normalizeIntentToken))
+    ).filter(Boolean);
+
+    for (const alias of aliases) {
+      if (alias.length >= 3 && compact.includes(alias)) {
+        return canonical;
+      }
+      for (const token of tokens) {
+        const tokenCompact = normalizeIntentToken(token);
+        if (!tokenCompact) {
+          continue;
+        }
+        if (tokenCompact === alias) {
+          return canonical;
+        }
+        if (
+          tokenCompact.length >= 5 &&
+          alias.length >= 5 &&
+          (tokenCompact.includes(alias) || alias.includes(tokenCompact))
+        ) {
+          return canonical;
+        }
+        if (
+          tokenCompact.length >= 6 &&
+          alias.length >= 6 &&
+          hasSmallEditDistance(tokenCompact, alias, 2)
+        ) {
+          return canonical;
+        }
+      }
+    }
+  }
+
+  return "";
+}
+
 function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const custom = (process.env.LZT_CATEGORY_ENDPOINTS ?? "")
     .split(",")
@@ -1820,8 +1950,12 @@ function applyLocalFilters(
   queryTerm: string
 ) {
   let output = listings.slice();
-  const gameFilter = options.game?.trim().toLowerCase() ?? "";
-  const categoryFilter = options.category?.trim().toLowerCase() ?? "";
+  const selectedGameFilter = options.game?.trim().toLowerCase() ?? "";
+  const selectedCategoryFilter = options.category?.trim().toLowerCase() ?? "";
+  const inferredQueryGameFilter =
+    !selectedGameFilter && !selectedCategoryFilter ? detectQueryIntent(queryTerm) : "";
+  const gameFilter = selectedGameFilter || inferredQueryGameFilter;
+  const categoryFilter = selectedCategoryFilter;
   const hasKeywordQuery = Boolean(queryTerm.trim());
   const mediaFollowersMin = Number(options.supplierFilters?.media_followers_min ?? NaN);
   const mediaVerified = options.supplierFilters?.media_verified?.trim() ?? "";
@@ -2195,14 +2329,20 @@ function applyLocalFilters(
 
   const matchesGameToken = (item: MarketListing, token: string) => {
     const normalizedToken = normalizeText(token);
-    const haystack = `${item.game} ${item.title} ${item.category} ${item.description}`.toLowerCase();
+    const rawHaystack = `${item.game} ${item.title} ${item.category} ${item.description} ${item.specs
+      .map((spec) => `${spec.label} ${spec.value}`)
+      .join(" ")}`.toLowerCase();
+    const normalizedHaystack = normalizeText(rawHaystack);
+    const containsToken = (keyword: string) =>
+      rawHaystack.includes(keyword.toLowerCase()) ||
+      normalizedHaystack.includes(normalizeText(keyword));
     if (
       normalizedToken === "social" ||
       normalizedToken === "media" ||
       normalizedToken === "media account" ||
       normalizedToken === "media accounts"
     ) {
-      return socialKeywords.some((keyword) => haystack.includes(keyword));
+      return socialKeywords.some((keyword) => containsToken(keyword));
     }
     if (normalizedToken === "fortnite") {
       return [
@@ -2217,59 +2357,59 @@ function applyLocalFilters(
         "leviathan",
         "фортнайт",
         "эпик"
-      ].some((keyword) => haystack.includes(keyword));
+      ].some((keyword) => containsToken(keyword));
     }
     if (normalizedToken === "steam") {
       return (
-        haystack.includes("steam") ||
-        haystack.includes("cs2") ||
-        haystack.includes("counter-strike") ||
-        haystack.includes("dota") ||
-        haystack.includes("rust") ||
-        haystack.includes("pubg") ||
-        haystack.includes("vac") ||
-        haystack.includes("prime") ||
-        haystack.includes("faceit")
+        containsToken("steam") ||
+        containsToken("cs2") ||
+        containsToken("counter-strike") ||
+        containsToken("dota") ||
+        containsToken("rust") ||
+        containsToken("pubg") ||
+        containsToken("vac") ||
+        containsToken("prime") ||
+        containsToken("faceit")
       );
     }
     if (normalizedToken === "siege") {
-      return haystack.includes("siege") || haystack.includes("rainbow") || haystack.includes("r6");
+      return containsToken("siege") || containsToken("rainbow") || containsToken("r6");
     }
     if (
       normalizedToken === "valorant" ||
       normalizedToken === "riot client" ||
       normalizedToken === "riot"
     ) {
-      return haystack.includes("valorant") || haystack.includes("riot");
+      return containsToken("valorant") || containsToken("riot");
     }
     if (normalizedToken === "battlenet") {
       return (
-        haystack.includes("battlenet") ||
-        haystack.includes("battle.net") ||
-        haystack.includes("blizzard") ||
-        haystack.includes("overwatch") ||
-        haystack.includes("warzone") ||
-        haystack.includes("call of duty") ||
-        haystack.includes("diablo") ||
-        haystack.includes("world of warcraft") ||
-        haystack.includes("wow")
+        containsToken("battlenet") ||
+        containsToken("battle.net") ||
+        containsToken("blizzard") ||
+        containsToken("overwatch") ||
+        containsToken("warzone") ||
+        containsToken("call of duty") ||
+        containsToken("diablo") ||
+        containsToken("world of warcraft") ||
+        containsToken("wow")
       );
     }
     if (normalizedToken === "telegram") {
-      return haystack.includes("telegram") || haystack.includes("телеграм");
+      return containsToken("telegram") || containsToken("телеграм");
     }
     if (normalizedToken === "discord") {
-      return haystack.includes("discord") || haystack.includes("дискорд");
+      return containsToken("discord") || containsToken("дискорд");
     }
     if (normalizedToken === "cs2") {
       return (
-        haystack.includes("cs2") ||
-        haystack.includes("counter-strike") ||
-        haystack.includes("counter strike") ||
-        haystack.includes("csgo")
+        containsToken("cs2") ||
+        containsToken("counter-strike") ||
+        containsToken("counter strike") ||
+        containsToken("csgo")
       );
     }
-    return haystack.includes(normalizedToken);
+    return containsToken(normalizedToken);
   };
   const itemScopeHaystack = (item: MarketListing) =>
     normalizeText(`${item.game} ${item.title} ${item.category} ${item.description}`);
@@ -2660,7 +2800,39 @@ function applyLocalFilters(
     }
   }
   if (gameFilter === "fortnite") {
-    output = output.filter((item) => hasFortniteKeyword(item) || !hasSocialKeyword(item));
+    const blockedNonFortnite = [
+      "telegram",
+      "discord",
+      "instagram",
+      "tiktok",
+      "facebook",
+      "youtube",
+      "twitter",
+      "x.com",
+      "steam",
+      "counter-strike",
+      "cs2",
+      "valorant",
+      "riot",
+      "league of legends",
+      "rainbow",
+      "siege",
+      "battlenet",
+      "battle.net",
+      "blizzard",
+      "warzone",
+      "social media"
+    ].map((token) => normalizeText(token));
+    output = output.filter((item) => {
+      if (hasFortniteKeyword(item)) {
+        return true;
+      }
+      const haystack = itemSearchText(item);
+      if (blockedNonFortnite.some((token) => haystack.includes(token))) {
+        return false;
+      }
+      return !hasSocialKeyword(item);
+    });
   }
   if (
     categoryFilter &&
@@ -2680,10 +2852,11 @@ function applyLocalFilters(
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.item);
-    const unmatched = ranked
-      .filter((entry) => entry.score <= 0)
-      .map((entry) => entry.item);
-    output = [...matched, ...unmatched];
+    if (matched.length > 0) {
+      output = matched;
+    } else if (!gameFilter && !categoryFilter && !inferredQueryGameFilter) {
+      output = [];
+    }
   }
   const resolvedMediaPlatform =
     mediaPlatform && mediaPlatform in mediaPlatformKeywords
@@ -3317,6 +3490,13 @@ function buildSupplierQueryVariants(query: string) {
   );
 
   const variants = new Set<string>([normalized]);
+  const inferredIntent = detectQueryIntent(normalized);
+  if (inferredIntent) {
+    variants.add(inferredIntent);
+    for (const alias of QUERY_INTENT_ALIASES[inferredIntent] ?? []) {
+      variants.add(alias);
+    }
+  }
   if (tokens.length > 0) {
     variants.add(tokens.join(" "));
   }
@@ -3332,7 +3512,7 @@ function buildSupplierQueryVariants(query: string) {
     }
   }
 
-  return Array.from(variants).filter(Boolean).slice(0, 5);
+  return Array.from(variants).filter(Boolean).slice(0, 8);
 }
 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
@@ -3340,14 +3520,22 @@ export async function searchListings(query: string, options: SearchOptions = {})
   const endpoint = getSearchEndpoint();
   const token = await getLztAccessToken();
   const trimmedQuery = query.trim();
-  const hasBrowseScope = Boolean(options.game?.trim() || options.category?.trim());
+  const explicitScope = Boolean(options.game?.trim() || options.category?.trim());
+  const inferredScope = !explicitScope ? detectQueryIntent(trimmedQuery) : "";
+  const effectiveOptions: SearchOptions = inferredScope
+    ? {
+        ...options,
+        game: options.game?.trim() ? options.game : inferredScope
+      }
+    : options;
+  const hasBrowseScope = Boolean(effectiveOptions.game?.trim() || effectiveOptions.category?.trim());
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
   const pageSize = Number.isFinite(options.pageSize ?? NaN)
     ? Math.min(60, Math.max(1, Number(options.pageSize)))
     : 15;
   const fetchPageSize = Math.min(80, pageSize + 12);
   const normalizedOptions: SearchOptions = {
-    ...options,
+    ...effectiveOptions,
     page,
     pageSize: fetchPageSize
   };
@@ -3419,11 +3607,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
       );
       const endpointScope = broadMode
         ? {
-            ...options,
+            ...effectiveOptions,
             game: null,
             category: null
           }
-        : options;
+        : effectiveOptions;
       const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope);
       const categoryResultsSettled = await Promise.allSettled(
         categoryEndpoints.map((categoryEndpoint) =>
@@ -3443,7 +3631,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         .map((entry) => entry.value);
 
       const combined = mergeUnique([primary, ...categoryResults].flat());
-      return applyLocalFilters(combined, options, trimmedQuery);
+      return applyLocalFilters(combined, effectiveOptions, trimmedQuery);
     };
 
     let activeSupplierQueries = trimmedQuery
