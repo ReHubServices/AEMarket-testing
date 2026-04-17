@@ -59,6 +59,77 @@ function normalizeEndpoint(value: string) {
   return value.endsWith("/") ? value : `${value}/`;
 }
 
+function inferEndpointGameHint(endpoint: string) {
+  const normalized = endpoint.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  let token = "";
+  try {
+    const url = new URL(normalizeEndpoint(normalized));
+    const segments = url.pathname
+      .split("/")
+      .map((segment) => toSlug(segment))
+      .filter(Boolean);
+    token = segments[segments.length - 1] ?? "";
+  } catch {
+    token = "";
+  }
+
+  if (!token) {
+    return "";
+  }
+
+  const matches = (aliases: string[]) =>
+    aliases.some((alias) => token === alias || token.includes(alias) || alias.includes(token));
+
+  if (matches(["fortnite", "epicgames", "epic-games", "epic"])) {
+    return "Fortnite";
+  }
+  if (matches(["riot", "valorant", "league-of-legends", "leagueoflegends"])) {
+    return "Riot Client";
+  }
+  if (matches(["rainbow-six-siege", "rainbowsixsiege", "siege", "r6"])) {
+    return "Rainbow Six Siege";
+  }
+  if (matches(["steam", "cs2", "counter-strike", "counterstrike", "csgo"])) {
+    return "Steam";
+  }
+  if (matches(["battlenet", "battle-net", "blizzard"])) {
+    return "Battle.net";
+  }
+  if (matches(["instagram"])) {
+    return "Instagram";
+  }
+  if (matches(["tiktok"])) {
+    return "TikTok";
+  }
+  if (matches(["facebook"])) {
+    return "Facebook";
+  }
+  if (matches(["twitter", "x-com"])) {
+    return "Twitter/X";
+  }
+  if (matches(["youtube"])) {
+    return "YouTube";
+  }
+  if (matches(["telegram"])) {
+    return "Telegram";
+  }
+  if (matches(["discord"])) {
+    return "Discord";
+  }
+  if (matches(["snapchat"])) {
+    return "Snapchat";
+  }
+  if (matches(["social", "media"])) {
+    return "Social Media";
+  }
+
+  return "";
+}
+
 function extractText(value: unknown, fallback = ""): string {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -374,7 +445,7 @@ function extractItems(data: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function mapRawListing(item: Record<string, unknown>): MarketListing {
+function mapRawListing(item: Record<string, unknown>, endpointGameHint = ""): MarketListing {
   const source = buildListingSource(item);
   const basePrice = resolveListingBasePrice(source);
   const title = extractText(
@@ -382,7 +453,13 @@ function mapRawListing(item: Record<string, unknown>): MarketListing {
     "Untitled listing"
   );
   const imageUrl = extractImageUrl(source);
-  const game = resolveGameLabel(source);
+  let game = resolveGameLabel(source);
+  if (
+    endpointGameHint &&
+    (isGenericCategory(game) || normalizeLabel(game) === "gaming" || normalizeLabel(game) === "social media")
+  ) {
+    game = endpointGameHint;
+  }
   const category = resolveCategoryLabel(source, game);
   const specs = extractSpecs(source);
   const description = extractDescription(source) || buildDescriptionFallback(source, specs);
@@ -1440,6 +1517,7 @@ async function fetchListingsFromEndpoint(input: {
   query: string;
   options: SearchOptions;
 }) {
+  const endpointGameHint = inferEndpointGameHint(input.endpoint);
   const response = await fetch(buildSearchUrl(input.endpoint, input.query, input.options), {
     headers: {
       Authorization: `Bearer ${input.token}`,
@@ -1458,7 +1536,7 @@ async function fetchListingsFromEndpoint(input: {
   const data = (await response.json()) as unknown;
   return extractItems(data)
     .filter((entry) => !hasBlockedMarketplaceLink(buildListingSource(entry)))
-    .map((entry) => mapRawListing(entry))
+    .map((entry) => mapRawListing(entry, endpointGameHint))
     .filter(
       (listing) =>
         Boolean(listing.id) &&
@@ -1749,9 +1827,16 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
       : categories;
   const root = normalizeEndpoint(baseEndpoint);
 
+  const selectedCategories =
+    requested.length > 0
+      ? narrowedCategories.length > 0
+        ? narrowedCategories
+        : requestedTokens
+      : categories;
+
   return Array.from(
     new Set(
-      (narrowedCategories.length > 0 ? narrowedCategories : categories).map((category) =>
+      selectedCategories.map((category) =>
         category.startsWith("http://") || category.startsWith("https://")
           ? category
           : `${root}${category}`
@@ -2018,6 +2103,7 @@ function applyLocalFilters(
   const selectedCategoryFilter = options.category?.trim().toLowerCase() ?? "";
   const inferredQueryGameFilter =
     !selectedGameFilter && !selectedCategoryFilter ? detectQueryIntent(queryTerm) : "";
+  const hasExplicitScope = Boolean(selectedGameFilter || selectedCategoryFilter);
   const gameFilter = selectedGameFilter || inferredQueryGameFilter;
   const categoryFilter = selectedCategoryFilter;
   const hasKeywordQuery = Boolean(queryTerm.trim());
@@ -3095,7 +3181,7 @@ function applyLocalFilters(
     const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
     if (scoped.length > 0) {
       output = scoped;
-    } else if (effectiveGameFilter === "fortnite") {
+    } else if (!hasExplicitScope && effectiveGameFilter === "fortnite") {
       const fallbackFortnite = output.filter((item) => !hasSocialKeyword(item));
       if (fallbackFortnite.length > 0) {
         output = fallbackFortnite;
@@ -3910,12 +3996,15 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
-      const primary = await fetchFromEndpointForQueries(
-        endpoint,
-        pageOptions,
-        supplierQueries,
-        supplierPages
-      );
+      const primary =
+        !explicitScope || broadMode
+          ? await fetchFromEndpointForQueries(
+              endpoint,
+              pageOptions,
+              supplierQueries,
+              supplierPages
+            )
+          : [];
       const endpointScope = broadMode
         ? {
             ...effectiveOptions,
@@ -3955,7 +4044,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       activeSupplierQueries
     );
     let usingBroadFallback = false;
-    if (trimmedQuery) {
+    if (trimmedQuery && !explicitScope) {
       if (filteredCurrentPage.length < pageSize) {
         usingBroadFallback = true;
         const broadScoped = await loadFilteredPage(
@@ -3975,7 +4064,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         }
       }
     }
-    if (hasBrowseScope && !trimmedQuery) {
+    if (hasBrowseScope && !trimmedQuery && !explicitScope) {
       const broadScoped = await loadFilteredPage(page, true, activeSupplierQueries);
       if (broadScoped.length > filteredCurrentPage.length) {
         filteredCurrentPage = broadScoped;
@@ -3996,7 +4085,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         filteredCurrentPage = scopeOnly;
         activeSupplierQueries = [""];
         usingEmptySupplierQueryFallback = true;
-      } else {
+      } else if (!explicitScope) {
         const broadScopeOnly = await loadFilteredPage(page, true, [""]);
         if (broadScopeOnly.length > 0) {
           filteredCurrentPage = broadScopeOnly;
