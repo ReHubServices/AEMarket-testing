@@ -1810,7 +1810,6 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                           ))}
 
                           <div className="space-y-1 rounded-xl border border-white/10 bg-black/25 p-2">
-                            <p className="text-xs font-medium text-zinc-300">Total Value in V-Bucks</p>
                             {FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS.map((field) => (
                               <div key={field.minKey} className="space-y-1.5">
                                 <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-400">

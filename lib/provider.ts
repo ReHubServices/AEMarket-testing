@@ -3936,10 +3936,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const enriched = await enrichListingsWithDetails(visibleWindow, token);
     const translated = await translateListingsToEnglish(enriched);
     const withSharedImages = applySharedImageFallback(translated, trimmedQuery);
-    const pagedListings = withMarkup(withSharedImages, store.settings.markupPercent);
+    const finalFiltered = applyLocalFilters(withSharedImages, effectiveOptions, trimmedQuery);
+    const finalWindow = mergeUnique(finalFiltered).slice(0, pageSize);
+    const finalHasMore = hasMore || finalWindow.length < withSharedImages.length;
+    const pagedListings = withMarkup(finalWindow, store.settings.markupPercent);
     return {
       listings: pagedListings,
-      hasMore,
+      hasMore: finalHasMore,
       page,
       pageSize
     };
