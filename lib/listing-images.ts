@@ -30,6 +30,9 @@ function normalizeUrl(raw: string | null | undefined) {
     }
     return value.startsWith("http://") ? `https://${value.slice(7)}` : value;
   }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i.test(value)) {
+    return `https://${value}`;
+  }
   return "";
 }
 
@@ -80,12 +83,14 @@ type ListingImageOptions = {
   preferFortniteSkins?: boolean;
 };
 
+type ListingImageSource = Pick<MarketListing, "imageUrl" | "title" | "game" | "category"> & {
+  id?: string;
+};
+
 function isFortniteLikeListing(listing: Pick<MarketListing, "title" | "game" | "category">) {
   const text = listingKeywords(listing);
   return [
     "fortnite",
-    "epicgames",
-    "epic games",
     "vbucks",
     "v-bucks",
     "battle pass",
@@ -177,20 +182,38 @@ export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title
   return getListingImageWithOptions(listing, {});
 }
 
+function fortniteImageById(id: string | undefined) {
+  const normalizedId = String(id ?? "").trim();
+  if (!/^\d+$/.test(normalizedId)) {
+    return "";
+  }
+  return `https://lzt.market/${normalizedId}/image?type=skins`;
+}
+
 export function getListingImageWithOptions(
-  listing: Pick<MarketListing, "imageUrl" | "title" | "game" | "category">,
+  listing: ListingImageSource,
   options: ListingImageOptions = {}
 ) {
   const normalized = normalizeUrl(listing.imageUrl);
+  const fortniteById = isFortniteLikeListing(listing) ? fortniteImageById(listing.id) : "";
   if (!normalized) {
+    if (fortniteById) {
+      return fortniteById;
+    }
     return getPresetListingImage(listing, options);
   }
   const lower = normalized.toLowerCase();
   const blocked = BROKEN_IMAGE_HINTS.some((hint) => lower.includes(hint));
   if (blocked) {
+    if (fortniteById) {
+      return fortniteById;
+    }
     return getPresetListingImage(listing, options);
   }
   if (!isLikelyDisplayImage(normalized)) {
+    if (fortniteById) {
+      return fortniteById;
+    }
     return getPresetListingImage(listing, options);
   }
   if (options.preferFortniteSkins && isFortniteLikeListing(listing)) {
@@ -200,16 +223,22 @@ export function getListingImageWithOptions(
     }
   }
   if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(normalized)) {
+    if (fortniteById) {
+      return fortniteById;
+    }
     return "/fallbacks/fortnite.svg";
   }
   if (isFortniteLikeListing(listing) && !isTrustedSupplierImage(normalized)) {
+    if (fortniteById) {
+      return fortniteById;
+    }
     return "/fallbacks/fortnite.svg";
   }
   return normalized;
 }
 
 export function getListingImageGallery(
-  listing: Pick<MarketListing, "imageUrl" | "title" | "game" | "category">,
+  listing: ListingImageSource,
   options: ListingImageOptions = {}
 ) {
   const base = getListingImageWithOptions(listing, options);

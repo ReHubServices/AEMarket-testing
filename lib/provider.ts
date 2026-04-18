@@ -114,8 +114,11 @@ function inferEndpointGameHint(endpoint: string) {
   const matches = (aliases: string[]) =>
     aliases.some((alias) => token === alias || token.includes(alias) || alias.includes(token));
 
-  if (matches(["fortnite", "epicgames", "epic-games", "epic"])) {
+  if (matches(["fortnite"])) {
     return "Fortnite";
+  }
+  if (matches(["epicgames", "epic-games", "epic"])) {
+    return "Epic Games";
   }
   if (matches(["riot", "valorant", "league-of-legends", "leagueoflegends"])) {
     return "Riot Client";
@@ -652,6 +655,9 @@ function normalizeImageUrl(value: string) {
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     return raw.startsWith("http://") ? `https://${raw.slice(7)}` : raw;
   }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i.test(raw)) {
+    return `https://${raw}`;
+  }
   if (raw.startsWith("/")) {
     if (/^\/\d+\/image(?:\?|$)/i.test(raw) || /^\/market\/\d+\/image(?:\?|$)/i.test(raw)) {
       return `https://lzt.market${raw}`;
@@ -781,6 +787,14 @@ function extractImageUrlFromPostText(value: unknown, depth = 0): string {
 
   const urlMatches = text.match(/(?:https?:\/\/|\/\/)[^\s"'<>)\]]+/gi) ?? [];
   for (const url of urlMatches) {
+    const normalized = normalizeImageUrl(url);
+    if (normalized && isLikelyImageUrl(normalized)) {
+      return normalized;
+    }
+  }
+  const bareUrlMatches =
+    text.match(/\b(?:lzt\.market|lolz\.guru|lztcdn\.com|nztcdn\.com)\/[^\s"'<>)\]]+/gi) ?? [];
+  for (const url of bareUrlMatches) {
     const normalized = normalizeImageUrl(url);
     if (normalized && isLikelyImageUrl(normalized)) {
       return normalized;
@@ -1998,7 +2012,6 @@ function applySharedImageFallback(listings: MarketListing[], queryTerm: string) 
   }
 
   const tokenToImages = new Map<string, string[]>();
-  const gameToImage = new Map<string, string>();
   const queryTokenSet = new Set(tokenizeImageKeywords(queryTerm));
 
   for (const listing of listings) {
@@ -2009,11 +2022,6 @@ function applySharedImageFallback(listings: MarketListing[], queryTerm: string) 
     const image = normalizeImageUrl(listing.imageUrl);
     if (!image) {
       continue;
-    }
-
-    const gameKey = normalizeKeywordText(listing.game);
-    if (gameKey && !gameToImage.has(gameKey)) {
-      gameToImage.set(gameKey, image);
     }
 
     for (const token of listingImageKeywords(listing)) {
@@ -2055,14 +2063,6 @@ function applySharedImageFallback(listings: MarketListing[], queryTerm: string) 
       return {
         ...listing,
         imageUrl: bestImage
-      };
-    }
-
-    const gameImage = gameToImage.get(normalizeKeywordText(listing.game));
-    if (gameImage) {
-      return {
-        ...listing,
-        imageUrl: gameImage
       };
     }
 
@@ -2532,6 +2532,33 @@ function applyLocalFilters(
     return matchedTokens >= requiredTokens;
   };
 
+  const hasFortniteSignal = (item: MarketListing) => {
+    const text = itemSearchText(item);
+    return [
+      "fortnite",
+      "vbucks",
+      "v bucks",
+      "v-bucks",
+      "battle pass",
+      "save the world",
+      "stw",
+      "outfit",
+      "outfits",
+      "skins",
+      "skin count",
+      "pickaxe",
+      "pickaxes",
+      "emote",
+      "emotes",
+      "dances",
+      "dance",
+      "glider",
+      "gliders",
+      "locker"
+    ]
+      .map((keyword) => normalizeText(keyword))
+      .some((keyword) => keyword && text.includes(keyword));
+  };
   const matchesGameToken = (item: MarketListing, token: string) => {
     const normalizedToken = normalizeText(token);
     const rawHaystack = `${item.game} ${item.title} ${item.category} ${item.description} ${item.specs
@@ -2550,19 +2577,7 @@ function applyLocalFilters(
       return socialKeywords.some((keyword) => containsToken(keyword));
     }
     if (normalizedToken === "fortnite") {
-      return [
-        "fortnite",
-        "epicgames",
-        "epic games",
-        "save the world",
-        "stw",
-        "vbucks",
-        "v-bucks",
-        "battle pass",
-        "leviathan",
-        "фортнайт",
-        "эпик"
-      ].some((keyword) => containsToken(keyword));
+      return hasFortniteSignal(item) || ["leviathan", "фортнайт"].some((keyword) => containsToken(keyword));
     }
     if (normalizedToken === "steam") {
       return (
@@ -3954,10 +3969,14 @@ function isFortniteListing(listing: MarketListing) {
   const text = normalizeKeywordText(`${listing.game} ${listing.category} ${listing.title}`);
   return (
     text.includes("fortnite") ||
-    text.includes("epicgames") ||
-    text.includes("epic games") ||
     text.includes("vbucks") ||
-    text.includes("v bucks")
+    text.includes("v bucks") ||
+    text.includes("battle pass") ||
+    text.includes("outfit") ||
+    text.includes("pickaxe") ||
+    text.includes("emote") ||
+    text.includes("glider") ||
+    text.includes("stw")
   );
 }
 
