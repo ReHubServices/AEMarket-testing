@@ -79,6 +79,18 @@ export function ProductDetailModal({
       preferFortniteSkins: true
     });
   const hasMultipleImages = gallery.length > 1;
+  const goToPreviousImage = () => {
+    if (!hasMultipleImages) {
+      return;
+    }
+    setActiveImageIndex((previous) => (previous <= 0 ? gallery.length - 1 : previous - 1));
+  };
+  const goToNextImage = () => {
+    if (!hasMultipleImages) {
+      return;
+    }
+    setActiveImageIndex((previous) => (previous + 1) % gallery.length);
+  };
 
   if (!hasListing || !listing) {
     return null;
@@ -96,11 +108,26 @@ export function ProductDetailModal({
             <X size={16} />
           </button>
 
-          <div className="relative h-56 sm:h-64 md:h-full">
+          <div
+            className="relative flex h-56 items-center justify-center overflow-hidden bg-black/50 sm:h-64 md:h-full"
+            onClick={(event) => {
+              if (!hasMultipleImages) {
+                return;
+              }
+              const bounds = event.currentTarget.getBoundingClientRect();
+              const clickX = event.clientX - bounds.left;
+              const isRightHalf = clickX >= bounds.width / 2;
+              if (isRightHalf) {
+                goToNextImage();
+              } else {
+                goToPreviousImage();
+              }
+            }}
+          >
             <img
               src={activeImage}
               alt={safeListing.title}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
               onError={(event) => {
                 event.currentTarget.onerror = null;
                 event.currentTarget.src = getPresetListingImage(safeListing, {
@@ -112,20 +139,20 @@ export function ProductDetailModal({
               <>
                 <button
                   type="button"
-                  onClick={() =>
-                    setActiveImageIndex((previous) =>
-                      previous <= 0 ? gallery.length - 1 : previous - 1
-                    )
-                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    goToPreviousImage();
+                  }}
                   className="absolute left-3 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/45 text-zinc-100 transition hover:bg-black/70"
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setActiveImageIndex((previous) => (previous + 1) % gallery.length)
-                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    goToNextImage();
+                  }}
                   className="absolute right-3 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/45 text-zinc-100 transition hover:bg-black/70"
                 >
                   <ChevronRight size={18} />

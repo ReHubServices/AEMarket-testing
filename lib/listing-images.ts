@@ -116,7 +116,8 @@ function isTrustedSupplierImage(url: string) {
       host.includes("nztcdn.com") ||
       host.includes("lztcdn.com") ||
       host.includes("lzt.market") ||
-      host.includes("prod-api.lzt.market")
+      host.includes("prod-api.lzt.market") ||
+      host.includes("fortnite-api.com")
     );
   } catch {
     return false;

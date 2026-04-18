@@ -18,6 +18,45 @@ function formatPrice(value: number, currency: string) {
   }).format(value);
 }
 
+function isFortniteMarketGallerySource(url: string) {
+  const normalized = String(url ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    /(?:lzt\.market|lolz\.guru)\/(?:market\/)?\d+\/image\?(?:[^#\s]*)type=/.test(normalized) ||
+    /^\/(?:market\/)?\d+\/image\?(?:[^#\s]*)type=/.test(normalized)
+  );
+}
+
+function mergeListingForModal(base: MarketListing | null, detail: MarketListing | null) {
+  if (!base && !detail) {
+    return null;
+  }
+  if (!detail) {
+    return base;
+  }
+  if (!base) {
+    return detail;
+  }
+
+  const baseImage = String(base.imageUrl ?? "").trim();
+  const detailImage = String(detail.imageUrl ?? "").trim();
+  const keepBaseGalleryImage =
+    isFortniteMarketGallerySource(baseImage) && !isFortniteMarketGallerySource(detailImage);
+
+  return {
+    ...base,
+    ...detail,
+    imageUrl: keepBaseGalleryImage ? baseImage : detailImage || baseImage,
+    description: detail.description?.trim() ? detail.description : base.description,
+    specs:
+      Array.isArray(detail.specs) && detail.specs.length > 0
+        ? detail.specs
+        : base.specs
+  };
+}
+
 function useDebouncedValue(value: string, delay = 260) {
   const [debounced, setDebounced] = useState(value);
 
@@ -1100,7 +1139,10 @@ export function MarketSearch({
     () => listings.find((listing) => listing.id === activeListingId) ?? null,
     [activeListingId, listings]
   );
-  const modalListing = detailListing ?? activeListing;
+  const modalListing = useMemo(
+    () => mergeListingForModal(activeListing, detailListing),
+    [activeListing, detailListing]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1132,7 +1174,7 @@ export function MarketSearch({
           throw new Error(payload.error || "Unable to load full details");
         }
         if (!cancelled && payload.listing) {
-          setDetailListing(payload.listing);
+          setDetailListing(mergeListingForModal(activeListing, payload.listing));
         }
       } catch (detailFetchError) {
         if (!cancelled) {
@@ -1154,7 +1196,7 @@ export function MarketSearch({
     return () => {
       cancelled = true;
     };
-  }, [activeListingId]);
+  }, [activeListing, activeListingId]);
 
   async function handleBuy(listingId: string) {
     if (!viewer) {

@@ -27,6 +27,7 @@ export type SearchOptions = {
 };
 
 const translationCache = new Map<string, string>();
+const fortniteCosmeticImageCache = new Map<string, { imageUrl: string; expiresAt: number }>();
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
@@ -3903,6 +3904,255 @@ async function translateListingsToEnglish(listings: MarketListing[]) {
   }));
 }
 
+const FORTNITE_IMAGE_STOPWORDS = new Set([
+  "fortnite",
+  "account",
+  "accounts",
+  "skin",
+  "skins",
+  "outfit",
+  "outfits",
+  "pickaxe",
+  "pickaxes",
+  "dances",
+  "dance",
+  "emotes",
+  "emote",
+  "glider",
+  "gliders",
+  "stacked",
+  "full",
+  "mail",
+  "access",
+  "fa",
+  "nfa",
+  "og",
+  "bundle",
+  "with",
+  "and",
+  "the",
+  "for"
+]);
+
+function isFortniteListing(listing: MarketListing) {
+  const text = normalizeKeywordText(`${listing.game} ${listing.category} ${listing.title}`);
+  return (
+    text.includes("fortnite") ||
+    text.includes("epicgames") ||
+    text.includes("epic games") ||
+    text.includes("vbucks") ||
+    text.includes("v bucks")
+  );
+}
+
+function sanitizeFortniteTerm(raw: string) {
+  const compact = raw
+    .replace(/[\[\]{}()<>]/g, " ")
+    .replace(/[_|/\\]+/g, " ")
+    .replace(/[+&]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!compact) {
+    return "";
+  }
+  const tokens = compact
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .filter((token) => !FORTNITE_IMAGE_STOPWORDS.has(token.toLowerCase()))
+    .filter((token) => !/^\d+$/.test(token));
+  const phrase = tokens.join(" ").trim();
+  if (!phrase || phrase.length < 2 || phrase.length > 64) {
+    return "";
+  }
+  return phrase;
+}
+
+function extractFortniteCosmeticTerms(listing: MarketListing) {
+  const candidates = new Map<string, string>();
+  const add = (value: string) => {
+    const term = sanitizeFortniteTerm(value);
+    if (!term) {
+      return;
+    }
+    const key = normalizeKeywordText(term);
+    if (!key || candidates.has(key)) {
+      return;
+    }
+    candidates.set(key, term);
+  };
+
+  add(listing.title);
+  for (const part of listing.title.split(/[,/|+&-]+/g)) {
+    add(part);
+  }
+
+  const titleTokens = listing.title
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && token.length <= 24);
+  for (let i = 0; i < titleTokens.length; i += 1) {
+    add(titleTokens[i]);
+    if (i + 1 < titleTokens.length) {
+      add(`${titleTokens[i]} ${titleTokens[i + 1]}`);
+    }
+    if (i + 2 < titleTokens.length) {
+      add(`${titleTokens[i]} ${titleTokens[i + 1]} ${titleTokens[i + 2]}`);
+    }
+  }
+
+  const quoted = Array.from(listing.description.matchAll(/["'`]\s*([^"'`]{2,60})\s*["'`]/g));
+  for (const match of quoted) {
+    add(match[1] ?? "");
+  }
+
+  return Array.from(candidates.values()).slice(0, 10);
+}
+
+function extractFortniteApiImageFromPayload(payload: unknown) {
+  const pickImage = (record: Record<string, unknown>) => {
+    const images =
+      record.images && typeof record.images === "object"
+        ? (record.images as Record<string, unknown>)
+        : null;
+    if (!images) {
+      return "";
+    }
+    const candidates = [
+      images.icon,
+      images.smallIcon,
+      images.featured,
+      images.background
+    ];
+    for (const candidate of candidates) {
+      const normalized = normalizeImageUrl(extractText(candidate, ""));
+      if (normalized && isLikelyImageUrl(normalized)) {
+        return normalized;
+      }
+    }
+    return "";
+  };
+
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  const root = payload as Record<string, unknown>;
+  const data = root.data;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const image = pickImage(data as Record<string, unknown>);
+    if (image) {
+      return image;
+    }
+  }
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+      const image = pickImage(item as Record<string, unknown>);
+      if (image) {
+        return image;
+      }
+    }
+  }
+  return "";
+}
+
+async function resolveFortniteCosmeticImage(term: string) {
+  const key = normalizeKeywordText(term);
+  if (!key) {
+    return "";
+  }
+  const cached = fortniteCosmeticImageCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.imageUrl;
+  }
+
+  const baseUrl = (process.env.FORTNITE_API_BASE_URL ?? "https://fortnite-api.com").trim().replace(/\/+$/, "");
+  const urls = [
+    `${baseUrl}/v2/cosmetics/br/search?name=${encodeURIComponent(term)}`,
+    `${baseUrl}/v2/cosmetics/br/search/all?name=${encodeURIComponent(term)}`
+  ];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/json"
+        },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        continue;
+      }
+      const payload = (await response.json()) as unknown;
+      const imageUrl = extractFortniteApiImageFromPayload(payload);
+      if (imageUrl) {
+        fortniteCosmeticImageCache.set(key, {
+          imageUrl,
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000
+        });
+        return imageUrl;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  fortniteCosmeticImageCache.set(key, {
+    imageUrl: "",
+    expiresAt: Date.now() + 60 * 60 * 1000
+  });
+  return "";
+}
+
+async function enrichFortniteListingImages(listings: MarketListing[]) {
+  const output = listings.slice();
+  let lookupBudget = 28;
+
+  for (let index = 0; index < output.length; index += 1) {
+    const listing = output[index];
+    if (!isFortniteListing(listing)) {
+      continue;
+    }
+
+    const shouldOverride = !hasRealImage(listing.imageUrl);
+    if (!shouldOverride) {
+      continue;
+    }
+
+    const terms = extractFortniteCosmeticTerms(listing);
+    if (terms.length === 0) {
+      continue;
+    }
+
+    let imageUrl = "";
+    for (const term of terms) {
+      if (lookupBudget <= 0) {
+        break;
+      }
+      lookupBudget -= 1;
+      imageUrl = await resolveFortniteCosmeticImage(term);
+      if (imageUrl) {
+        break;
+      }
+    }
+
+    if (imageUrl) {
+      output[index] = {
+        ...listing,
+        imageUrl
+      };
+    }
+    if (lookupBudget <= 0) {
+      break;
+    }
+  }
+
+  return output;
+}
+
 function withMarkup(listings: MarketListing[], markupPercent: number) {
   return listings.map((listing) => {
     const basePrice = Number.isFinite(listing.basePrice) ? listing.basePrice : listing.price;
@@ -4257,7 +4507,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     );
     const translated = await translateListingsToEnglish(enriched);
     const withSharedImages = applySharedImageFallback(translated, trimmedQuery);
-    const finalFiltered = applyLocalFilters(withSharedImages, effectiveOptions, trimmedQuery, "final");
+    const withFortniteApiImages = await enrichFortniteListingImages(withSharedImages);
+    const finalFiltered = applyLocalFilters(withFortniteApiImages, effectiveOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);
     const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
     const finalHasMore = hasMore || uniqueFinal.length > targetEnd;
@@ -4295,12 +4546,14 @@ export async function getListingById(listingId: string) {
       const mapped = await fetchListingDetailFromApi(listingIdTrimmed, token);
       if (mapped) {
         const [translated] = await translateListingsToEnglish([mapped]);
-        if (!translated.id || translated.basePrice <= 0) {
+        const [withFortniteImage] = await enrichFortniteListingImages([translated]);
+        const ready = withFortniteImage ?? translated;
+        if (!ready.id || ready.basePrice <= 0) {
           throw new Error("INVALID_DETAIL_PAYLOAD");
         }
         return {
-          ...translated,
-          price: applyMarkup(translated.basePrice, store.settings.markupPercent)
+          ...ready,
+          price: applyMarkup(ready.basePrice, store.settings.markupPercent)
         };
       }
     } catch (error) {
