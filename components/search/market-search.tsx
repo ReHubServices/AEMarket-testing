@@ -29,6 +29,23 @@ function isFortniteMarketGallerySource(url: string) {
   );
 }
 
+function isDisplayImage(url: string) {
+  const normalized = String(url ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (
+    normalized.includes("/listing-placeholder.svg") ||
+    normalized.includes("/logo.png") ||
+    normalized.includes("/logo.svg") ||
+    normalized.includes("images.unsplash.com") ||
+    normalized.includes("unsplash.com")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function mergeListingForModal(base: MarketListing | null, detail: MarketListing | null) {
   if (!base && !detail) {
     return null;
@@ -42,13 +59,14 @@ function mergeListingForModal(base: MarketListing | null, detail: MarketListing 
 
   const baseImage = String(base.imageUrl ?? "").trim();
   const detailImage = String(detail.imageUrl ?? "").trim();
-  const keepBaseGalleryImage =
-    isFortniteMarketGallerySource(baseImage) && !isFortniteMarketGallerySource(detailImage);
+  const keepBaseImage =
+    (isFortniteMarketGallerySource(baseImage) && !isFortniteMarketGallerySource(detailImage)) ||
+    (isDisplayImage(baseImage) && !isDisplayImage(detailImage));
 
   return {
     ...base,
     ...detail,
-    imageUrl: keepBaseGalleryImage ? baseImage : detailImage || baseImage,
+    imageUrl: keepBaseImage ? baseImage : detailImage || baseImage,
     description: detail.description?.trim() ? detail.description : base.description,
     specs:
       Array.isArray(detail.specs) && detail.specs.length > 0

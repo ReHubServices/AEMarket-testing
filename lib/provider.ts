@@ -1484,10 +1484,6 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "online",
     "vac",
     "first_owner",
-    "fortnite_outfits",
-    "fortnite_pickaxes",
-    "fortnite_emotes",
-    "fortnite_gliders",
     "media_followers_min",
     "media_verified",
     "media_platform"
@@ -1653,7 +1649,21 @@ const QUERY_INTENT_ALIASES: Record<string, string[]> = {
     "vbucks",
     "v-bucks",
     "epic games",
-    "epicgames"
+    "epicgames",
+    "galaxy",
+    "galaxy scout",
+    "galaxy grappler",
+    "skull trooper",
+    "ghoul trooper",
+    "renegade raider",
+    "black knight",
+    "aerial assault trooper",
+    "ikonik",
+    "glow",
+    "mako",
+    "travis scott",
+    "leviathan axe",
+    "take the l"
   ],
   valorant: ["valorant", "riot", "riot client"],
   siege: ["siege", "rainbow six", "rainbow-six-siege", "r6"],
@@ -3286,10 +3296,16 @@ function applyLocalFilters(
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.item);
-    if (matched.length > 0) {
+    const strictKeywordFilter =
+      phase === "final" && !effectiveGameFilter && !categoryFilter && !inferredQueryGameFilter;
+    if (strictKeywordFilter && matched.length > 0) {
       output = matched;
-    } else if (!effectiveGameFilter && !categoryFilter && !inferredQueryGameFilter) {
+    } else if (strictKeywordFilter && matched.length === 0) {
       output = [];
+    } else if (matched.length > 0) {
+      const matchedIds = new Set(matched.map((item) => item.id));
+      const nonMatched = output.filter((item) => !matchedIds.has(item.id));
+      output = [...matched, ...nonMatched];
     }
   }
   const resolvedMediaPlatform =
