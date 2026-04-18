@@ -208,9 +208,13 @@ export async function confirmPaymentAndReservePurchase(input: {
       return Boolean(reference && (primary === reference || alternate === reference));
     };
 
-    const transaction = input.transactionId
+    const byTransactionId = input.transactionId
       ? store.transactions.find((item) => item.id === input.transactionId)
-      : store.transactions.find((item) => isMatchingReference(item, input.providerPaymentId));
+      : null;
+    const byProviderReference = store.transactions.find((item) =>
+      isMatchingReference(item, input.providerPaymentId)
+    );
+    const transaction = byTransactionId ?? byProviderReference;
 
     if (!transaction) {
       throw new Error("Transaction not found for webhook");

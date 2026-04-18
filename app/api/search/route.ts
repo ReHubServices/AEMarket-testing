@@ -397,10 +397,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "SEARCH_FAILED";
     if (message === "LZT_AUTH_MISSING") {
-      return fail("LZT API token is not configured", 503);
+      return fail("Search provider is not configured", 503);
     }
     if (message === "LZT_AUTH_FAILED") {
-      return fail("LZT API authorization failed", 401);
+      return fail("Search provider authorization failed", 401);
     }
     return fail("Search unavailable", 502);
   }
