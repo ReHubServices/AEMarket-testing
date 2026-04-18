@@ -159,8 +159,28 @@ function isSupplierFundingFailure(message: string) {
   return patterns.some((pattern) => text.includes(pattern));
 }
 
+function isSupplierPurchaseCooldown(message: string) {
+  const text = message.toLowerCase();
+  const patterns = [
+    "recently purchased this product",
+    "please wait before purchasing again",
+    "already purchased",
+    "already bought",
+    "too many purchase attempts",
+    "purchase cooldown"
+  ];
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
 function mapFulfillmentFailure(error: unknown) {
   const internalMessage = error instanceof Error ? error.message : "Purchase failed";
+  if (isSupplierPurchaseCooldown(internalMessage)) {
+    return {
+      code: "B03",
+      publicMessage: "Listing is temporarily unavailable. Refresh and try another listing.",
+      internalMessage
+    };
+  }
   if (isSupplierFundingFailure(internalMessage)) {
     return {
       code: "B00",

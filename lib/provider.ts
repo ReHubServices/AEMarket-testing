@@ -45,14 +45,41 @@ function getItemEndpointBase() {
 }
 
 function getPurchaseEndpoint(listingId: string) {
-  const configured = process.env.LZT_API_PURCHASE_URL;
-  if (configured?.includes("{item_id}")) {
-    return configured.replace("{item_id}", encodeURIComponent(listingId));
+  const encodedId = encodeURIComponent(listingId);
+  const fallback = `${getLztBaseUrl()}/${encodedId}/fast-buy`;
+  const configuredRaw = (process.env.LZT_API_PURCHASE_URL ?? "").trim();
+  if (!configuredRaw) {
+    return fallback;
   }
-  if (configured) {
-    return configured;
+
+  const templated = configuredRaw
+    .replace(/\{item_id\}/g, encodedId)
+    .replace(/\{listing_id\}/g, encodedId)
+    .replace(/\{listingId\}/g, encodedId);
+  if (templated !== configuredRaw) {
+    return templated;
   }
-  return `${getLztBaseUrl()}/${encodeURIComponent(listingId)}/fast-buy`;
+
+  try {
+    const configuredUrl = new URL(configuredRaw);
+    const baseUrl = new URL(getLztBaseUrl());
+    const configuredPath = configuredUrl.pathname.replace(/\/+$/, "");
+    const basePath = baseUrl.pathname.replace(/\/+$/, "");
+
+    if (configuredUrl.origin === baseUrl.origin && configuredPath === basePath) {
+      return fallback;
+    }
+
+    if (/\/fast-buy$/i.test(configuredPath) && !configuredPath.includes(`/${encodedId}/`)) {
+      const prefix = configuredPath.replace(/\/fast-buy$/i, "");
+      configuredUrl.pathname = `${prefix}/${encodedId}/fast-buy`;
+      return configuredUrl.toString();
+    }
+
+    return configuredRaw;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeEndpoint(value: string) {
@@ -2463,6 +2490,11 @@ function applyLocalFilters(
     if (haystack.includes(normalizedTerm)) {
       return true;
     }
+    const compactHaystack = haystack.replace(/\s+/g, "");
+    const compactTerm = normalizedTerm.replace(/\s+/g, "");
+    if (compactTerm.length >= 4 && compactHaystack.includes(compactTerm)) {
+      return true;
+    }
     const termTokens = normalizedTerm.split(" ").filter((token) => token.length > 1);
     if (termTokens.length === 0) {
       return false;
@@ -2470,6 +2502,10 @@ function applyLocalFilters(
     let matchedTokens = 0;
     for (const token of termTokens) {
       if (haystack.includes(token)) {
+        matchedTokens += 1;
+        continue;
+      }
+      if (token.length >= 4 && isSubsequence(compactHaystack, token)) {
         matchedTokens += 1;
       }
     }
@@ -4271,7 +4307,10 @@ export async function getListingById(listingId: string) {
 }
 
 export async function buyFromSupplier(listingId: string) {
-  const endpoint = getPurchaseEndpoint(listingId);
+  const encodedId = encodeURIComponent(listingId);
+  const primaryEndpoint = getPurchaseEndpoint(listingId);
+  const canonicalEndpoint = `${getLztBaseUrl()}/${encodedId}/fast-buy`;
+  const endpoints = Array.from(new Set([primaryEndpoint, canonicalEndpoint]));
   const token = await getLztAccessToken();
 
   if (!token) {
@@ -4290,22 +4329,87 @@ export async function buyFromSupplier(listingId: string) {
     };
   }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    },
-    body: JSON.stringify({ listingId })
-  });
+  const payloadVariants: Array<Record<string, string> | null> = [
+    null,
+    { item_id: listingId },
+    { listing_id: listingId },
+    { listingId }
+  ];
+  let data: Record<string, unknown> | null = null;
+  let lastErrorMessage = "Supplier purchase failed";
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "Supplier purchase failed");
+  for (const endpoint of endpoints) {
+    for (const payload of payloadVariants) {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json"
+      };
+      const requestInit: RequestInit = {
+        method: "POST",
+        headers,
+        cache: "no-store"
+      };
+      if (payload) {
+        headers["Content-Type"] = "application/json";
+        requestInit.body = JSON.stringify(payload);
+      }
+
+      const response = await fetch(endpoint, requestInit);
+      const responseText = await response.text();
+      let parsed: Record<string, unknown> = {};
+      if (responseText) {
+        try {
+          parsed = JSON.parse(responseText) as Record<string, unknown>;
+        } catch {
+          parsed = {};
+        }
+      }
+
+      if (!response.ok) {
+        lastErrorMessage = extractText(
+          parsed.error ?? parsed.message ?? parsed.detail ?? responseText,
+          "Supplier purchase failed"
+        );
+        continue;
+      }
+
+      const statusText = extractText(parsed.status, "").toLowerCase();
+      const explicitError = extractText(parsed.error ?? parsed.message ?? parsed.detail, "");
+      const plainText = responseText.trim().toLowerCase();
+      const hasParsedPayload = Object.keys(parsed).length > 0;
+      const plainTextFailure =
+        !hasParsedPayload &&
+        Boolean(plainText) &&
+        /(recently purchased|wait before purchasing again|purchase failed|error|failed|insufficient|not enough)/i.test(
+          plainText
+        );
+      const explicitFailure =
+        statusText === "failed" ||
+        statusText === "error" ||
+        extractText(parsed.success, "").toLowerCase() === "false" ||
+        Boolean(explicitError && (statusText === "failed" || statusText === "error")) ||
+        plainTextFailure;
+
+      if (explicitFailure) {
+        lastErrorMessage =
+          explicitError ||
+          extractText(responseText, "Supplier purchase failed") ||
+          "Supplier purchase failed";
+        continue;
+      }
+
+      data = parsed;
+      break;
+    }
+    if (data) {
+      break;
+    }
   }
 
-  const data = (await response.json()) as Record<string, unknown>;
+  if (!data) {
+    throw new Error(lastErrorMessage);
+  }
+
   const deliverySource =
     data.delivery && typeof data.delivery === "object"
       ? ((data.delivery as Record<string, unknown>) ?? {})

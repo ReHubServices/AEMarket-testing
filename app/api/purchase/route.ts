@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
       });
     } catch (error) {
       const code = error instanceof Error ? error.message : "B99";
+      if (code === "B03") {
+        return fail("Listing is temporarily unavailable. Refresh and try another listing.", 409);
+      }
       if (code === "B00" || code === "B99") {
         return fail(`Something Failed, Contact Support and Give them this error code: ${code}`, 502);
       }

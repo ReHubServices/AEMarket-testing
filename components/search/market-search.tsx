@@ -851,6 +851,10 @@ function parseSelectedValues(raw: string | undefined) {
     .filter(Boolean);
 }
 
+function normalizeSelectorTerm(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function normalizeSuggestionValue(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -1320,14 +1324,29 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
   function openFortniteSelector(key: FortniteSelectorKey) {
     setFortniteSelectorOpen(key);
     setFortniteSelectorSearch("");
-    setFortniteSelectorDraft(parseSelectedValues(gameFilters[key]));
+    const unique = new Map<string, string>();
+    for (const value of parseSelectedValues(gameFilters[key])) {
+      const normalized = normalizeSelectorTerm(value);
+      if (!normalized) {
+        continue;
+      }
+      const signature = normalized.toLowerCase();
+      if (!unique.has(signature)) {
+        unique.set(signature, normalized);
+      }
+    }
+    setFortniteSelectorDraft(Array.from(unique.values()));
   }
 
   function toggleFortniteSelectorValue(value: string) {
+    const normalizedValue = normalizeSelectorTerm(value);
+    if (!normalizedValue) {
+      return;
+    }
     setFortniteSelectorDraft((previous) =>
-      previous.includes(value)
-        ? previous.filter((entry) => entry !== value)
-        : [...previous, value]
+      previous.some((entry) => entry.toLowerCase() === normalizedValue.toLowerCase())
+        ? previous.filter((entry) => entry.toLowerCase() !== normalizedValue.toLowerCase())
+        : [...previous, normalizedValue]
     );
   }
 
@@ -1335,7 +1354,18 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
     if (!fortniteSelectorOpen) {
       return;
     }
-    setGameFilter(fortniteSelectorOpen, fortniteSelectorDraft.join(","));
+    const unique = new Map<string, string>();
+    for (const value of fortniteSelectorDraft) {
+      const normalized = normalizeSelectorTerm(value);
+      if (!normalized) {
+        continue;
+      }
+      const signature = normalized.toLowerCase();
+      if (!unique.has(signature)) {
+        unique.set(signature, normalized);
+      }
+    }
+    setGameFilter(fortniteSelectorOpen, Array.from(unique.values()).join(","));
     setFortniteSelectorOpen(null);
     setFortniteSelectorSearch("");
   }
@@ -1381,6 +1411,19 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
     }
     for (const global of GLOBAL_SUGGESTION_POOL) {
       source.add(global);
+    }
+    if (selectedGame === "fortnite") {
+      for (const selector of FORTNITE_SELECTOR_CONFIG) {
+        for (const option of selector.options) {
+          source.add(option);
+        }
+        for (const selectedValue of parseSelectedValues(gameFilters[selector.key])) {
+          const normalizedSelected = normalizeSelectorTerm(selectedValue);
+          if (normalizedSelected) {
+            source.add(normalizedSelected);
+          }
+        }
+      }
     }
     for (const listing of listings) {
       const title = listing.title.trim();
@@ -1440,25 +1483,83 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
       .map((entry) => entry.value);
 
     return scored;
-  }, [query, selectedGame, listings]);
+  }, [query, selectedGame, listings, gameFilters]);
   const showSuggestions = searchFocused && suggestions.length > 0;
   const activeFortniteSelector = useMemo(
     () =>
       FORTNITE_SELECTOR_CONFIG.find((config) => config.key === fortniteSelectorOpen) ?? null,
     [fortniteSelectorOpen]
   );
+  const fortniteSelectorBaseOptions = useMemo(() => {
+    if (!activeFortniteSelector) {
+      return [];
+    }
+    const source = new Map<string, string>();
+    for (const option of activeFortniteSelector.options) {
+      const normalized = normalizeSelectorTerm(option);
+      if (!normalized) {
+        continue;
+      }
+      const signature = normalized.toLowerCase();
+      if (!source.has(signature)) {
+        source.set(signature, normalized);
+      }
+    }
+    for (const value of parseSelectedValues(gameFilters[activeFortniteSelector.key])) {
+      const normalized = normalizeSelectorTerm(value);
+      if (!normalized) {
+        continue;
+      }
+      const signature = normalized.toLowerCase();
+      if (!source.has(signature)) {
+        source.set(signature, normalized);
+      }
+    }
+    for (const value of fortniteSelectorDraft) {
+      const normalized = normalizeSelectorTerm(value);
+      if (!normalized) {
+        continue;
+      }
+      const signature = normalized.toLowerCase();
+      if (!source.has(signature)) {
+        source.set(signature, normalized);
+      }
+    }
+    return Array.from(source.values());
+  }, [activeFortniteSelector, gameFilters, fortniteSelectorDraft]);
   const fortniteSelectorOptions = useMemo(() => {
     if (!activeFortniteSelector) {
       return [];
     }
-    const normalized = fortniteSelectorSearch.trim().toLowerCase();
+    const normalized = normalizeSuggestionValue(fortniteSelectorSearch);
     if (!normalized) {
-      return activeFortniteSelector.options;
+      return fortniteSelectorBaseOptions;
     }
-    return activeFortniteSelector.options.filter((option) =>
-      option.toLowerCase().includes(normalized)
+    return fortniteSelectorBaseOptions.filter((option) =>
+      normalizeSuggestionValue(option).includes(normalized)
     );
-  }, [activeFortniteSelector, fortniteSelectorSearch]);
+  }, [activeFortniteSelector, fortniteSelectorSearch, fortniteSelectorBaseOptions]);
+  const fortniteSelectorCustomCandidate = useMemo(() => {
+    if (!activeFortniteSelector) {
+      return "";
+    }
+    const candidate = normalizeSelectorTerm(fortniteSelectorSearch);
+    if (candidate.length < 2 || candidate.length > 64) {
+      return "";
+    }
+    const exists = fortniteSelectorBaseOptions.some(
+      (option) => option.toLowerCase() === candidate.toLowerCase()
+    );
+    return exists ? "" : candidate;
+  }, [activeFortniteSelector, fortniteSelectorSearch, fortniteSelectorBaseOptions]);
+
+  function addCustomFortniteSelectorValue() {
+    if (!fortniteSelectorCustomCandidate) {
+      return;
+    }
+    toggleFortniteSelectorValue(fortniteSelectorCustomCandidate);
+    setFortniteSelectorSearch("");
+  }
 
   return (
     <main className="space-y-5 pt-1 sm:space-y-6 sm:pt-2 md:space-y-7 md:pt-3">
@@ -2922,9 +3023,25 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
               <Input
                 value={fortniteSelectorSearch}
                 onChange={(event) => setFortniteSelectorSearch(event.target.value)}
-                placeholder="Search options"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && fortniteSelectorCustomCandidate) {
+                    event.preventDefault();
+                    addCustomFortniteSelectorValue();
+                  }
+                }}
+                placeholder="Search or add custom item"
                 className="h-10"
               />
+              {fortniteSelectorCustomCandidate && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9 w-full justify-start text-zinc-200"
+                  onClick={addCustomFortniteSelectorValue}
+                >
+                  Add "{fortniteSelectorCustomCandidate}"
+                </Button>
+              )}
               <p className="text-xs text-zinc-400">
                 Selected: {fortniteSelectorDraft.length}
               </p>
