@@ -1,9 +1,14 @@
-﻿"use client";
+"use client";
 
-import { X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarketListing, PublicViewer } from "@/lib/types";
-import { getListingImageWithOptions, getPresetListingImage } from "@/lib/listing-images";
+import {
+  getListingImageGallery,
+  getListingImageWithOptions,
+  getPresetListingImage
+} from "@/lib/listing-images";
 
 function formatPrice(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -33,10 +38,51 @@ export function ProductDetailModal({
   descriptionError = null,
   imageTheme = null
 }: ProductDetailModalProps) {
-  if (!listing) {
+  const hasListing = Boolean(listing);
+  const safeListing = listing ?? {
+    id: "",
+    title: "",
+    imageUrl: "",
+    price: 0,
+    basePrice: 0,
+    currency: "USD",
+    game: "",
+    category: "",
+    description: "",
+    specs: []
+  };
+  const specs = Array.isArray(safeListing.specs) ? safeListing.specs : [];
+  const gallery = useMemo(
+    () =>
+      getListingImageGallery(safeListing, {
+        forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined,
+        preferFortniteSkins: true
+      }),
+    [imageTheme, safeListing]
+  );
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [safeListing.id]);
+
+  useEffect(() => {
+    if (activeImageIndex > gallery.length - 1) {
+      setActiveImageIndex(0);
+    }
+  }, [activeImageIndex, gallery.length]);
+
+  const activeImage =
+    gallery[activeImageIndex] ||
+    getListingImageWithOptions(safeListing, {
+      forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined,
+      preferFortniteSkins: true
+    });
+  const hasMultipleImages = gallery.length > 1;
+
+  if (!hasListing || !listing) {
     return null;
   }
-  const specs = Array.isArray(listing.specs) ? listing.specs : [];
 
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/65 p-2 backdrop-blur-md md:items-center md:p-6">
@@ -44,26 +90,51 @@ export function ProductDetailModal({
         <div className="relative grid max-h-[96dvh] gap-0 overflow-y-auto overscroll-contain md:max-h-[92dvh] md:grid-cols-[1.15fr_1fr]">
           <button
             onClick={onClose}
-            className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/45 text-zinc-200 transition hover:bg-black/70 md:right-4 md:top-4"
+            className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/45 text-zinc-200 transition hover:bg-black/70 md:right-4 md:top-4"
             type="button"
           >
             <X size={16} />
           </button>
 
-          <div className="h-56 sm:h-64 md:h-full">
+          <div className="relative h-56 sm:h-64 md:h-full">
             <img
-              src={getListingImageWithOptions(listing, {
-                forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined
-              })}
-              alt={listing.title}
+              src={activeImage}
+              alt={safeListing.title}
               className="h-full w-full object-cover"
               onError={(event) => {
                 event.currentTarget.onerror = null;
-                event.currentTarget.src = getPresetListingImage(listing, {
+                event.currentTarget.src = getPresetListingImage(safeListing, {
                   forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined
                 });
               }}
             />
+            {hasMultipleImages && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveImageIndex((previous) =>
+                      previous <= 0 ? gallery.length - 1 : previous - 1
+                    )
+                  }
+                  className="absolute left-3 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/45 text-zinc-100 transition hover:bg-black/70"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveImageIndex((previous) => (previous + 1) % gallery.length)
+                  }
+                  className="absolute right-3 top-1/2 z-10 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/45 text-zinc-100 transition hover:bg-black/70"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[11px] text-zinc-100">
+                  {activeImageIndex + 1}/{gallery.length}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-5 p-4 sm:p-6 md:space-y-6 md:p-8">

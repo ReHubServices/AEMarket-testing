@@ -40,6 +40,10 @@ type SearchResponse = {
 
 type MarketSearchProps = {
   viewer: PublicViewer | null;
+  homeTitle?: string;
+  homeSubtitle?: string;
+  announcementEnabled?: boolean;
+  announcementText?: string;
 };
 
 type GameFilterTarget =
@@ -929,7 +933,14 @@ function inferRarityTone(listing: MarketListing): RarityTone {
   return { label: "Standard", nameClass: "text-white" };
 }
 
-export function MarketSearch({ viewer }: MarketSearchProps) {
+export function MarketSearch({
+  viewer,
+  homeTitle = "Welcome to AE EMPIRE",
+  homeSubtitle =
+    "Premium digital account marketplace with secure balance payments and instant automated delivery.",
+  announcementEnabled = false,
+  announcementText = ""
+}: MarketSearchProps) {
   const PAGE_SIZE = 15;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1572,12 +1583,10 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
             </div>
             <div className="space-y-2">
               <h1 className="text-glow font-[var(--font-space-grotesk)] text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">
-                Welcome to AE EMPIRE
+                {homeTitle}
               </h1>
               <p className="max-w-2xl text-sm text-zinc-300 md:text-base">
-                We offer Fortnite, Siege, media accounts, and more through AE Marketplace.
-                All accounts are guaranteed to meet the advertised specifications at the time
-                of purchase.
+                {homeSubtitle}
               </p>
             </div>
           </div>
@@ -1593,6 +1602,16 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
           </div>
         </div>
       </header>
+      {announcementEnabled && announcementText.trim().length > 0 && (
+        <section className="glass-panel rounded-2xl border border-emerald-300/20 bg-emerald-900/10 p-4 sm:p-5">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/90">
+            Announcement
+          </p>
+          <p className="whitespace-pre-wrap break-words text-sm text-emerald-100 sm:text-base">
+            {announcementText}
+          </p>
+        </section>
+      )}
 
       <section className="glass-panel rounded-3xl p-4 sm:p-5 md:p-6">
         <div className="flex flex-col gap-4">
@@ -2888,7 +2907,8 @@ export function MarketSearch({ viewer }: MarketSearchProps) {
                 <div className="relative h-44 w-full overflow-hidden">
                   <img
                     src={getListingImageWithOptions(listing, {
-                      forceTheme: selectedGame === "fortnite" ? "fortnite" : undefined
+                      forceTheme: selectedGame === "fortnite" ? "fortnite" : undefined,
+                      preferFortniteSkins: true
                     })}
                     alt={listing.title}
                     className="h-full w-full object-cover"

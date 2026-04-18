@@ -22,6 +22,12 @@ function normalizeUrl(raw: string | null | undefined) {
     value.startsWith("data:image/") ||
     value.startsWith("/")
   ) {
+    if (
+      value.startsWith("/") &&
+      (/^\/\d+\/image(?:\?|$)/i.test(value) || /^\/market\/\d+\/image(?:\?|$)/i.test(value))
+    ) {
+      return `https://lzt.market${value}`;
+    }
     return value.startsWith("http://") ? `https://${value.slice(7)}` : value;
   }
   return "";
@@ -71,6 +77,7 @@ function listingKeywords(listing: Pick<MarketListing, "title" | "game" | "catego
 
 type ListingImageOptions = {
   forceTheme?: "fortnite";
+  preferFortniteSkins?: boolean;
 };
 
 function isFortniteLikeListing(listing: Pick<MarketListing, "title" | "game" | "category">) {
@@ -114,6 +121,29 @@ function isTrustedSupplierImage(url: string) {
   } catch {
     return false;
   }
+}
+
+function toFortniteMarketImageUrl(url: string, type: "skins" | "pickaxes" | "dances" | "gliders") {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "";
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  if (!(host.includes("lzt.market") || host.includes("lolz.guru"))) {
+    return "";
+  }
+  if (!/\/(?:market\/)?\d+\/image$/.test(path)) {
+    return "";
+  }
+  parsed.searchParams.set("type", type);
+  return parsed.toString();
+}
+
+function getPreferredFortnitePreviewUrl(url: string) {
+  return toFortniteMarketImageUrl(url, "skins") || url;
 }
 
 export function getPresetListingImage(
@@ -162,6 +192,12 @@ export function getListingImageWithOptions(
   if (!isLikelyDisplayImage(normalized)) {
     return getPresetListingImage(listing, options);
   }
+  if (options.preferFortniteSkins && isFortniteLikeListing(listing)) {
+    const preferred = getPreferredFortnitePreviewUrl(normalized);
+    if (preferred && isLikelyDisplayImage(preferred)) {
+      return preferred;
+    }
+  }
   if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(normalized)) {
     return "/fallbacks/fortnite.svg";
   }
@@ -169,4 +205,30 @@ export function getListingImageWithOptions(
     return "/fallbacks/fortnite.svg";
   }
   return normalized;
+}
+
+export function getListingImageGallery(
+  listing: Pick<MarketListing, "imageUrl" | "title" | "game" | "category">,
+  options: ListingImageOptions = {}
+) {
+  const base = getListingImageWithOptions(listing, options);
+  if (!base || base.startsWith("/fallbacks/") || base === "/listing-placeholder.svg") {
+    return [base].filter(Boolean);
+  }
+  if (!isFortniteLikeListing(listing)) {
+    return [base];
+  }
+  const orderedTypes: Array<"skins" | "pickaxes" | "dances" | "gliders"> = [
+    "skins",
+    "pickaxes",
+    "dances",
+    "gliders"
+  ];
+  const gallery = orderedTypes
+    .map((type) => toFortniteMarketImageUrl(base, type))
+    .filter(Boolean);
+  if (gallery.length === 0) {
+    return [base];
+  }
+  return Array.from(new Set(gallery));
 }

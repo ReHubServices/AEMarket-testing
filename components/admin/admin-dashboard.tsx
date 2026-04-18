@@ -51,7 +51,14 @@ export function AdminDashboard({
 }: AdminDashboardProps) {
   const router = useRouter();
   const [markupPercent, setMarkupPercent] = useState(String(settings.markupPercent));
+  const [homeTitle, setHomeTitle] = useState(settings.homeTitle ?? "");
+  const [homeSubtitle, setHomeSubtitle] = useState(settings.homeSubtitle ?? "");
+  const [announcementText, setAnnouncementText] = useState(settings.announcementText ?? "");
+  const [announcementEnabled, setAnnouncementEnabled] = useState(
+    Boolean(settings.announcementEnabled)
+  );
   const [saving, setSaving] = useState(false);
+  const [savingContent, setSavingContent] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [fundInputs, setFundInputs] = useState<Record<string, string>>({});
@@ -85,6 +92,37 @@ export function AdminDashboard({
       const message = saveError instanceof Error ? saveError.message : "Save failed";
       setStatus(message);
       setSaving(false);
+    }
+  }
+
+  async function onSaveContent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingContent(true);
+    setStatus(null);
+    try {
+      const response = await fetch("/api/admin/content", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          homeTitle,
+          homeSubtitle,
+          announcementText,
+          announcementEnabled
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to save content");
+      }
+      setStatus("Homepage content updated");
+      setSavingContent(false);
+      router.refresh();
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : "Save failed";
+      setStatus(message);
+      setSavingContent(false);
     }
   }
 
@@ -258,6 +296,59 @@ export function AdminDashboard({
             {saving ? "Saving..." : "Save Markup"}
           </Button>
           {status && <p className="text-sm text-zinc-300 md:self-center">{status}</p>}
+        </form>
+      </section>
+
+      <section className="glass-panel rounded-3xl p-5 md:p-6">
+        <h2 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
+          Homepage Content
+        </h2>
+        <form onSubmit={onSaveContent} className="mt-4 space-y-3">
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-[0.14em] text-zinc-400">Title</span>
+            <Input
+              value={homeTitle}
+              onChange={(event) => setHomeTitle(event.target.value)}
+              maxLength={120}
+              className="w-full"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-[0.14em] text-zinc-400">Subtitle</span>
+            <textarea
+              value={homeSubtitle}
+              onChange={(event) => setHomeSubtitle(event.target.value)}
+              maxLength={400}
+              rows={3}
+              className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-[0.14em] text-zinc-400">Announcement</span>
+            <textarea
+              value={announcementText}
+              onChange={(event) => setAnnouncementText(event.target.value)}
+              maxLength={1200}
+              rows={4}
+              placeholder="Write an announcement shown on the homepage"
+              className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+            />
+          </label>
+          <label className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              checked={announcementEnabled}
+              onChange={(event) => setAnnouncementEnabled(event.target.checked)}
+              className="h-4 w-4"
+            />
+            Show announcement on homepage
+          </label>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <Button className="w-full md:w-auto" disabled={savingContent}>
+              {savingContent ? "Saving..." : "Save Content"}
+            </Button>
+            {status && <p className="text-sm text-zinc-300 md:self-center">{status}</p>}
+          </div>
         </form>
       </section>
 

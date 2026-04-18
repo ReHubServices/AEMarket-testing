@@ -30,7 +30,12 @@ const defaultStore: StoreData = {
   orders: [],
   transactions: [],
   settings: {
-    markupPercent: 50
+    markupPercent: 50,
+    homeTitle: "Welcome to AE EMPIRE",
+    homeSubtitle:
+      "Premium digital account marketplace with secure balance payments and instant automated delivery.",
+    announcementText: "",
+    announcementEnabled: false
   }
 };
 
@@ -71,13 +76,33 @@ function normalizeStore(raw: unknown): StoreData {
     typeof data.settings?.markupPercent === "number" && Number.isFinite(data.settings.markupPercent)
       ? data.settings.markupPercent
       : defaultStore.settings.markupPercent;
+  const homeTitle =
+    typeof data.settings?.homeTitle === "string" && data.settings.homeTitle.trim()
+      ? data.settings.homeTitle.trim().slice(0, 120)
+      : defaultStore.settings.homeTitle;
+  const homeSubtitle =
+    typeof data.settings?.homeSubtitle === "string" && data.settings.homeSubtitle.trim()
+      ? data.settings.homeSubtitle.trim().slice(0, 400)
+      : defaultStore.settings.homeSubtitle;
+  const announcementText =
+    typeof data.settings?.announcementText === "string"
+      ? data.settings.announcementText.trim().slice(0, 1200)
+      : defaultStore.settings.announcementText;
+  const announcementEnabled =
+    typeof data.settings?.announcementEnabled === "boolean"
+      ? data.settings.announcementEnabled
+      : defaultStore.settings.announcementEnabled;
 
   return {
     users: Array.isArray(data.users) ? data.users : [],
     orders: Array.isArray(data.orders) ? data.orders : [],
     transactions: Array.isArray(data.transactions) ? data.transactions : [],
     settings: {
-      markupPercent: markup
+      markupPercent: markup,
+      homeTitle,
+      homeSubtitle,
+      announcementText,
+      announcementEnabled
     }
   };
 }

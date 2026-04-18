@@ -30,6 +30,8 @@ const translationCache = new Map<string, string>();
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
+const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
+  /(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)\/(?:market\/)?\d+\/image(?:\?[^ \]\n\r<>"']*)?/gi;
 
 function getLztBaseUrl() {
   const raw = (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim();
@@ -650,6 +652,9 @@ function normalizeImageUrl(value: string) {
     return raw.startsWith("http://") ? `https://${raw.slice(7)}` : raw;
   }
   if (raw.startsWith("/")) {
+    if (/^\/\d+\/image(?:\?|$)/i.test(raw) || /^\/market\/\d+\/image(?:\?|$)/i.test(raw)) {
+      return `https://lzt.market${raw}`;
+    }
     return `${getLztBaseUrl()}${raw}`;
   }
   return "";
@@ -1017,7 +1022,10 @@ function hasBlockedMarketplaceLink(item: Record<string, unknown>) {
     collectStrings(candidate, texts);
   }
 
-  return texts.some((text) => BLOCKED_MARKET_LINK_PATTERN.test(text));
+  return texts.some((text) => {
+    const scrubbed = text.replace(ALLOWED_MARKET_IMAGE_LINK_PATTERN, " ");
+    return BLOCKED_MARKET_LINK_PATTERN.test(scrubbed);
+  });
 }
 
 function extractCurrency(item: Record<string, unknown>) {

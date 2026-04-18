@@ -83,6 +83,10 @@ export type TransactionRecord = {
 
 export type AppSettings = {
   markupPercent: number;
+  homeTitle: string;
+  homeSubtitle: string;
+  announcementText: string;
+  announcementEnabled: boolean;
 };
 
 export type StoreData = {
