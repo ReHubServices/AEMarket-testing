@@ -478,6 +478,80 @@ function extractItems(data: unknown): Record<string, unknown>[] {
   return [];
 }
 
+function extractMarketListingIdFromText(value: string) {
+  const text = value.trim();
+  if (!text) {
+    return "";
+  }
+  if (/^\d{5,}$/.test(text)) {
+    return text;
+  }
+  const marketHostMatch = text.match(/(?:lzt\.market|lolz\.guru)\/(?:market\/)?(\d+)(?:\/|$)/i);
+  if (marketHostMatch?.[1]) {
+    return marketHostMatch[1];
+  }
+  const marketPathMatch = text.match(/\/(?:market\/)?(\d+)(?:\/|$)/i);
+  if (marketPathMatch?.[1]) {
+    return marketPathMatch[1];
+  }
+  return "";
+}
+
+function resolveListingId(source: Record<string, unknown>, fallbackIdSource: string) {
+  const directIdRaw = extractText(
+    source.item_id ??
+      source.itemId ??
+      source.listing_id ??
+      source.listingId ??
+      source.offer_id ??
+      source.offerId ??
+      source.thread_id ??
+      source.threadId ??
+      source.post_id ??
+      source.postId ??
+      source.market_item_id ??
+      source.marketItemId ??
+      source.uuid ??
+      source.slug ??
+      source.id,
+    ""
+  ).trim();
+
+  if (directIdRaw) {
+    const marketId = extractMarketListingIdFromText(directIdRaw);
+    if (marketId) {
+      return marketId;
+    }
+    if (!/[\/\s]/.test(directIdRaw)) {
+      return directIdRaw;
+    }
+  }
+
+  const urlCandidates = [
+    extractText(source.url, ""),
+    extractText(source.link, ""),
+    extractText(source.href, ""),
+    extractText(source.permalink, ""),
+    extractText(source.item_url, ""),
+    extractText(source.listing_url, ""),
+    extractText(source.market_url, ""),
+    extractText(source.image, ""),
+    extractText(source.image_url, ""),
+    extractText(source.imageUrl, ""),
+    extractText(source.preview, ""),
+    extractText(source.preview_url, "")
+  ];
+
+  for (const candidate of urlCandidates) {
+    const marketId = extractMarketListingIdFromText(candidate);
+    if (marketId) {
+      return marketId;
+    }
+  }
+
+  return `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 52)}`;
+}
+
 function mapRawListing(item: Record<string, unknown>, endpointGameHint = ""): MarketListing {
   const source = buildListingSource(item);
   const basePrice = resolveListingBasePrice(source);
@@ -508,24 +582,7 @@ function mapRawListing(item: Record<string, unknown>, endpointGameHint = ""): Ma
   ]
     .join("|")
     .trim();
-  const id = extractText(
-    source.item_id ??
-      source.itemId ??
-      source.listing_id ??
-      source.listingId ??
-      source.offer_id ??
-      source.offerId ??
-      source.thread_id ??
-      source.threadId ??
-      source.post_id ??
-      source.postId ??
-      source.market_item_id ??
-      source.marketItemId ??
-      source.uuid ??
-      source.slug ??
-      source.id,
-    ""
-  ) || `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 52)}`;
+  const id = resolveListingId(source, fallbackIdSource);
 
   return {
     id,
@@ -973,6 +1030,25 @@ function extractImageUrl(item: Record<string, unknown>) {
     const found = extractImageUrlFromPostText(candidate);
     if (found) {
       return found;
+    }
+  }
+
+  const fallbackIdCandidates = [
+    extractText(item.url, ""),
+    extractText(item.link, ""),
+    extractText(item.href, ""),
+    extractText(item.permalink, ""),
+    extractText(item.item_url, ""),
+    extractText(item.listing_url, ""),
+    extractText(item.market_url, ""),
+    extractText(item.id, ""),
+    extractText(item.listing_id, ""),
+    extractText(item.item_id, "")
+  ];
+  for (const candidate of fallbackIdCandidates) {
+    const listingId = extractMarketListingIdFromText(candidate);
+    if (listingId) {
+      return `https://lzt.market/${listingId}/image`;
     }
   }
 

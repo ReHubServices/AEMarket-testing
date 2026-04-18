@@ -182,55 +182,58 @@ export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title
   return getListingImageWithOptions(listing, {});
 }
 
-function fortniteImageById(id: string | undefined) {
+function marketImageById(id: string | undefined, fortniteMode: boolean) {
   const normalizedId = String(id ?? "").trim();
   if (!/^\d+$/.test(normalizedId)) {
     return "";
   }
-  return `https://lzt.market/${normalizedId}/image?type=skins`;
+  return fortniteMode
+    ? `https://lzt.market/${normalizedId}/image?type=skins`
+    : `https://lzt.market/${normalizedId}/image`;
 }
 
 export function getListingImageWithOptions(
   listing: ListingImageSource,
   options: ListingImageOptions = {}
 ) {
+  const fortniteLike = options.forceTheme === "fortnite" || isFortniteLikeListing(listing);
   const normalized = normalizeUrl(listing.imageUrl);
-  const fortniteById = isFortniteLikeListing(listing) ? fortniteImageById(listing.id) : "";
+  const byIdImage = marketImageById(listing.id, fortniteLike);
   if (!normalized) {
-    if (fortniteById) {
-      return fortniteById;
+    if (byIdImage) {
+      return byIdImage;
     }
     return getPresetListingImage(listing, options);
   }
   const lower = normalized.toLowerCase();
   const blocked = BROKEN_IMAGE_HINTS.some((hint) => lower.includes(hint));
   if (blocked) {
-    if (fortniteById) {
-      return fortniteById;
+    if (byIdImage) {
+      return byIdImage;
     }
     return getPresetListingImage(listing, options);
   }
   if (!isLikelyDisplayImage(normalized)) {
-    if (fortniteById) {
-      return fortniteById;
+    if (byIdImage) {
+      return byIdImage;
     }
     return getPresetListingImage(listing, options);
   }
-  if (options.preferFortniteSkins && isFortniteLikeListing(listing)) {
+  if (options.preferFortniteSkins && fortniteLike) {
     const preferred = getPreferredFortnitePreviewUrl(normalized);
     if (preferred && isLikelyDisplayImage(preferred)) {
       return preferred;
     }
   }
   if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(normalized)) {
-    if (fortniteById) {
-      return fortniteById;
+    if (byIdImage) {
+      return byIdImage;
     }
     return "/fallbacks/fortnite.svg";
   }
-  if (isFortniteLikeListing(listing) && !isTrustedSupplierImage(normalized)) {
-    if (fortniteById) {
-      return fortniteById;
+  if (fortniteLike && !isTrustedSupplierImage(normalized)) {
+    if (byIdImage) {
+      return byIdImage;
     }
     return "/fallbacks/fortnite.svg";
   }
@@ -241,11 +244,12 @@ export function getListingImageGallery(
   listing: ListingImageSource,
   options: ListingImageOptions = {}
 ) {
+  const fortniteLike = options.forceTheme === "fortnite" || isFortniteLikeListing(listing);
   const base = getListingImageWithOptions(listing, options);
   if (!base || base.startsWith("/fallbacks/") || base === "/listing-placeholder.svg") {
     return [base].filter(Boolean);
   }
-  if (!isFortniteLikeListing(listing)) {
+  if (!fortniteLike) {
     return [base];
   }
   const orderedTypes: Array<"skins" | "pickaxes" | "dances" | "gliders"> = [
@@ -257,6 +261,15 @@ export function getListingImageGallery(
   const gallery = orderedTypes
     .map((type) => toFortniteMarketImageUrl(base, type))
     .filter(Boolean);
+  if (gallery.length === 0) {
+    const normalizedId = String(listing.id ?? "").trim();
+    if (/^\d+$/.test(normalizedId)) {
+      const byIdGallery = orderedTypes.map(
+        (type) => `https://lzt.market/${normalizedId}/image?type=${type}`
+      );
+      return Array.from(new Set(byIdGallery));
+    }
+  }
   if (gallery.length === 0) {
     return [base];
   }
