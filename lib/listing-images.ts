@@ -320,8 +320,10 @@ export function getListingImageGallery(
     return [base];
   }
   const baseMeta = extractMarketImageMeta(base);
-  if (!baseMeta) {
-    return [base];
+  const numericId = String(listing.id ?? "").trim();
+  const hasNumericId = /^\d{5,}$/.test(numericId);
+  if (!baseMeta && !hasNumericId) {
+    return [base].filter(Boolean);
   }
   const orderedTypes: Array<"skins" | "pickaxes" | "dances" | "gliders"> = [
     "skins",
@@ -329,20 +331,16 @@ export function getListingImageGallery(
     "dances",
     "gliders"
   ];
-  const gallery = orderedTypes
+  const typedFromBase = orderedTypes
     .map((type) => toFortniteMarketImageUrl(base, type))
     .filter(Boolean);
-  if (gallery.length === 0) {
-    const normalizedId = String(listing.id ?? "").trim();
-    if (/^\d{5,}$/.test(normalizedId)) {
-      const byIdGallery = orderedTypes.map(
-        (type) => toListingImageProxyUrl(normalizedId, type)
-      );
-      return Array.from(new Set(byIdGallery));
-    }
-  }
+  const typedById =
+    hasNumericId
+      ? orderedTypes.map((type) => toListingImageProxyUrl(numericId, type))
+      : [];
+  const gallery = Array.from(new Set([base, ...typedFromBase, ...typedById].filter(Boolean)));
   if (gallery.length === 0) {
     return [base];
   }
-  return Array.from(new Set(gallery));
+  return gallery;
 }

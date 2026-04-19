@@ -2256,6 +2256,45 @@ function mergeListing(base: MarketListing, detail: MarketListing | null) {
   };
 }
 
+function isFortniteApiImageUrl(url: string) {
+  const normalized = normalizeImageUrl(url);
+  if (!normalized) {
+    return false;
+  }
+  try {
+    const parsed = new URL(normalized);
+    return parsed.hostname.toLowerCase().includes("fortnite-api.com");
+  } catch {
+    return false;
+  }
+}
+
+function withFortniteImageDiversity(listings: MarketListing[]) {
+  const usage = new Map<string, number>();
+  return listings.map((listing) => {
+    const image = normalizeImageUrl(listing.imageUrl);
+    if (!image || !isFortniteApiImageUrl(image)) {
+      return listing;
+    }
+    const count = usage.get(image) ?? 0;
+    usage.set(image, count + 1);
+    if (count === 0) {
+      return listing;
+    }
+    const numericId = String(listing.id ?? "").trim();
+    if (/^\d{5,}$/.test(numericId)) {
+      return {
+        ...listing,
+        imageUrl: `https://lzt.market/${numericId}/image?type=skins`
+      };
+    }
+    return {
+      ...listing,
+      imageUrl: DEFAULT_LISTING_IMAGE
+    };
+  });
+}
+
 async function enrichListingsWithDetails(
   listings: MarketListing[],
   token: string,
@@ -4818,7 +4857,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const displayTranslated = await translateListingsToEnglish(displayEnriched);
     const displayWithSharedImages = applySharedImageFallback(displayTranslated, trimmedQuery);
     const displayWithFortniteApiImages = await enrichFortniteListingImages(displayWithSharedImages);
-    const pagedListings = withMarkup(displayWithFortniteApiImages, store.settings.markupPercent);
+    const diversified = withFortniteImageDiversity(displayWithFortniteApiImages);
+    const pagedListings = withMarkup(diversified, store.settings.markupPercent);
     return {
       listings: pagedListings,
       hasMore: finalHasMore,
