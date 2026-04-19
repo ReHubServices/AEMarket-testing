@@ -19,6 +19,59 @@ function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
 }
 
+function detectImageContentType(bytes: Uint8Array, headerContentType: string) {
+  const header = (headerContentType ?? "").toLowerCase();
+  if (header.startsWith("image/")) {
+    return header.split(";")[0] || "image/webp";
+  }
+  if (bytes.length >= 12) {
+    if (
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47
+    ) {
+      return "image/png";
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return "image/jpeg";
+    }
+    if (
+      bytes[0] === 0x47 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x38
+    ) {
+      return "image/gif";
+    }
+    if (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    ) {
+      return "image/webp";
+    }
+    if (
+      bytes[4] === 0x66 &&
+      bytes[5] === 0x74 &&
+      bytes[6] === 0x79 &&
+      bytes[7] === 0x70 &&
+      bytes[8] === 0x61 &&
+      bytes[9] === 0x76 &&
+      bytes[10] === 0x69 &&
+      bytes[11] === 0x66
+    ) {
+      return "image/avif";
+    }
+  }
+  return "";
+}
+
 async function fetchImageCandidate(url: string, headers: Record<string, string> = {}) {
   try {
     const response = await fetch(url, {
@@ -31,12 +84,13 @@ async function fetchImageCandidate(url: string, headers: Record<string, string> 
     if (!response.ok) {
       return null;
     }
-    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-    if (!contentType.startsWith("image/")) {
-      return null;
-    }
+    const contentTypeHeader = (response.headers.get("content-type") ?? "").toLowerCase();
     const buffer = await response.arrayBuffer();
     if (!buffer.byteLength) {
+      return null;
+    }
+    const contentType = detectImageContentType(new Uint8Array(buffer), contentTypeHeader);
+    if (!contentType) {
       return null;
     }
     return {

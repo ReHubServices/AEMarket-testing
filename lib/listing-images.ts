@@ -174,7 +174,12 @@ function toListingImageProxyUrl(
   id: string,
   type?: "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
 ) {
-  return type ? `https://lzt.market/${id}/image?type=${type}` : `https://lzt.market/${id}/image`;
+  const params = new URLSearchParams();
+  if (type) {
+    params.set("type", type);
+  }
+  const query = params.toString();
+  return query ? `/api/listings/${id}/image?${query}` : `/api/listings/${id}/image`;
 }
 
 function extractMarketImageMeta(value: string) {
