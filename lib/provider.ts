@@ -4138,6 +4138,54 @@ function sanitizeFortniteTerm(raw: string) {
   return phrase;
 }
 
+const FORTNITE_SPEC_LABEL_HINTS = [
+  "outfit",
+  "outfits",
+  "skin",
+  "skins",
+  "pickaxe",
+  "pickaxes",
+  "harvesting",
+  "axe",
+  "emote",
+  "emotes",
+  "dance",
+  "dances",
+  "glider",
+  "gliders",
+  "cosmetic",
+  "cosmetics",
+  "locker",
+  "bundle",
+  "set"
+];
+
+function splitFortniteNameCandidates(raw: string) {
+  const text = raw
+    .replace(/\[[^\]]+]/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, "|")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) {
+    return [];
+  }
+  const separators = /(?:\s*\|\s*|,\s*|;\s*|\/\s*|\n+|•)+/g;
+  const segments = text
+    .split(separators)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return Array.from(new Set(segments)).slice(0, 24);
+}
+
+function isLikelyFortniteCosmeticLabel(label: string) {
+  const normalized = normalizeKeywordText(label);
+  if (!normalized) {
+    return false;
+  }
+  return FORTNITE_SPEC_LABEL_HINTS.some((hint) => normalized.includes(hint));
+}
+
 function extractFortniteCosmeticTerms(listing: MarketListing) {
   const candidates = new Map<string, string>();
   const add = (value: string) => {
@@ -4151,6 +4199,30 @@ function extractFortniteCosmeticTerms(listing: MarketListing) {
     }
     candidates.set(key, term);
   };
+
+  for (const spec of listing.specs) {
+    if (!isLikelyFortniteCosmeticLabel(spec.label)) {
+      continue;
+    }
+    const value = String(spec.value ?? "").trim();
+    if (!value || /^\d+(?:\.\d+)?$/.test(value)) {
+      continue;
+    }
+    for (const part of splitFortniteNameCandidates(value)) {
+      add(part);
+    }
+  }
+
+  const structuredMatches = Array.from(
+    listing.description.matchAll(
+      /\b(?:outfits?|skins?|pickaxes?|emotes?|dances?|gliders?)\s*[:=-]\s*([^\n\r]{3,240})/gi
+    )
+  );
+  for (const match of structuredMatches) {
+    for (const part of splitFortniteNameCandidates(match[1] ?? "")) {
+      add(part);
+    }
+  }
 
   add(listing.title);
   for (const part of listing.title.split(/[,/|+&-]+/g)) {
