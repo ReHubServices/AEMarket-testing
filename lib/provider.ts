@@ -486,13 +486,19 @@ function extractMarketListingIdFromText(value: string) {
   if (/^\d{5,}$/.test(text)) {
     return text;
   }
-  const marketHostMatch = text.match(/(?:lzt\.market|lolz\.guru)\/(?:market\/)?(\d+)(?:\/|$)/i);
+  const marketHostMatch = text.match(
+    /(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)\/(?:market\/)?(\d{5,})(?:[/?#]|$)/i
+  );
   if (marketHostMatch?.[1]) {
     return marketHostMatch[1];
   }
-  const marketPathMatch = text.match(/\/(?:market\/)?(\d+)(?:\/|$)/i);
+  const marketPathMatch = text.match(/^\/(?:market\/)?(\d{5,})(?:[/?#]|$)/i);
   if (marketPathMatch?.[1]) {
     return marketPathMatch[1];
+  }
+  const imagePathMatch = text.match(/^\/(?:market\/)?(\d{5,})\/image(?:[/?#]|$)/i);
+  if (imagePathMatch?.[1]) {
+    return imagePathMatch[1];
   }
   return "";
 }
@@ -1030,25 +1036,6 @@ function extractImageUrl(item: Record<string, unknown>) {
     const found = extractImageUrlFromPostText(candidate);
     if (found) {
       return found;
-    }
-  }
-
-  const fallbackIdCandidates = [
-    extractText(item.url, ""),
-    extractText(item.link, ""),
-    extractText(item.href, ""),
-    extractText(item.permalink, ""),
-    extractText(item.item_url, ""),
-    extractText(item.listing_url, ""),
-    extractText(item.market_url, ""),
-    extractText(item.id, ""),
-    extractText(item.listing_id, ""),
-    extractText(item.item_id, "")
-  ];
-  for (const candidate of fallbackIdCandidates) {
-    const listingId = extractMarketListingIdFromText(candidate);
-    if (listingId) {
-      return `https://lzt.market/${listingId}/image`;
     }
   }
 

@@ -184,7 +184,7 @@ export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title
 
 function marketImageById(id: string | undefined, fortniteMode: boolean) {
   const normalizedId = String(id ?? "").trim();
-  if (!/^\d+$/.test(normalizedId)) {
+  if (!/^\d{5,}$/.test(normalizedId)) {
     return "";
   }
   return fortniteMode
@@ -198,7 +198,7 @@ export function getListingImageWithOptions(
 ) {
   const fortniteLike = options.forceTheme === "fortnite" || isFortniteLikeListing(listing);
   const normalized = normalizeUrl(listing.imageUrl);
-  const byIdImage = marketImageById(listing.id, fortniteLike);
+  const byIdImage = fortniteLike ? marketImageById(listing.id, true) : "";
   if (!normalized) {
     if (byIdImage) {
       return byIdImage;
@@ -263,7 +263,7 @@ export function getListingImageGallery(
     .filter(Boolean);
   if (gallery.length === 0) {
     const normalizedId = String(listing.id ?? "").trim();
-    if (/^\d+$/.test(normalizedId)) {
+    if (/^\d{5,}$/.test(normalizedId)) {
       const byIdGallery = orderedTypes.map(
         (type) => `https://lzt.market/${normalizedId}/image?type=${type}`
       );
