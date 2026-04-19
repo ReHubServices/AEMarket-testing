@@ -52,6 +52,20 @@ export function ProductDetailModal({
     specs: []
   };
   const specs = Array.isArray(safeListing.specs) ? safeListing.specs : [];
+  const hiddenSpecTokens = [
+    "fortnite skin count",
+    "fortnite pickaxe count",
+    "fortnite dance count",
+    "fortnite glider count",
+    "fortnite shop skins count",
+    "fortnite shop pickaxes count",
+    "fortnite shop dances count",
+    "fortnite shop gliders count"
+  ];
+  const visibleSpecs = specs.filter((spec) => {
+    const label = String(spec.label ?? "").trim().toLowerCase();
+    return !hiddenSpecTokens.some((token) => label.includes(token));
+  });
   const gallery = useMemo(
     () =>
       getListingImageGallery(safeListing, {
@@ -183,9 +197,9 @@ export function ProductDetailModal({
                   {listing.description || "Listing details are being synchronized."}
                 </p>
               )}
-              {!descriptionLoading && !descriptionError && specs.length > 0 && (
+              {!descriptionLoading && !descriptionError && visibleSpecs.length > 0 && (
                 <div className="grid gap-2 rounded-2xl border border-white/15 bg-black/30 p-3">
-                  {specs.slice(0, 14).map((spec, index) => (
+                  {visibleSpecs.slice(0, 14).map((spec, index) => (
                     <div
                       key={`${spec.label}-${spec.value}-${index}`}
                       className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-[130px_1fr] sm:gap-3 md:text-sm"

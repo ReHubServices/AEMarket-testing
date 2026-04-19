@@ -146,11 +146,11 @@ export function getPresetListingImage(
   options: ListingImageOptions = {}
 ) {
   if (options.forceTheme === "fortnite") {
-    return "/fallbacks/fortnite.svg";
+    return "/listing-placeholder.svg";
   }
   const text = listingKeywords(listing);
   if (isFortniteLikeListing(listing)) {
-    return "/fallbacks/fortnite.svg";
+    return "/listing-placeholder.svg";
   }
   if (text.includes("valorant")) {
     return "/fallbacks/valorant.svg";

@@ -500,6 +500,82 @@ function extractMarketListingIdFromText(value: string) {
   if (imagePathMatch?.[1]) {
     return imagePathMatch[1];
   }
+  const inlineMarketMatch = text.match(/(?:^|[^\d])market\/(\d{5,})(?:[/?#]|$)/i);
+  if (inlineMarketMatch?.[1]) {
+    return inlineMarketMatch[1];
+  }
+  const inlineImageMatch = text.match(/(?:^|[^\d])(\d{5,})\/image(?:[/?#]|$)/i);
+  if (inlineImageMatch?.[1]) {
+    return inlineImageMatch[1];
+  }
+  return "";
+}
+
+function extractMarketListingIdDeep(value: unknown, depth = 0, visited = new Set<unknown>()) {
+  if (depth > 5 || value == null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return extractMarketListingIdFromText(value);
+  }
+  if (typeof value === "number") {
+    const numeric = String(value);
+    return /^\d{5,}$/.test(numeric) ? numeric : "";
+  }
+  if (typeof value !== "object") {
+    return "";
+  }
+  if (visited.has(value)) {
+    return "";
+  }
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const hit = extractMarketListingIdDeep(entry, depth + 1, visited);
+      if (hit) {
+        return hit;
+      }
+    }
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  const prioritizedKeys = [
+    "url",
+    "link",
+    "href",
+    "permalink",
+    "item_url",
+    "listing_url",
+    "market_url",
+    "image",
+    "image_url",
+    "imageUrl",
+    "preview",
+    "preview_url",
+    "id",
+    "item_id",
+    "listing_id",
+    "market_item_id"
+  ];
+
+  for (const key of prioritizedKeys) {
+    if (!(key in record)) {
+      continue;
+    }
+    const hit = extractMarketListingIdDeep(record[key], depth + 1, visited);
+    if (hit) {
+      return hit;
+    }
+  }
+
+  for (const entry of Object.values(record)) {
+    const hit = extractMarketListingIdDeep(entry, depth + 1, visited);
+    if (hit) {
+      return hit;
+    }
+  }
   return "";
 }
 
@@ -528,7 +604,10 @@ function resolveListingId(source: Record<string, unknown>, fallbackIdSource: str
     if (marketId) {
       return marketId;
     }
-    if (!/[\/\s]/.test(directIdRaw)) {
+    if (/^\d{5,}$/.test(directIdRaw)) {
+      return directIdRaw;
+    }
+    if (!/[\/\s]/.test(directIdRaw) && /[a-z]/i.test(directIdRaw) && directIdRaw.length >= 6) {
       return directIdRaw;
     }
   }
@@ -553,6 +632,11 @@ function resolveListingId(source: Record<string, unknown>, fallbackIdSource: str
     if (marketId) {
       return marketId;
     }
+  }
+
+  const deepMarketId = extractMarketListingIdDeep(source);
+  if (deepMarketId) {
+    return deepMarketId;
   }
 
   return `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 52)}`;
