@@ -130,22 +130,11 @@ function isTrustedSupplierImage(url: string) {
 }
 
 function toFortniteMarketImageUrl(url: string, type: "skins" | "pickaxes" | "dances" | "gliders") {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
+  const parsed = extractMarketImageMeta(url);
+  if (!parsed) {
     return "";
   }
-  const host = parsed.hostname.toLowerCase();
-  const path = parsed.pathname.toLowerCase();
-  if (!(host.includes("lzt.market") || host.includes("lolz.guru"))) {
-    return "";
-  }
-  if (!/\/(?:market\/)?\d+\/image$/.test(path)) {
-    return "";
-  }
-  parsed.searchParams.set("type", type);
-  return parsed.toString();
+  return toListingImageProxyUrl(parsed.id, type);
 }
 
 function getPreferredFortnitePreviewUrl(url: string) {
@@ -182,14 +171,87 @@ export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title
   return getListingImageWithOptions(listing, {});
 }
 
+function toListingImageProxyUrl(
+  id: string,
+  type?: "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
+) {
+  const params = new URLSearchParams();
+  if (type) {
+    params.set("type", type);
+  }
+  const query = params.toString();
+  return query ? `/api/listings/${id}/image?${query}` : `/api/listings/${id}/image`;
+}
+
+function extractMarketImageMeta(value: string) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    if (raw.startsWith("/")) {
+      try {
+        parsed = new URL(`https://lzt.market${raw}`);
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+  if (!parsed) {
+    return null;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const lztMatch = path.match(/^\/(?:market\/)?(\d{5,})\/image$/i);
+  const proxyMatch = path.match(/^\/api\/listings\/(\d{5,})\/image$/i);
+
+  let id = "";
+  if (lztMatch?.[1] && (host.includes("lzt.market") || host.includes("lolz.guru"))) {
+    id = lztMatch[1];
+  } else if (proxyMatch?.[1]) {
+    id = proxyMatch[1];
+  }
+  if (!id) {
+    return null;
+  }
+
+  const typeRaw = parsed.searchParams.get("type")?.trim().toLowerCase() ?? "";
+  const allowedTypes = new Set(["skins", "pickaxes", "dances", "gliders", "weapons", "agents", "buddies"]);
+  const type = allowedTypes.has(typeRaw) ? typeRaw : "";
+
+  return {
+    id,
+    type
+  };
+}
+
+function toProxyFromMarketImageUrl(
+  url: string,
+  preferredType?: "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
+) {
+  const parsed = extractMarketImageMeta(url);
+  if (!parsed) {
+    return "";
+  }
+  return toListingImageProxyUrl(
+    parsed.id,
+    preferredType ?? ((parsed.type as "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies" | "") || undefined)
+  );
+}
+
 function marketImageById(id: string | undefined, fortniteMode: boolean) {
   const normalizedId = String(id ?? "").trim();
   if (!/^\d{5,}$/.test(normalizedId)) {
     return "";
   }
   return fortniteMode
-    ? `https://lzt.market/${normalizedId}/image?type=skins`
-    : `https://lzt.market/${normalizedId}/image`;
+    ? toListingImageProxyUrl(normalizedId, "skins")
+    : toListingImageProxyUrl(normalizedId);
 }
 
 export function getListingImageWithOptions(
@@ -219,25 +281,30 @@ export function getListingImageWithOptions(
     }
     return getPresetListingImage(listing, options);
   }
+  const proxied = toProxyFromMarketImageUrl(
+    normalized,
+    options.preferFortniteSkins && fortniteLike ? "skins" : undefined
+  );
+  const resolved = proxied || normalized;
   if (options.preferFortniteSkins && fortniteLike) {
-    const preferred = getPreferredFortnitePreviewUrl(normalized);
+    const preferred = getPreferredFortnitePreviewUrl(resolved);
     if (preferred && isLikelyDisplayImage(preferred)) {
       return preferred;
     }
   }
-  if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(normalized)) {
+  if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(resolved)) {
     if (byIdImage) {
       return byIdImage;
     }
     return "/fallbacks/fortnite.svg";
   }
-  if (fortniteLike && !isTrustedSupplierImage(normalized)) {
+  if (fortniteLike && !isTrustedSupplierImage(resolved)) {
     if (byIdImage) {
       return byIdImage;
     }
     return "/fallbacks/fortnite.svg";
   }
-  return normalized;
+  return resolved;
 }
 
 export function getListingImageGallery(
@@ -265,7 +332,7 @@ export function getListingImageGallery(
     const normalizedId = String(listing.id ?? "").trim();
     if (/^\d{5,}$/.test(normalizedId)) {
       const byIdGallery = orderedTypes.map(
-        (type) => `https://lzt.market/${normalizedId}/image?type=${type}`
+        (type) => toListingImageProxyUrl(normalizedId, type)
       );
       return Array.from(new Set(byIdGallery));
     }
