@@ -511,7 +511,11 @@ function extractMarketListingIdFromText(value: string) {
   return "";
 }
 
-function extractMarketListingIdDeep(value: unknown, depth = 0, visited = new Set<unknown>()) {
+function extractMarketListingIdDeep(
+  value: unknown,
+  depth = 0,
+  visited = new Set<unknown>()
+): string {
   if (depth > 5 || value == null) {
     return "";
   }
