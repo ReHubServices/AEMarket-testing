@@ -75,10 +75,25 @@ export function ProductDetailModal({
     [imageTheme, safeListing]
   );
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [failedImageIndexes, setFailedImageIndexes] = useState<number[]>([]);
+
+  const getNextValidIndex = (startIndex: number, direction: 1 | -1) => {
+    if (gallery.length <= 1) {
+      return startIndex;
+    }
+    for (let step = 1; step < gallery.length; step += 1) {
+      const next = (startIndex + step * direction + gallery.length) % gallery.length;
+      if (!failedImageIndexes.includes(next)) {
+        return next;
+      }
+    }
+    return startIndex;
+  };
 
   useEffect(() => {
     setActiveImageIndex(0);
-  }, [safeListing.id]);
+    setFailedImageIndexes([]);
+  }, [safeListing.id, gallery.length]);
 
   useEffect(() => {
     if (activeImageIndex > gallery.length - 1) {
@@ -97,13 +112,13 @@ export function ProductDetailModal({
     if (!hasMultipleImages) {
       return;
     }
-    setActiveImageIndex((previous) => (previous <= 0 ? gallery.length - 1 : previous - 1));
+    setActiveImageIndex((previous) => getNextValidIndex(previous, -1));
   };
   const goToNextImage = () => {
     if (!hasMultipleImages) {
       return;
     }
-    setActiveImageIndex((previous) => (previous + 1) % gallery.length);
+    setActiveImageIndex((previous) => getNextValidIndex(previous, 1));
   };
 
   if (!hasListing || !listing) {
@@ -142,11 +157,29 @@ export function ProductDetailModal({
               src={activeImage}
               alt={safeListing.title}
               className="h-full w-full object-contain"
+              referrerPolicy="no-referrer"
               onError={(event) => {
                 event.currentTarget.onerror = null;
-                event.currentTarget.src = getPresetListingImage(safeListing, {
-                  forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined
-                });
+                const nextFailed = failedImageIndexes.includes(activeImageIndex)
+                  ? failedImageIndexes
+                  : [...failedImageIndexes, activeImageIndex];
+                setFailedImageIndexes(nextFailed);
+                if (hasMultipleImages && nextFailed.length < gallery.length) {
+                  const nextIndex = (() => {
+                    for (let step = 1; step < gallery.length; step += 1) {
+                      const next = (activeImageIndex + step) % gallery.length;
+                      if (!nextFailed.includes(next)) {
+                        return next;
+                      }
+                    }
+                    return activeImageIndex;
+                  })();
+                  if (nextIndex !== activeImageIndex) {
+                    setActiveImageIndex(nextIndex);
+                    return;
+                  }
+                }
+                event.currentTarget.src = "/listing-placeholder.svg";
               }}
             />
             {hasMultipleImages && (

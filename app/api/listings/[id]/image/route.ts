@@ -19,6 +19,35 @@ function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
 }
 
+async function fetchImageCandidate(url: string, headers: Record<string, string> = {}) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "image/*,*/*",
+        ...headers
+      },
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+    if (!contentType.startsWith("image/")) {
+      return null;
+    }
+    const buffer = await response.arrayBuffer();
+    if (!buffer.byteLength) {
+      return null;
+    }
+    return {
+      buffer,
+      contentType
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -44,37 +73,35 @@ export async function GET(
   const type = typeRaw && ALLOWED_TYPES.has(typeRaw) ? typeRaw : "";
 
   const token = await getLztAccessToken();
-  if (!token) {
-    return fail("Supplier API token missing", 503);
+  const query = type ? `?type=${encodeURIComponent(type)}` : "";
+  const candidates: Array<{ url: string; headers?: Record<string, string> }> = [];
+  if (token) {
+    candidates.push({
+      url: `${getLztBaseUrl()}/${normalizedId}/image${query}`,
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+  }
+  candidates.push({ url: `https://lzt.market/${normalizedId}/image${query}` });
+  candidates.push({ url: `https://lzt.market/market/${normalizedId}/image${query}` });
+  candidates.push({ url: `https://lolz.guru/market/${normalizedId}/image${query}` });
+
+  let resolved: { buffer: ArrayBuffer; contentType: string } | null = null;
+  for (const candidate of candidates) {
+    resolved = await fetchImageCandidate(candidate.url, candidate.headers ?? {});
+    if (resolved) {
+      break;
+    }
+  }
+  if (!resolved) {
+    return fail("Listing image unavailable", 404);
   }
 
-  const upstreamUrl = new URL(`${getLztBaseUrl()}/${normalizedId}/image`);
-  if (type) {
-    upstreamUrl.searchParams.set("type", type);
-  }
-
-  const upstream = await fetch(upstreamUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "image/*,*/*"
-    },
-    cache: "no-store"
-  });
-
-  if (!upstream.ok) {
-    return fail("Listing image unavailable", upstream.status === 404 ? 404 : 502);
-  }
-
-  const contentType = upstream.headers.get("content-type") ?? "image/webp";
-  const buffer = await upstream.arrayBuffer();
-  if (!buffer.byteLength) {
-    return fail("Empty image response", 502);
-  }
-
-  return new Response(buffer, {
+  return new Response(resolved.buffer, {
     status: 200,
     headers: {
-      "Content-Type": contentType,
+      "Content-Type": resolved.contentType,
       "Cache-Control": "public, max-age=180, stale-while-revalidate=600"
     }
   });
