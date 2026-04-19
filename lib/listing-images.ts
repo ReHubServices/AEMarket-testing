@@ -260,7 +260,7 @@ export function getListingImageWithOptions(
 ) {
   const fortniteLike = options.forceTheme === "fortnite" || isFortniteLikeListing(listing);
   const normalized = normalizeUrl(listing.imageUrl);
-  const byIdImage = fortniteLike ? marketImageById(listing.id, true) : "";
+  const byIdImage = marketImageById(listing.id, fortniteLike);
   if (!normalized) {
     if (byIdImage) {
       return byIdImage;

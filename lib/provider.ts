@@ -2695,8 +2695,6 @@ function applyLocalFilters(
       "stw",
       "outfit",
       "outfits",
-      "skins",
-      "skin count",
       "pickaxe",
       "pickaxes",
       "emote",
@@ -3410,38 +3408,24 @@ function applyLocalFilters(
     }
   }
   if (effectiveGameFilter === "fortnite") {
-    const blockedNonFortnite = [
-      "telegram",
-      "discord",
-      "instagram",
-      "tiktok",
-      "facebook",
-      "youtube",
-      "twitter",
-      "x.com",
-      "steam",
-      "counter-strike",
-      "cs2",
-      "valorant",
-      "riot",
-      "league of legends",
-      "rainbow",
-      "siege",
-      "battlenet",
-      "battle.net",
-      "blizzard",
-      "warzone",
-      "social media"
-    ].map((token) => normalizeText(token));
     output = output.filter((item) => {
-      if (hasFortniteKeyword(item)) {
+      if (hasFortniteSignal(item) || hasFortniteKeyword(item)) {
         return true;
       }
       const haystack = itemSearchText(item);
-      if (blockedNonFortnite.some((token) => haystack.includes(token))) {
-        return false;
-      }
-      return !hasSocialKeyword(item);
+      return (
+        haystack.includes(normalizeText("fortnite")) ||
+        haystack.includes(normalizeText("v-bucks")) ||
+        haystack.includes(normalizeText("vbucks")) ||
+        haystack.includes(normalizeText("battle pass")) ||
+        haystack.includes(normalizeText("save the world")) ||
+        haystack.includes(normalizeText("stw")) ||
+        haystack.includes(normalizeText("pickaxe")) ||
+        haystack.includes(normalizeText("outfit")) ||
+        haystack.includes(normalizeText("emote")) ||
+        haystack.includes(normalizeText("glider")) ||
+        haystack.includes(normalizeText("leviathan"))
+      );
     });
   }
   if (
