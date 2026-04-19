@@ -319,6 +319,10 @@ export function getListingImageGallery(
   if (!fortniteLike) {
     return [base];
   }
+  const baseMeta = extractMarketImageMeta(base);
+  if (!baseMeta) {
+    return [base];
+  }
   const orderedTypes: Array<"skins" | "pickaxes" | "dances" | "gliders"> = [
     "skins",
     "pickaxes",

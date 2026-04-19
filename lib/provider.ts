@@ -478,12 +478,12 @@ function extractItems(data: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function extractMarketListingIdFromText(value: string) {
+function extractMarketListingIdFromText(value: string, allowPlainNumeric = false) {
   const text = value.trim();
   if (!text) {
     return "";
   }
-  if (/^\d{5,}$/.test(text)) {
+  if (allowPlainNumeric && /^\d{5,}$/.test(text)) {
     return text;
   }
   const marketHostMatch = text.match(
@@ -521,10 +521,6 @@ function extractMarketListingIdDeep(
   }
   if (typeof value === "string") {
     return extractMarketListingIdFromText(value);
-  }
-  if (typeof value === "number") {
-    const numeric = String(value);
-    return /^\d{5,}$/.test(numeric) ? numeric : "";
   }
   if (typeof value !== "object") {
     return "";
@@ -584,7 +580,7 @@ function extractMarketListingIdDeep(
 }
 
 function resolveListingId(source: Record<string, unknown>, fallbackIdSource: string) {
-  const directIdRaw = extractText(
+  const explicitIdCandidates = [
     source.item_id ??
       source.itemId ??
       source.listing_id ??
@@ -596,20 +592,16 @@ function resolveListingId(source: Record<string, unknown>, fallbackIdSource: str
       source.post_id ??
       source.postId ??
       source.market_item_id ??
-      source.marketItemId ??
-      source.uuid ??
-      source.slug ??
-      source.id,
-    ""
-  ).trim();
-
-  if (directIdRaw) {
-    const marketId = extractMarketListingIdFromText(directIdRaw);
+      source.marketItemId
+  ];
+  for (const candidate of explicitIdCandidates) {
+    const directIdRaw = extractText(candidate, "").trim();
+    if (!directIdRaw) {
+      continue;
+    }
+    const marketId = extractMarketListingIdFromText(directIdRaw, true);
     if (marketId) {
       return marketId;
-    }
-    if (/^\d{5,}$/.test(directIdRaw)) {
-      return directIdRaw;
     }
     if (!/[\/\s]/.test(directIdRaw) && /[a-z]/i.test(directIdRaw) && directIdRaw.length >= 6) {
       return directIdRaw;
@@ -632,9 +624,25 @@ function resolveListingId(source: Record<string, unknown>, fallbackIdSource: str
   ];
 
   for (const candidate of urlCandidates) {
-    const marketId = extractMarketListingIdFromText(candidate);
+    const marketId = extractMarketListingIdFromText(candidate, false);
     if (marketId) {
       return marketId;
+    }
+  }
+
+  const genericIdRaw = extractText(source.id ?? source.uuid ?? source.slug, "").trim();
+  if (genericIdRaw) {
+    const marketId = extractMarketListingIdFromText(genericIdRaw, false);
+    if (marketId) {
+      return marketId;
+    }
+    if (
+      !/^\d+$/.test(genericIdRaw) &&
+      !/[\/\s]/.test(genericIdRaw) &&
+      /[a-z]/i.test(genericIdRaw) &&
+      genericIdRaw.length >= 6
+    ) {
+      return genericIdRaw;
     }
   }
 
@@ -2186,6 +2194,9 @@ function applySharedImageFallback(listings: MarketListing[], queryTerm: string) 
 
   return listings.map((listing) => {
     if (hasRealImage(listing.imageUrl)) {
+      return listing;
+    }
+    if (isFortniteListing(listing)) {
       return listing;
     }
 
@@ -4252,8 +4263,43 @@ function extractFortniteCosmeticTerms(listing: MarketListing) {
   return Array.from(candidates.values()).slice(0, 10);
 }
 
-function extractFortniteApiImageFromPayload(payload: unknown) {
+function normalizeFortniteNameMatch(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isFortniteApiCandidateMatch(record: Record<string, unknown>, term: string) {
+  const target = normalizeFortniteNameMatch(term);
+  if (!target) {
+    return false;
+  }
+  const candidateName = normalizeFortniteNameMatch(extractText(record.name, ""));
+  if (!candidateName) {
+    return false;
+  }
+  if (candidateName === target) {
+    return true;
+  }
+  if (candidateName.includes(target) || target.includes(candidateName)) {
+    return true;
+  }
+  const targetTokens = target.split(" ").filter((token) => token.length >= 2);
+  if (targetTokens.length === 0) {
+    return false;
+  }
+  const candidateTokens = new Set(candidateName.split(" ").filter((token) => token.length >= 2));
+  const matched = targetTokens.filter((token) => candidateTokens.has(token)).length;
+  return matched >= Math.max(1, Math.ceil(targetTokens.length * 0.6));
+}
+
+function extractFortniteApiImageFromPayload(payload: unknown, term: string) {
   const pickImage = (record: Record<string, unknown>) => {
+    if (!isFortniteApiCandidateMatch(record, term)) {
+      return "";
+    }
     const images =
       record.images && typeof record.images === "object"
         ? (record.images as Record<string, unknown>)
@@ -4332,7 +4378,7 @@ async function resolveFortniteCosmeticImage(term: string) {
         continue;
       }
       const payload = (await response.json()) as unknown;
-      const imageUrl = extractFortniteApiImageFromPayload(payload);
+      const imageUrl = extractFortniteApiImageFromPayload(payload, term);
       if (imageUrl) {
         fortniteCosmeticImageCache.set(key, {
           imageUrl,
@@ -4355,6 +4401,7 @@ async function resolveFortniteCosmeticImage(term: string) {
 async function enrichFortniteListingImages(listings: MarketListing[]) {
   const output = listings.slice();
   let lookupBudget = 28;
+  const imageUsage = new Map<string, number>();
 
   for (let index = 0; index < output.length; index += 1) {
     const listing = output[index];
@@ -4380,6 +4427,12 @@ async function enrichFortniteListingImages(listings: MarketListing[]) {
       lookupBudget -= 1;
       imageUrl = await resolveFortniteCosmeticImage(term);
       if (imageUrl) {
+        const usage = imageUsage.get(imageUrl) ?? 0;
+        if (usage >= 1) {
+          imageUrl = "";
+          continue;
+        }
+        imageUsage.set(imageUrl, usage + 1);
         break;
       }
     }
