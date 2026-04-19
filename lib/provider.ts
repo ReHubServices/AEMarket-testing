@@ -4757,7 +4757,15 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const uniqueFinal = mergeUnique(finalFiltered);
     const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
     const finalHasMore = hasMore || uniqueFinal.length > targetEnd;
-    const pagedListings = withMarkup(finalWindow, store.settings.markupPercent);
+    const displayEnriched = await enrichListingsWithDetails(
+      finalWindow,
+      token,
+      finalWindow.length
+    );
+    const displayTranslated = await translateListingsToEnglish(displayEnriched);
+    const displayWithSharedImages = applySharedImageFallback(displayTranslated, trimmedQuery);
+    const displayWithFortniteApiImages = await enrichFortniteListingImages(displayWithSharedImages);
+    const pagedListings = withMarkup(displayWithFortniteApiImages, store.settings.markupPercent);
     return {
       listings: pagedListings,
       hasMore: finalHasMore,
