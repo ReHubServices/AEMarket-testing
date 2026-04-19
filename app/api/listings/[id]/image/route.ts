@@ -75,17 +75,32 @@ export async function GET(
   const token = await getLztAccessToken();
   const query = type ? `?type=${encodeURIComponent(type)}` : "";
   const candidates: Array<{ url: string; headers?: Record<string, string> }> = [];
-  if (token) {
-    candidates.push({
-      url: `${getLztBaseUrl()}/${normalizedId}/image${query}`,
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
+  const publicCandidates = [
+    { url: `https://lzt.market/${normalizedId}/image${query}` },
+    { url: `https://lzt.market/market/${normalizedId}/image${query}` },
+    { url: `https://lolz.guru/market/${normalizedId}/image${query}` }
+  ];
+  const apiCandidate =
+    token
+      ? {
+          url: `${getLztBaseUrl()}/${normalizedId}/image${query}`,
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      : null;
+
+  if (type) {
+    candidates.push(...publicCandidates);
+    if (apiCandidate) {
+      candidates.push(apiCandidate);
+    }
+  } else {
+    if (apiCandidate) {
+      candidates.push(apiCandidate);
+    }
+    candidates.push(...publicCandidates);
   }
-  candidates.push({ url: `https://lzt.market/${normalizedId}/image${query}` });
-  candidates.push({ url: `https://lzt.market/market/${normalizedId}/image${query}` });
-  candidates.push({ url: `https://lolz.guru/market/${normalizedId}/image${query}` });
 
   let resolved: { buffer: ArrayBuffer; contentType: string } | null = null;
   for (const candidate of candidates) {

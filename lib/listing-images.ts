@@ -121,8 +121,7 @@ function isTrustedSupplierImage(url: string) {
       host.includes("nztcdn.com") ||
       host.includes("lztcdn.com") ||
       host.includes("lzt.market") ||
-      host.includes("prod-api.lzt.market") ||
-      host.includes("fortnite-api.com")
+      host.includes("prod-api.lzt.market")
     );
   } catch {
     return false;
@@ -261,10 +260,10 @@ export function getListingImageWithOptions(
   const fortniteLike = options.forceTheme === "fortnite" || isFortniteLikeListing(listing);
   const normalized = normalizeUrl(listing.imageUrl);
   const byIdImage = marketImageById(listing.id, fortniteLike);
+  if (fortniteLike && byIdImage) {
+    return byIdImage;
+  }
   if (!normalized) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return getPresetListingImage(listing, options);
   }
   const lower = normalized.toLowerCase();
@@ -276,9 +275,6 @@ export function getListingImageWithOptions(
     return getPresetListingImage(listing, options);
   }
   if (!isLikelyDisplayImage(normalized)) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return getPresetListingImage(listing, options);
   }
   const proxied = toProxyFromMarketImageUrl(
@@ -293,15 +289,9 @@ export function getListingImageWithOptions(
     }
   }
   if (options.forceTheme === "fortnite" && !isTrustedSupplierImage(resolved)) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return "/fallbacks/fortnite.svg";
   }
   if (fortniteLike && !isTrustedSupplierImage(resolved)) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return "/fallbacks/fortnite.svg";
   }
   return resolved;
@@ -319,28 +309,16 @@ export function getListingImageGallery(
   if (!fortniteLike) {
     return [base];
   }
-  const baseMeta = extractMarketImageMeta(base);
   const numericId = String(listing.id ?? "").trim();
   const hasNumericId = /^\d{5,}$/.test(numericId);
-  if (!baseMeta && !hasNumericId) {
-    return [base].filter(Boolean);
-  }
   const orderedTypes: Array<"skins" | "pickaxes" | "dances" | "gliders"> = [
     "skins",
     "pickaxes",
     "dances",
     "gliders"
   ];
-  const typedFromBase = orderedTypes
-    .map((type) => toFortniteMarketImageUrl(base, type))
-    .filter(Boolean);
-  const typedById =
-    hasNumericId
-      ? orderedTypes.map((type) => toListingImageProxyUrl(numericId, type))
-      : [];
-  const gallery = Array.from(new Set([base, ...typedFromBase, ...typedById].filter(Boolean)));
-  if (gallery.length === 0) {
-    return [base];
+  if (hasNumericId) {
+    return orderedTypes.map((type) => toListingImageProxyUrl(numericId, type));
   }
-  return gallery;
+  return [base];
 }
