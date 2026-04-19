@@ -4240,6 +4240,8 @@ async function resolveFortniteCosmeticImage(term: string) {
   }
 
   const baseUrl = (process.env.FORTNITE_API_BASE_URL ?? "https://fortnite-api.com").trim().replace(/\/+$/, "");
+  const fortniteApiKey = (process.env.FORTNITE_API_KEY ?? "").trim();
+  const fortniteAuthHeader = fortniteApiKey || "";
   const urls = [
     `${baseUrl}/v2/cosmetics/br/search?name=${encodeURIComponent(term)}`,
     `${baseUrl}/v2/cosmetics/br/search/all?name=${encodeURIComponent(term)}`
@@ -4249,7 +4251,8 @@ async function resolveFortniteCosmeticImage(term: string) {
     try {
       const response = await fetch(url, {
         headers: {
-          Accept: "application/json"
+          Accept: "application/json",
+          ...(fortniteAuthHeader ? { Authorization: fortniteAuthHeader, "x-api-key": fortniteApiKey } : {})
         },
         cache: "no-store"
       });
