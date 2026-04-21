@@ -1996,7 +1996,7 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const requestedGame = options.game ? toSlug(options.game) : "";
   const requested = requestedCategory || requestedGame;
   const requestedAliases: Record<string, string[]> = {
-    fortnite: ["fortnite", "epicgames", "epic-games", "epic"],
+    fortnite: ["fortnite"],
     valorant: ["valorant", "riot"],
     siege: ["siege", "rainbow-six-siege", "rainbow6", "r6"],
     steam: ["steam", "cs2", "counter-strike", "counter-strike-2"],
@@ -2735,16 +2735,29 @@ function applyLocalFilters(
 
   const hasFortniteSignal = (item: MarketListing) => {
     const text = itemSearchText(item);
-    return [
+    const strongKeywords = [
       "fortnite",
+      "фортнайт",
       "vbucks",
       "v bucks",
       "v-bucks",
-      "battle pass",
       "save the world",
       "stw",
+      "battle royale",
+      "locker"
+    ]
+      .map((keyword) => normalizeText(keyword))
+      .some((keyword) => keyword && text.includes(keyword));
+
+    if (strongKeywords) {
+      return true;
+    }
+
+    const weakKeywords = [
       "outfit",
       "outfits",
+      "skin",
+      "skins",
       "pickaxe",
       "pickaxes",
       "emote",
@@ -2752,11 +2765,41 @@ function applyLocalFilters(
       "dances",
       "dance",
       "glider",
-      "gliders",
-      "locker"
-    ]
+      "gliders"
+    ];
+    const weakMatchCount = weakKeywords.reduce((count, keyword) => {
+      const normalized = normalizeText(keyword);
+      return normalized && text.includes(normalized) ? count + 1 : count;
+    }, 0);
+
+    const blockedLeakKeywords = [
+      "gta",
+      "grand theft auto",
+      "social club",
+      "rockstar",
+      "ark",
+      "dead by daylight",
+      "dbd",
+      "steam",
+      "counter strike",
+      "cs2",
+      "valorant",
+      "league of legends",
+      "battlenet",
+      "battle.net"
+    ];
+    const hasLeakKeyword = blockedLeakKeywords
       .map((keyword) => normalizeText(keyword))
       .some((keyword) => keyword && text.includes(keyword));
+
+    const hasFortniteSpecLabel = item.specs.some((spec) =>
+      normalizeText(spec.label).includes("fortnite")
+    );
+    if (hasFortniteSpecLabel) {
+      return true;
+    }
+
+    return weakMatchCount >= 2 && !hasLeakKeyword;
   };
   const matchesGameToken = (item: MarketListing, token: string) => {
     const normalizedToken = normalizeText(token);
@@ -2776,7 +2819,7 @@ function applyLocalFilters(
       return socialKeywords.some((keyword) => containsToken(keyword));
     }
     if (normalizedToken === "fortnite") {
-      return hasFortniteSignal(item) || ["leviathan", "фортнайт"].some((keyword) => containsToken(keyword));
+      return hasFortniteSignal(item);
     }
     if (normalizedToken === "steam") {
       return (
@@ -3458,25 +3501,7 @@ function applyLocalFilters(
     }
   }
   if (effectiveGameFilter === "fortnite") {
-    output = output.filter((item) => {
-      if (hasFortniteSignal(item) || hasFortniteKeyword(item)) {
-        return true;
-      }
-      const haystack = itemSearchText(item);
-      return (
-        haystack.includes(normalizeText("fortnite")) ||
-        haystack.includes(normalizeText("v-bucks")) ||
-        haystack.includes(normalizeText("vbucks")) ||
-        haystack.includes(normalizeText("battle pass")) ||
-        haystack.includes(normalizeText("save the world")) ||
-        haystack.includes(normalizeText("stw")) ||
-        haystack.includes(normalizeText("pickaxe")) ||
-        haystack.includes(normalizeText("outfit")) ||
-        haystack.includes(normalizeText("emote")) ||
-        haystack.includes(normalizeText("glider")) ||
-        haystack.includes(normalizeText("leviathan"))
-      );
-    });
+    output = output.filter((item) => hasFortniteSignal(item));
   }
   if (
     categoryFilter &&
