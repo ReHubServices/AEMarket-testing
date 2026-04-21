@@ -638,11 +638,10 @@ export async function GET(
 
   const acceptHeader = (request.headers.get("accept") ?? "").toLowerCase();
   const fetchDest = (request.headers.get("sec-fetch-dest") ?? "").toLowerCase();
-  const isDocumentRequest =
-    (view && !raw) ||
-    fetchDest === "document" ||
-    (acceptHeader.includes("text/html") && !raw);
-  if (isDocumentRequest) {
+  const wantsViewer =
+    !raw &&
+    (view || fetchDest === "document" || acceptHeader.includes("text/html"));
+  if (wantsViewer && !debug) {
     return new Response(renderImageViewerHtml({ id: normalizedId, query, type }), {
       status: 200,
       headers: {
