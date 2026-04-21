@@ -364,7 +364,7 @@ export async function GET(
 ) {
   const limiter = checkRateLimit({
     key: createRateKey(request, "listing_image_proxy"),
-    maxRequests: 240,
+    maxRequests: 2400,
     windowMs: 60_000
   });
   if (!limiter.allowed) {
@@ -506,7 +506,6 @@ export async function GET(
     headers: {
       "Content-Type": resolved.contentType,
       "X-AE-Image-Source-Stage": resolvedSourceStage || "candidate-image",
-      "X-AE-Image-Source-Url": resolvedSourceUrl || "unknown",
       "Cache-Control": "public, max-age=180, stale-while-revalidate=600"
     }
   });
