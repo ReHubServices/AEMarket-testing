@@ -79,6 +79,9 @@ async function fetchImageCandidate(url: string, headers: Record<string, string> 
     const response = await fetch(url, {
       headers: {
         Accept: "image/*,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         ...headers
       },
       cache: "no-store"
@@ -369,50 +372,69 @@ export async function GET(
 
   const token = await getLztAccessToken();
   const query = type ? `?type=${encodeURIComponent(type)}` : "";
+  const referer = `https://lzt.market/market/${normalizedId}`;
+  const browserHeaders = {
+    Referer: referer,
+    Origin: "https://lzt.market"
+  };
   const candidates: Array<{ url: string; headers?: Record<string, string> }> = [];
   const publicCandidates = [
     { url: `https://lzt.market/${normalizedId}/image${query}` },
     { url: `https://lzt.market/market/${normalizedId}/image${query}` },
     { url: `https://lolz.guru/market/${normalizedId}/image${query}` }
   ];
-  const apiCandidate =
-    token
-      ? {
-          url: `${getLztBaseUrl()}/${normalizedId}/image${query}`,
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+  const apiCandidates = token
+    ? Array.from(
+        new Set([
+          `${getLztBaseUrl()}/${normalizedId}/image${query}`,
+          `${getLztBaseUrl()}/market/${normalizedId}/image${query}`,
+          `${getLztBaseUrl()}/item/${normalizedId}/image${query}`,
+          `${getLztBaseUrl()}/items/${normalizedId}/image${query}`
+        ])
+      ).map((url) => ({
+        url,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...browserHeaders
         }
-      : null;
+      }))
+    : [];
   const publicCandidatesWithoutType = [
     { url: `https://lzt.market/${normalizedId}/image` },
     { url: `https://lzt.market/market/${normalizedId}/image` },
     { url: `https://lolz.guru/market/${normalizedId}/image` }
   ];
-  const apiCandidateWithoutType =
-    token
-      ? {
-          url: `${getLztBaseUrl()}/${normalizedId}/image`,
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+  const apiCandidatesWithoutType = token
+    ? Array.from(
+        new Set([
+          `${getLztBaseUrl()}/${normalizedId}/image`,
+          `${getLztBaseUrl()}/market/${normalizedId}/image`,
+          `${getLztBaseUrl()}/item/${normalizedId}/image`,
+          `${getLztBaseUrl()}/items/${normalizedId}/image`
+        ])
+      ).map((url) => ({
+        url,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...browserHeaders
         }
-      : null;
+      }))
+    : [];
 
   if (type) {
-    candidates.push(...publicCandidates);
-    if (apiCandidate) {
-      candidates.push(apiCandidate);
-    }
-    if (apiCandidateWithoutType) {
-      candidates.push(apiCandidateWithoutType);
-    }
-    candidates.push(...publicCandidatesWithoutType);
+    candidates.push(
+      ...publicCandidates.map((candidate) => ({ ...candidate, headers: browserHeaders }))
+    );
+    candidates.push(...apiCandidates);
+    candidates.push(...apiCandidatesWithoutType);
+    candidates.push(
+      ...publicCandidatesWithoutType.map((candidate) => ({ ...candidate, headers: browserHeaders }))
+    );
   } else {
-    if (apiCandidate) {
-      candidates.push(apiCandidate);
-    }
-    candidates.push(...publicCandidates);
+    candidates.push(...apiCandidates);
+    candidates.push(
+      ...publicCandidates.map((candidate) => ({ ...candidate, headers: browserHeaders }))
+    );
   }
 
   let resolved: { buffer: ArrayBuffer; contentType: string } | null = null;
