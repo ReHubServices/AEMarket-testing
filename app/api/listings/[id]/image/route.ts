@@ -20,6 +20,15 @@ type FetchedImage = {
   buffer: ArrayBuffer;
   contentType: string;
 };
+type CandidateProbe = {
+  url: string;
+  ok: boolean;
+  status: number;
+  contentType: string;
+  location: string;
+  snippet: string;
+  error: string;
+};
 
 function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
@@ -287,6 +296,62 @@ async function fetchImageCandidate(
     };
   } catch {
     return null;
+  }
+}
+
+async function probeCandidate(
+  url: string,
+  headers: Record<string, string> = {}
+): Promise<CandidateProbe> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "image/*,*/*,application/json,text/html;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        ...headers
+      },
+      redirect: "manual",
+      cache: "no-store"
+    });
+
+    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+    const location = response.headers.get("location") ?? "";
+    let snippet = "";
+    try {
+      if (contentType.includes("json") || contentType.includes("text") || contentType.includes("html")) {
+        const text = await response.text();
+        snippet = text.slice(0, 220);
+      } else {
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        snippet = Array.from(buffer.slice(0, 24))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+      }
+    } catch {
+      snippet = "";
+    }
+
+    return {
+      url,
+      ok: response.ok,
+      status: response.status,
+      contentType,
+      location,
+      snippet,
+      error: ""
+    };
+  } catch (error) {
+    return {
+      url,
+      ok: false,
+      status: 0,
+      contentType: "",
+      location: "",
+      snippet: "",
+      error: error instanceof Error ? error.message : "unknown_error"
+    };
   }
 }
 
@@ -682,11 +747,16 @@ export async function GET(
     }
   }
   if (debug && !view) {
+    const candidateDiagnostics: CandidateProbe[] = [];
+    for (const candidate of candidates) {
+      candidateDiagnostics.push(await probeCandidate(candidate.url, candidate.headers ?? {}));
+    }
     return ok({
       listingId: normalizedId,
       type: type || null,
       tokenPresent: Boolean(token),
       attemptedCandidates,
+      candidateDiagnostics,
       resolved: Boolean(resolved),
       resolvedSourceStage: resolvedSourceStage || null,
       resolvedSourceUrl: resolvedSourceUrl || null,
