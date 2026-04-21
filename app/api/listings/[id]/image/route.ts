@@ -577,7 +577,7 @@ export async function GET(
     (view && !raw) ||
     fetchDest === "document" ||
     (acceptHeader.includes("text/html") && !raw);
-  if (!debug && isDocumentRequest) {
+  if (isDocumentRequest) {
     return new Response(renderImageViewerHtml({ id: normalizedId, query, type }), {
       status: 200,
       headers: {
@@ -681,7 +681,7 @@ export async function GET(
       resolvedSourceStage = htmlResolved.sourceStage;
     }
   }
-  if (debug) {
+  if (debug && !view) {
     return ok({
       listingId: normalizedId,
       type: type || null,
