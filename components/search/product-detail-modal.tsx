@@ -76,6 +76,7 @@ export function ProductDetailModal({
   );
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [failedImageIndexes, setFailedImageIndexes] = useState<number[]>([]);
+  const [imageLoading, setImageLoading] = useState(true);
 
   const getNextValidIndex = (startIndex: number, direction: 1 | -1) => {
     if (gallery.length <= 1) {
@@ -107,6 +108,11 @@ export function ProductDetailModal({
       forceTheme: imageTheme === "fortnite" ? "fortnite" : undefined,
       preferFortniteSkins: true
     });
+
+  useEffect(() => {
+    setImageLoading(true);
+  }, [activeImage, safeListing.id]);
+
   const hasMultipleImages = gallery.length > 1;
   const goToPreviousImage = () => {
     if (!hasMultipleImages) {
@@ -156,9 +162,13 @@ export function ProductDetailModal({
             <img
               src={activeImage}
               alt={safeListing.title}
-              className="h-full w-full object-contain"
+              className={`h-full w-full object-contain transition-opacity duration-200 ${imageLoading ? "opacity-60" : "opacity-100"}`}
+              onLoad={() => {
+                setImageLoading(false);
+              }}
               onError={(event) => {
                 event.currentTarget.onerror = null;
+                setImageLoading(false);
                 const nextFailed = failedImageIndexes.includes(activeImageIndex)
                   ? failedImageIndexes
                   : [...failedImageIndexes, activeImageIndex];
@@ -181,6 +191,16 @@ export function ProductDetailModal({
                 event.currentTarget.src = "/listing-placeholder.svg";
               }}
             />
+            {imageLoading && (
+              <div className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/55 px-3 py-1 text-[11px] text-zinc-100">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-100 [animation-delay:-200ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-100 [animation-delay:-100ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-100" />
+                </span>
+                <span>Loading</span>
+              </div>
+            )}
             {hasMultipleImages && (
               <>
                 <button
