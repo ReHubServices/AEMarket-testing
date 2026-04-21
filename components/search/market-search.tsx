@@ -2974,7 +2974,6 @@ export function MarketSearch({
                     className="h-full w-full object-cover"
                     loading="lazy"
                     decoding="async"
-                    referrerPolicy="no-referrer"
                     onError={(event) => {
                       event.currentTarget.onerror = null;
                       event.currentTarget.src = getPresetListingImage(listing, {

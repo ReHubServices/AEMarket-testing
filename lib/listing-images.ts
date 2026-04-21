@@ -179,7 +179,8 @@ function toListingImageProxyUrl(
     params.set("type", type);
   }
   const query = params.toString();
-  return query ? `/api/listings/${id}/image?${query}` : `/api/listings/${id}/image`;
+  const base = `https://lzt.market/${id}/image`;
+  return query ? `${base}?${query}` : base;
 }
 
 function extractMarketImageMeta(value: string) {

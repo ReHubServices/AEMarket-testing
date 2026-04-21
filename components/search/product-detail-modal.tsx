@@ -157,7 +157,6 @@ export function ProductDetailModal({
               src={activeImage}
               alt={safeListing.title}
               className="h-full w-full object-contain"
-              referrerPolicy="no-referrer"
               onError={(event) => {
                 event.currentTarget.onerror = null;
                 const nextFailed = failedImageIndexes.includes(activeImageIndex)

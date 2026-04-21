@@ -15,6 +15,8 @@ const ALLOWED_TYPES = new Set([
   "buddies"
 ]);
 
+const NO_IMAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1b1b1f"/><stop offset="100%" stop-color="#0f1012"/></linearGradient></defs><rect width="1200" height="675" fill="url(#g)"/><rect x="80" y="80" width="1040" height="515" rx="28" fill="none" stroke="#2f3137" stroke-width="2"/><text x="600" y="320" text-anchor="middle" fill="#d4d4d8" font-family="system-ui,Segoe UI,Arial" font-size="44" font-weight="600">No Image</text><text x="600" y="370" text-anchor="middle" fill="#71717a" font-family="system-ui,Segoe UI,Arial" font-size="22">Listing preview unavailable</text></svg>`;
+
 function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
 }
@@ -427,14 +429,21 @@ export async function GET(
     resolved = await fetchListingHtmlImageCandidate(normalizedId, type);
   }
   if (!resolved) {
-    const fallbackUrl = `https://lzt.market/market/${normalizedId}/image${query}`;
-    return Response.redirect(fallbackUrl, 302);
+    return new Response(NO_IMAGE_SVG, {
+      status: 200,
+      headers: {
+        "Content-Type": "image/svg+xml; charset=utf-8",
+        "Content-Disposition": "inline",
+        "Cache-Control": "public, max-age=60, stale-while-revalidate=120"
+      }
+    });
   }
 
   return new Response(resolved.buffer, {
     status: 200,
     headers: {
       "Content-Type": resolved.contentType,
+      "Content-Disposition": "inline",
       "Cache-Control": "public, max-age=180, stale-while-revalidate=600"
     }
   });
