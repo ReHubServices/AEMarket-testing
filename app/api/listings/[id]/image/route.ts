@@ -16,6 +16,10 @@ const ALLOWED_TYPES = new Set([
 ]);
 
 const NO_IMAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1b1b1f"/><stop offset="100%" stop-color="#0f1012"/></linearGradient></defs><rect width="1200" height="675" fill="url(#g)"/><rect x="80" y="80" width="1040" height="515" rx="28" fill="none" stroke="#2f3137" stroke-width="2"/><text x="600" y="320" text-anchor="middle" fill="#d4d4d8" font-family="system-ui,Segoe UI,Arial" font-size="44" font-weight="600">No Image</text><text x="600" y="370" text-anchor="middle" fill="#71717a" font-family="system-ui,Segoe UI,Arial" font-size="22">Listing preview unavailable</text></svg>`;
+type FetchedImage = {
+  buffer: ArrayBuffer;
+  contentType: string;
+};
 
 function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
@@ -143,7 +147,7 @@ async function fetchImageCandidate(
   url: string,
   headers: Record<string, string> = {},
   depth = 0
-) {
+): Promise<FetchedImage | null> {
   if (depth > 3) {
     return null;
   }
