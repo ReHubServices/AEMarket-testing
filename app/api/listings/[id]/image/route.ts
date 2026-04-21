@@ -25,6 +25,69 @@ function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
 }
 
+function buildImageQuery(type: string) {
+  return type ? `?type=${encodeURIComponent(type)}` : "";
+}
+
+function renderImageViewerHtml(input: { id: string; query: string; type: string }) {
+  const { id, query, type } = input;
+  const title = type ? `${type[0].toUpperCase()}${type.slice(1)} Preview` : "Listing Preview";
+  const encodedTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const primary = `/api/listings/${id}/image${query}${query ? "&" : "?"}raw=1`;
+  const sources = [
+    primary,
+    `https://lzt.market/${id}/image${query}`,
+    `https://lzt.market/market/${id}/image${query}`
+  ];
+  const serializedSources = JSON.stringify(sources);
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${encodedTitle}</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: Inter, Segoe UI, Arial, sans-serif; background: #0b0c0f; color: #e4e4e7; }
+  .wrap { min-height: 100vh; display: grid; place-items: center; padding: 28px; }
+  .card { width: min(1320px, 100%); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; background: rgba(255,255,255,.04); backdrop-filter: blur(12px); overflow: hidden; }
+  .top { padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 14px; color: #a1a1aa; }
+  .frame { display: grid; place-items: center; min-height: 420px; }
+  img { width: 100%; height: auto; display: block; object-fit: contain; background: #09090b; }
+  .status { padding: 12px 18px; border-top: 1px solid rgba(255,255,255,.1); font-size: 13px; color: #a1a1aa; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="top">${encodedTitle}</div>
+      <div class="frame"><img id="sheet" alt="${encodedTitle}" referrerpolicy="no-referrer" /></div>
+      <div class="status" id="status">Loading image...</div>
+    </div>
+  </div>
+  <script>
+    const sources = ${serializedSources};
+    const img = document.getElementById("sheet");
+    const status = document.getElementById("status");
+    let index = 0;
+    function loadNext() {
+      if (index >= sources.length) {
+        status.textContent = "No image available for this listing.";
+        return;
+      }
+      const current = sources[index++];
+      status.textContent = "Trying source " + index + " of " + sources.length + "...";
+      img.onerror = loadNext;
+      img.src = current;
+    }
+    img.onload = () => { status.textContent = "Loaded successfully."; };
+    loadNext();
+  </script>
+</body>
+</html>`;
+}
+
 function detectImageContentType(bytes: Uint8Array, headerContentType: string) {
   const header = (headerContentType ?? "").toLowerCase();
   if (header.startsWith("image/")) {
@@ -502,9 +565,24 @@ export async function GET(
     .toLowerCase();
   const type = typeRaw && ALLOWED_TYPES.has(typeRaw) ? typeRaw : "";
   const debug = request.nextUrl.searchParams.get("debug") === "1";
+  const raw = request.nextUrl.searchParams.get("raw") === "1";
 
   const token = await getLztAccessToken();
-  const query = type ? `?type=${encodeURIComponent(type)}` : "";
+  const query = buildImageQuery(type);
+
+  const acceptHeader = (request.headers.get("accept") ?? "").toLowerCase();
+  const fetchDest = (request.headers.get("sec-fetch-dest") ?? "").toLowerCase();
+  const isDocumentRequest = fetchDest === "document" || (acceptHeader.includes("text/html") && !raw);
+  if (!debug && isDocumentRequest) {
+    return new Response(renderImageViewerHtml({ id: normalizedId, query, type }), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store"
+      }
+    });
+  }
+
   const referer = `https://lzt.market/market/${normalizedId}`;
   const browserHeaders = {
     Referer: referer,
@@ -613,10 +691,7 @@ export async function GET(
   }
   if (!resolved) {
     const directUrl = `https://lzt.market/${normalizedId}/image${query}`;
-    const acceptHeader = (request.headers.get("accept") ?? "").toLowerCase();
-    const isImageRequest =
-      acceptHeader.includes("image/") ||
-      request.headers.get("sec-fetch-dest")?.toLowerCase() === "image";
+    const isImageRequest = acceptHeader.includes("image/") || fetchDest === "image";
     if (isImageRequest) {
       return new Response(null, {
         status: 307,
