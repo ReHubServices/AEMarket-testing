@@ -612,6 +612,20 @@ export async function GET(
     });
   }
   if (!resolved) {
+    const directUrl = `https://lzt.market/${normalizedId}/image${query}`;
+    const acceptHeader = (request.headers.get("accept") ?? "").toLowerCase();
+    const isImageRequest =
+      acceptHeader.includes("image/") ||
+      request.headers.get("sec-fetch-dest")?.toLowerCase() === "image";
+    if (isImageRequest) {
+      return new Response(null, {
+        status: 307,
+        headers: {
+          Location: directUrl,
+          "Referrer-Policy": "no-referrer"
+        }
+      });
+    }
     return new Response(NO_IMAGE_SVG, {
       status: 200,
       headers: {
