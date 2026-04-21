@@ -102,6 +102,245 @@ async function fetchImageCandidate(url: string, headers: Record<string, string> 
   }
 }
 
+function normalizeCandidateImageUrl(value: string) {
+  const raw = value.trim().replace(/&amp;/g, "&");
+  if (!raw) {
+    return "";
+  }
+  if (raw.startsWith("//")) {
+    return `https:${raw}`;
+  }
+  if (raw.startsWith("http://")) {
+    return `https://${raw.slice(7)}`;
+  }
+  if (raw.startsWith("https://")) {
+    return raw;
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i.test(raw)) {
+    return `https://${raw}`;
+  }
+  return "";
+}
+
+function looksLikeImageUrl(value: string) {
+  const normalized = value.toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (/\.(png|jpe?g|webp|gif|bmp|avif)(\?|#|$)/i.test(normalized)) {
+    return true;
+  }
+  if (normalized.includes("nztcdn.com/files/") || normalized.includes("lztcdn.com/")) {
+    return true;
+  }
+  return normalized.includes("/image?type=");
+}
+
+function extractImageCandidatesFromHtml(html: string) {
+  const normalizedHtml = html.replace(/\\\//g, "/");
+  const urls =
+    normalizedHtml.match(
+      /(?:https?:\/\/|\/\/|[a-z0-9.-]+\.[a-z]{2,}\/)[^\s"'<>\\]+/gi
+    ) ?? [];
+  const unique = new Set<string>();
+  for (const url of urls) {
+    const normalized = normalizeCandidateImageUrl(url);
+    if (!normalized) {
+      continue;
+    }
+    if (!looksLikeImageUrl(normalized)) {
+      continue;
+    }
+    unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+async function fetchListingHtmlImageCandidate(normalizedId: string, type: string) {
+  const pageCandidates = [
+    `https://lzt.market/${normalizedId}`,
+    `https://lzt.market/market/${normalizedId}`,
+    `https://lolz.guru/market/${normalizedId}`
+  ];
+  const typeToken = type.trim().toLowerCase();
+
+  for (const pageUrl of pageCandidates) {
+    try {
+      const response = await fetch(pageUrl, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        continue;
+      }
+
+      const html = await response.text();
+      if (!html) {
+        continue;
+      }
+
+      const extracted = extractImageCandidatesFromHtml(html);
+      if (!extracted.length) {
+        continue;
+      }
+
+      const prioritized = typeToken
+        ? [
+            ...extracted.filter((url) =>
+              url.toLowerCase().includes(`/image?type=${encodeURIComponent(typeToken)}`.toLowerCase())
+            ),
+            ...extracted.filter((url) => url.toLowerCase().includes(`type=${typeToken}`)),
+            ...extracted
+          ]
+        : extracted;
+
+      const deduped = Array.from(new Set(prioritized));
+      for (const candidateUrl of deduped) {
+        const resolved = await fetchImageCandidate(candidateUrl);
+        if (resolved) {
+          return resolved;
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function collectImageUrlsDeep(
+  value: unknown,
+  output: Set<string>,
+  depth = 0,
+  visited = new Set<unknown>()
+) {
+  if (depth > 5 || value == null) {
+    return;
+  }
+
+  if (typeof value === "string") {
+    const normalized = normalizeCandidateImageUrl(value);
+    if (normalized && looksLikeImageUrl(normalized)) {
+      output.add(normalized);
+    }
+    return;
+  }
+
+  if (typeof value !== "object") {
+    return;
+  }
+
+  if (visited.has(value)) {
+    return;
+  }
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectImageUrlsDeep(entry, output, depth + 1, visited);
+    }
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  const prioritizedKeys = [
+    "image",
+    "image_url",
+    "imageUrl",
+    "preview",
+    "preview_url",
+    "thumbnail",
+    "thumbnail_url",
+    "cover",
+    "cover_url",
+    "photo",
+    "photos",
+    "images",
+    "gallery",
+    "attachments",
+    "media",
+    "url",
+    "src"
+  ];
+
+  for (const key of prioritizedKeys) {
+    if (!(key in record)) {
+      continue;
+    }
+    collectImageUrlsDeep(record[key], output, depth + 1, visited);
+  }
+
+  for (const entry of Object.values(record)) {
+    collectImageUrlsDeep(entry, output, depth + 1, visited);
+  }
+}
+
+async function fetchListingApiImageCandidate(normalizedId: string, type: string, token: string) {
+  const base = getLztBaseUrl();
+  const detailUrls = Array.from(
+    new Set([
+      `${base}/${normalizedId}`,
+      `${base}/item/${normalizedId}`,
+      `${base}/items/${normalizedId}`,
+      `${base}/market/${normalizedId}`
+    ])
+  );
+  const typeToken = type.trim().toLowerCase();
+
+  for (const detailUrl of detailUrls) {
+    try {
+      const response = await fetch(detailUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json"
+        },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = (await response.json()) as unknown;
+      const extracted = new Set<string>();
+      collectImageUrlsDeep(data, extracted);
+      if (!extracted.size) {
+        continue;
+      }
+
+      const all = Array.from(extracted);
+      const prioritized = typeToken
+        ? [
+            ...all.filter((url) => url.toLowerCase().includes(`type=${typeToken}`)),
+            ...all
+          ]
+        : all;
+
+      const deduped = Array.from(new Set(prioritized));
+      for (const candidateUrl of deduped) {
+        const resolved = await fetchImageCandidate(candidateUrl, {
+          Authorization: `Bearer ${token}`
+        });
+        if (resolved) {
+          return resolved;
+        }
+        const fallbackResolved = await fetchImageCandidate(candidateUrl);
+        if (fallbackResolved) {
+          return fallbackResolved;
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -143,12 +382,30 @@ export async function GET(
           }
         }
       : null;
+  const publicCandidatesWithoutType = [
+    { url: `https://lzt.market/${normalizedId}/image` },
+    { url: `https://lzt.market/market/${normalizedId}/image` },
+    { url: `https://lolz.guru/market/${normalizedId}/image` }
+  ];
+  const apiCandidateWithoutType =
+    token
+      ? {
+          url: `${getLztBaseUrl()}/${normalizedId}/image`,
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      : null;
 
   if (type) {
     candidates.push(...publicCandidates);
     if (apiCandidate) {
       candidates.push(apiCandidate);
     }
+    if (apiCandidateWithoutType) {
+      candidates.push(apiCandidateWithoutType);
+    }
+    candidates.push(...publicCandidatesWithoutType);
   } else {
     if (apiCandidate) {
       candidates.push(apiCandidate);
@@ -163,8 +420,15 @@ export async function GET(
       break;
     }
   }
+  if (!resolved && token) {
+    resolved = await fetchListingApiImageCandidate(normalizedId, type, token);
+  }
   if (!resolved) {
-    return fail("Listing image unavailable", 404);
+    resolved = await fetchListingHtmlImageCandidate(normalizedId, type);
+  }
+  if (!resolved) {
+    const fallbackUrl = `https://lzt.market/market/${normalizedId}/image${query}`;
+    return Response.redirect(fallbackUrl, 302);
   }
 
   return new Response(resolved.buffer, {
