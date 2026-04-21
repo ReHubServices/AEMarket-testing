@@ -172,7 +172,7 @@ export function getListingImage(listing: Pick<MarketListing, "imageUrl" | "title
 
 function toListingImageProxyUrl(
   id: string,
-  type?: "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
+  type?: "skins" | "pickaxes" | "emotes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
 ) {
   const params = new URLSearchParams();
   params.set("v", "20260421");
@@ -221,7 +221,7 @@ function extractMarketImageMeta(value: string) {
   }
 
   const typeRaw = parsed.searchParams.get("type")?.trim().toLowerCase() ?? "";
-  const allowedTypes = new Set(["skins", "pickaxes", "dances", "gliders", "weapons", "agents", "buddies"]);
+  const allowedTypes = new Set(["skins", "pickaxes", "emotes", "dances", "gliders", "weapons", "agents", "buddies"]);
   const type = allowedTypes.has(typeRaw) ? typeRaw : "";
 
   return {
@@ -232,7 +232,7 @@ function extractMarketImageMeta(value: string) {
 
 function toProxyFromMarketImageUrl(
   url: string,
-  preferredType?: "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
+  preferredType?: "skins" | "pickaxes" | "emotes" | "dances" | "gliders" | "weapons" | "agents" | "buddies"
 ) {
   const parsed = extractMarketImageMeta(url);
   if (!parsed) {
@@ -240,7 +240,17 @@ function toProxyFromMarketImageUrl(
   }
   return toListingImageProxyUrl(
     parsed.id,
-    preferredType ?? ((parsed.type as "skins" | "pickaxes" | "dances" | "gliders" | "weapons" | "agents" | "buddies" | "") || undefined)
+    preferredType ??
+      ((parsed.type as
+        | "skins"
+        | "pickaxes"
+        | "emotes"
+        | "dances"
+        | "gliders"
+        | "weapons"
+        | "agents"
+        | "buddies"
+        | "") || undefined)
   );
 }
 
@@ -259,26 +269,20 @@ export function getListingImageWithOptions(
   options: ListingImageOptions = {}
 ) {
   const fortniteLike = options.forceTheme === "fortnite" || isFortniteLikeListing(listing);
-  const normalized = normalizeUrl(listing.imageUrl);
   const byIdImage = marketImageById(listing.id, fortniteLike);
+  if (byIdImage) {
+    return byIdImage;
+  }
+  const normalized = normalizeUrl(listing.imageUrl);
   if (!normalized) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return getPresetListingImage(listing, options);
   }
   const lower = normalized.toLowerCase();
   const blocked = BROKEN_IMAGE_HINTS.some((hint) => lower.includes(hint));
   if (blocked) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return getPresetListingImage(listing, options);
   }
   if (!isLikelyDisplayImage(normalized)) {
-    if (byIdImage) {
-      return byIdImage;
-    }
     return getPresetListingImage(listing, options);
   }
   const proxied = toProxyFromMarketImageUrl(
@@ -315,10 +319,10 @@ export function getListingImageGallery(
   }
   const numericId = String(listing.id ?? "").trim();
   const hasNumericId = /^\d{5,}$/.test(numericId);
-  const orderedTypes: Array<"skins" | "pickaxes" | "dances" | "gliders"> = [
+  const orderedTypes: Array<"skins" | "pickaxes" | "emotes" | "gliders"> = [
     "skins",
     "pickaxes",
-    "dances",
+    "emotes",
     "gliders"
   ];
   if (hasNumericId) {

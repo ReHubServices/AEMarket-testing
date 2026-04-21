@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 const ALLOWED_TYPES = new Set([
   "skins",
   "pickaxes",
+  "emotes",
   "dances",
   "gliders",
   "weapons",
@@ -34,8 +35,13 @@ function getLztBaseUrl() {
   return (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim().replace(/\/+$/, "");
 }
 
+function toSupplierImageType(type: string) {
+  return type === "emotes" ? "dances" : type;
+}
+
 function buildImageQuery(type: string) {
-  return type ? `?type=${encodeURIComponent(type)}` : "";
+  const normalizedType = toSupplierImageType(type);
+  return normalizedType ? `?type=${encodeURIComponent(normalizedType)}` : "";
 }
 
 function renderImageViewerHtml(input: { id: string; query: string; type: string }) {
