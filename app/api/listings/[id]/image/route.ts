@@ -150,6 +150,150 @@ function detectImageContentType(bytes: Uint8Array, headerContentType: string) {
   return "";
 }
 
+type Base64ImageHit = {
+  base64: string;
+  mime: string;
+};
+
+function getMimeFromRecord(record: Record<string, unknown>) {
+  const mimeCandidate = String(
+    record.mime ?? record.content_type ?? record.contentType ?? record.media_type ?? record.mediaType ?? ""
+  )
+    .trim()
+    .toLowerCase();
+  return mimeCandidate.startsWith("image/") ? mimeCandidate : "";
+}
+
+function looksLikeRawBase64(value: string) {
+  const compact = value.replace(/\s+/g, "");
+  if (compact.length < 160) {
+    return false;
+  }
+  if (!/^[a-z0-9+/=]+$/i.test(compact)) {
+    return false;
+  }
+  return (
+    compact.startsWith("ivbor") ||
+    compact.startsWith("/9j/") ||
+    compact.startsWith("r0lgod") ||
+    compact.startsWith("uklgr")
+  );
+}
+
+function extractBase64Image(
+  value: unknown,
+  depth = 0,
+  visited = new Set<unknown>()
+): Base64ImageHit | null {
+  if (depth > 6 || value == null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const dataUriMatch = trimmed.match(/^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i);
+    if (dataUriMatch?.[2]) {
+      return {
+        mime: dataUriMatch[1].toLowerCase(),
+        base64: dataUriMatch[2]
+      };
+    }
+    if (looksLikeRawBase64(trimmed)) {
+      return {
+        mime: "",
+        base64: trimmed
+      };
+    }
+    return null;
+  }
+
+  if (typeof value !== "object") {
+    return null;
+  }
+  if (visited.has(value)) {
+    return null;
+  }
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const hit = extractBase64Image(entry, depth + 1, visited);
+      if (hit) {
+        return hit;
+      }
+    }
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const localMime = getMimeFromRecord(record);
+
+  const directKeys = [
+    "base64",
+    "image_base64",
+    "imageBase64",
+    "img_base64",
+    "imgBase64",
+    "payload",
+    "data",
+    "image",
+    "result"
+  ];
+
+  for (const key of directKeys) {
+    if (!(key in record)) {
+      continue;
+    }
+    const hit = extractBase64Image(record[key], depth + 1, visited);
+    if (hit) {
+      return {
+        base64: hit.base64,
+        mime: hit.mime || localMime
+      };
+    }
+  }
+
+  for (const entry of Object.values(record)) {
+    const hit = extractBase64Image(entry, depth + 1, visited);
+    if (hit) {
+      return {
+        base64: hit.base64,
+        mime: hit.mime || localMime
+      };
+    }
+  }
+
+  return null;
+}
+
+function decodeBase64Image(hit: Base64ImageHit): FetchedImage | null {
+  const normalizedBase64 = hit.base64.replace(/\s+/g, "");
+  if (!normalizedBase64) {
+    return null;
+  }
+  try {
+    const binary = Buffer.from(normalizedBase64, "base64");
+    if (binary.byteLength < 16) {
+      return null;
+    }
+    const bytes = new Uint8Array(binary.buffer, binary.byteOffset, binary.byteLength);
+    const contentType = detectImageContentType(bytes, hit.mime);
+    if (!contentType) {
+      return null;
+    }
+    const buffer = binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength);
+    return {
+      buffer,
+      contentType
+    };
+  } catch {
+    return null;
+  }
+}
+
 function collectLinksDeep(value: unknown, output: Set<string>, depth = 0, visited = new Set<unknown>()) {
   if (depth > 4 || value == null) {
     return;
@@ -267,6 +411,13 @@ async function fetchImageCandidate(
       if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
         try {
           const parsed = JSON.parse(trimmed) as unknown;
+          const base64Hit = extractBase64Image(parsed);
+          if (base64Hit) {
+            const decoded = decodeBase64Image(base64Hit);
+            if (decoded) {
+              return decoded;
+            }
+          }
           const jsonLinks = new Set<string>();
           collectLinksDeep(parsed, jsonLinks);
           for (const link of jsonLinks) {
