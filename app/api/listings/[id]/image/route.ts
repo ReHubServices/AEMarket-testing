@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { fail } from "@/lib/http";
+import { fail, ok } from "@/lib/http";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
 import { getLztAccessToken } from "@/lib/lzt-auth";
 
@@ -207,7 +207,11 @@ async function fetchListingHtmlImageCandidate(normalizedId: string, type: string
       for (const candidateUrl of deduped) {
         const resolved = await fetchImageCandidate(candidateUrl);
         if (resolved) {
-          return resolved;
+          return {
+            ...resolved,
+            sourceUrl: candidateUrl,
+            sourceStage: "html-image"
+          };
         }
       }
     } catch {
@@ -331,11 +335,19 @@ async function fetchListingApiImageCandidate(normalizedId: string, type: string,
           Authorization: `Bearer ${token}`
         });
         if (resolved) {
-          return resolved;
+          return {
+            ...resolved,
+            sourceUrl: candidateUrl,
+            sourceStage: "detail-api-image"
+          };
         }
         const fallbackResolved = await fetchImageCandidate(candidateUrl);
         if (fallbackResolved) {
-          return fallbackResolved;
+          return {
+            ...fallbackResolved,
+            sourceUrl: candidateUrl,
+            sourceStage: "detail-api-image-fallback"
+          };
         }
       }
     } catch {
@@ -369,6 +381,7 @@ export async function GET(
     .trim()
     .toLowerCase();
   const type = typeRaw && ALLOWED_TYPES.has(typeRaw) ? typeRaw : "";
+  const debug = request.nextUrl.searchParams.get("debug") === "1";
 
   const token = await getLztAccessToken();
   const query = type ? `?type=${encodeURIComponent(type)}` : "";
@@ -438,24 +451,51 @@ export async function GET(
   }
 
   let resolved: { buffer: ArrayBuffer; contentType: string } | null = null;
+  let resolvedSourceUrl = "";
+  let resolvedSourceStage = "";
+  const attemptedCandidates: string[] = [];
   for (const candidate of candidates) {
+    attemptedCandidates.push(candidate.url);
     resolved = await fetchImageCandidate(candidate.url, candidate.headers ?? {});
     if (resolved) {
+      resolvedSourceUrl = candidate.url;
+      resolvedSourceStage = "candidate-image";
       break;
     }
   }
   if (!resolved && token) {
-    resolved = await fetchListingApiImageCandidate(normalizedId, type, token);
+    const apiResolved = await fetchListingApiImageCandidate(normalizedId, type, token);
+    if (apiResolved) {
+      resolved = apiResolved;
+      resolvedSourceUrl = apiResolved.sourceUrl;
+      resolvedSourceStage = apiResolved.sourceStage;
+    }
   }
   if (!resolved) {
-    resolved = await fetchListingHtmlImageCandidate(normalizedId, type);
+    const htmlResolved = await fetchListingHtmlImageCandidate(normalizedId, type);
+    if (htmlResolved) {
+      resolved = htmlResolved;
+      resolvedSourceUrl = htmlResolved.sourceUrl;
+      resolvedSourceStage = htmlResolved.sourceStage;
+    }
+  }
+  if (debug) {
+    return ok({
+      listingId: normalizedId,
+      type: type || null,
+      tokenPresent: Boolean(token),
+      attemptedCandidates,
+      resolved: Boolean(resolved),
+      resolvedSourceStage: resolvedSourceStage || null,
+      resolvedSourceUrl: resolvedSourceUrl || null,
+      contentType: resolved?.contentType ?? null
+    });
   }
   if (!resolved) {
     return new Response(NO_IMAGE_SVG, {
       status: 200,
       headers: {
         "Content-Type": "image/svg+xml; charset=utf-8",
-        "Content-Disposition": "inline",
         "Cache-Control": "public, max-age=60, stale-while-revalidate=120"
       }
     });
@@ -465,7 +505,8 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": resolved.contentType,
-      "Content-Disposition": "inline",
+      "X-AE-Image-Source-Stage": resolvedSourceStage || "candidate-image",
+      "X-AE-Image-Source-Url": resolvedSourceUrl || "unknown",
       "Cache-Control": "public, max-age=180, stale-while-revalidate=600"
     }
   });
