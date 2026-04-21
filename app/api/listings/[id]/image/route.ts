@@ -166,6 +166,7 @@ function getMimeFromRecord(record: Record<string, unknown>) {
 
 function looksLikeRawBase64(value: string) {
   const compact = value.replace(/\s+/g, "");
+  const lower = compact.toLowerCase();
   if (compact.length < 160) {
     return false;
   }
@@ -173,10 +174,10 @@ function looksLikeRawBase64(value: string) {
     return false;
   }
   return (
-    compact.startsWith("ivbor") ||
-    compact.startsWith("/9j/") ||
-    compact.startsWith("r0lgod") ||
-    compact.startsWith("uklgr")
+    lower.startsWith("ivbor") ||
+    lower.startsWith("/9j/") ||
+    lower.startsWith("r0lgod") ||
+    lower.startsWith("uklgr")
   );
 }
 
