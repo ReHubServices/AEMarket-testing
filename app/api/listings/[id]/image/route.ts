@@ -566,13 +566,17 @@ export async function GET(
   const type = typeRaw && ALLOWED_TYPES.has(typeRaw) ? typeRaw : "";
   const debug = request.nextUrl.searchParams.get("debug") === "1";
   const raw = request.nextUrl.searchParams.get("raw") === "1";
+  const view = request.nextUrl.searchParams.get("view") === "1";
 
   const token = await getLztAccessToken();
   const query = buildImageQuery(type);
 
   const acceptHeader = (request.headers.get("accept") ?? "").toLowerCase();
   const fetchDest = (request.headers.get("sec-fetch-dest") ?? "").toLowerCase();
-  const isDocumentRequest = fetchDest === "document" || (acceptHeader.includes("text/html") && !raw);
+  const isDocumentRequest =
+    (view && !raw) ||
+    fetchDest === "document" ||
+    (acceptHeader.includes("text/html") && !raw);
   if (!debug && isDocumentRequest) {
     return new Response(renderImageViewerHtml({ id: normalizedId, query, type }), {
       status: 200,
