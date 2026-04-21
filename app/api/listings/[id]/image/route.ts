@@ -74,7 +74,79 @@ function detectImageContentType(bytes: Uint8Array, headerContentType: string) {
   return "";
 }
 
-async function fetchImageCandidate(url: string, headers: Record<string, string> = {}) {
+function collectLinksDeep(value: unknown, output: Set<string>, depth = 0, visited = new Set<unknown>()) {
+  if (depth > 4 || value == null) {
+    return;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) {
+      output.add(trimmed);
+    }
+    return;
+  }
+  if (typeof value !== "object") {
+    return;
+  }
+  if (visited.has(value)) {
+    return;
+  }
+  visited.add(value);
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectLinksDeep(entry, output, depth + 1, visited);
+    }
+    return;
+  }
+  for (const entry of Object.values(value as Record<string, unknown>)) {
+    collectLinksDeep(entry, output, depth + 1, visited);
+  }
+}
+
+function normalizePossibleImageLink(raw: string, baseUrl: string) {
+  const value = raw.trim().replace(/\\\//g, "/").replace(/&amp;/g, "&");
+  if (!value) {
+    return "";
+  }
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    if (value.startsWith("//")) {
+      return `https:${value}`;
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i.test(value)) {
+      return `https://${value}`;
+    }
+    return "";
+  }
+}
+
+function isProbablyImageEndpoint(url: string) {
+  const normalized = url.toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (/\.(png|jpe?g|webp|gif|bmp|avif|svg)(\?|#|$)/i.test(normalized)) {
+    return true;
+  }
+  if (
+    normalized.includes("/image") ||
+    normalized.includes("nztcdn.com/files/") ||
+    normalized.includes("lztcdn.com/")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+async function fetchImageCandidate(
+  url: string,
+  headers: Record<string, string> = {},
+  depth = 0
+) {
+  if (depth > 3) {
+    return null;
+  }
   try {
     const response = await fetch(url, {
       headers: {
@@ -84,6 +156,7 @@ async function fetchImageCandidate(url: string, headers: Record<string, string> 
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         ...headers
       },
+      redirect: "follow",
       cache: "no-store"
     });
     if (!response.ok) {
@@ -96,6 +169,49 @@ async function fetchImageCandidate(url: string, headers: Record<string, string> 
     }
     const contentType = detectImageContentType(new Uint8Array(buffer), contentTypeHeader);
     if (!contentType) {
+      if (depth >= 3) {
+        return null;
+      }
+
+      const text = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(buffer));
+      if (!text.trim()) {
+        return null;
+      }
+
+      const candidates = new Set<string>();
+      const inlineLinks = text.match(/(?:https?:\/\/|\/\/|\/)[^\s"'<>\\]+/gi) ?? [];
+      for (const link of inlineLinks) {
+        const normalized = normalizePossibleImageLink(link, url);
+        if (normalized && isProbablyImageEndpoint(normalized)) {
+          candidates.add(normalized);
+        }
+      }
+
+      const trimmed = text.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed) as unknown;
+          const jsonLinks = new Set<string>();
+          collectLinksDeep(parsed, jsonLinks);
+          for (const link of jsonLinks) {
+            const normalized = normalizePossibleImageLink(link, url);
+            if (normalized && isProbablyImageEndpoint(normalized)) {
+              candidates.add(normalized);
+            }
+          }
+        } catch {
+        }
+      }
+
+      for (const candidateUrl of candidates) {
+        if (candidateUrl === url) {
+          continue;
+        }
+        const resolved = await fetchImageCandidate(candidateUrl, headers, depth + 1);
+        if (resolved) {
+          return resolved;
+        }
+      }
       return null;
     }
     return {
