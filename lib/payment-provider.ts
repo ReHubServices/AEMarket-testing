@@ -238,80 +238,7 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
       }
     : shared;
   const sharedWithoutWebhook = { ...shared };
-  const configuredProductId = firstNonEmpty([
-    readEnvCaseInsensitive("VENPAYR_TOPUP_PRODUCT_ID"),
-    readEnvCaseInsensitive("VENPAYR_PRODUCT_ID"),
-    readEnvCaseInsensitive("CARD_SETUP_PRODUCT_ID")
-  ]);
-
-  const attempts = [];
-
-  if (configuredProductId) {
-    attempts.push({
-      endpointSuffixes: [
-        "/api/v1/checkout/init/product",
-        "/api/checkout/init/product",
-        "/v1/checkout/init/product",
-        "/checkout/init/product"
-      ],
-      body: {
-        product_id: configuredProductId,
-        quantity: 1,
-        ...sharedWithWebhook
-      }
-    });
-    attempts.push({
-      endpointSuffixes: [
-        "/api/v1/checkout/init/product",
-        "/api/checkout/init/product",
-        "/v1/checkout/init/product",
-        "/checkout/init/product"
-      ],
-      body: {
-        product_id: configuredProductId,
-        quantity: 1,
-        ...sharedWithoutWebhook
-      }
-    });
-  }
-
-  attempts.push(
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init/product",
-        "/api/checkout/init/product",
-        "/v1/checkout/init/product",
-        "/checkout/init/product"
-      ],
-      body: {
-        product: {
-          name: itemName,
-          price: amount,
-          currency: payload.currency,
-          external_id: payload.orderId
-        },
-        quantity: 1,
-        ...sharedWithWebhook
-      }
-    },
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init/product",
-        "/api/checkout/init/product",
-        "/v1/checkout/init/product",
-        "/checkout/init/product"
-      ],
-      body: {
-        product: {
-          name: itemName,
-          price: amount,
-          currency: payload.currency,
-          external_id: payload.orderId
-        },
-        quantity: 1,
-        ...sharedWithoutWebhook
-      }
-    },
+  const attempts = [
     {
       endpointSuffixes: [
         "/api/v1/checkout/init",
@@ -383,10 +310,42 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
             quantity: 1
           }
         ],
+        ...sharedWithoutWebhook
+      }
+    },
+    {
+      endpointSuffixes: [
+        "/api/v1/checkout/init",
+        "/api/checkout/init",
+        "/v1/checkout/init",
+        "/checkout/init"
+      ],
+      body: {
+        item: {
+          name: itemName,
+          price: amount,
+          quantity: 1
+        },
+        ...sharedWithWebhook
+      }
+    },
+    {
+      endpointSuffixes: [
+        "/api/v1/checkout/init",
+        "/api/checkout/init",
+        "/v1/checkout/init",
+        "/checkout/init"
+      ],
+      body: {
+        item: {
+          name: itemName,
+          price: amount,
+          quantity: 1
+        },
         ...sharedWithoutWebhook
       }
     }
-  );
+  ];
 
   return attempts as ReadonlyArray<{
     endpointSuffixes: string[];
