@@ -41,7 +41,8 @@ export function AddFundsPanel() {
       window.location.assign(payload.checkoutUrl);
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "Top-up failed";
-      setError(message);
+      const normalized = message.replace(/(Payment API error)(\s*\1)+/gi, "Payment API error").trim();
+      setError(normalized);
       setLoading(false);
       router.refresh();
     }
@@ -97,9 +98,6 @@ export function AddFundsPanel() {
           <p className="font-medium text-zinc-100">Payment instructions</p>
           <p className="mt-1">
             Keep this site open until payment is complete and you are redirected back.
-          </p>
-          <p className="mt-1">
-            After you return, the system verifies the payment and credits your wallet automatically.
           </p>
         </div>
       </form>

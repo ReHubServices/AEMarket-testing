@@ -56,6 +56,8 @@ function readEnvCaseInsensitive(name: string) {
 function getApiKey() {
   const raw = firstNonEmpty([
     readEnvCaseInsensitive("VENPAYR_API_KEY"),
+    readEnvCaseInsensitive("VENPAYR_STORE_API_KEY"),
+    readEnvCaseInsensitive("VENPAYR_LIVE_API_KEY"),
     readEnvCaseInsensitive("VENPAYR_API_TOKEN"),
     readEnvCaseInsensitive("VENPAYR_API_SECRET"),
     readEnvCaseInsensitive("VENPAYR_SECRET_KEY"),
@@ -69,7 +71,9 @@ function getApiKey() {
     return "";
   }
   const withoutQuotes = raw.replace(/^['"]|['"]$/g, "");
-  return withoutQuotes.replace(/^bearer\s+/i, "").trim();
+  const withoutPrefix = withoutQuotes.replace(/^bearer\s+/i, "").trim();
+  const withoutZeroWidth = withoutPrefix.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  return withoutZeroWidth.replace(/\s+/g, "");
 }
 
 function getWebhookSecret() {
@@ -100,12 +104,122 @@ function getBaseUrlCandidates() {
       [
         configured,
         "https://dash.venpayr.com",
+        "https://api.venpayr.com",
         "https://dashboard.card-setup.com"
       ]
         .map((value) => value.trim().replace(/\/+$/, ""))
         .filter(Boolean)
     )
   );
+}
+
+function toRecord(value: unknown) {
+  if (value && typeof value === "object") {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function getBodyErrorMessage(raw: Record<string, unknown>) {
+  const data = toRecord(raw.data);
+  return (
+    toStringValue(raw.error) ??
+    toStringValue(raw.message) ??
+    toStringValue(raw.detail) ??
+    toStringValue(raw.details) ??
+    toStringValue(data?.error) ??
+    toStringValue(data?.message) ??
+    null
+  );
+}
+
+function buildCheckoutAttempts(payload: CheckoutRequest) {
+  const email = resolveCustomerEmail(payload);
+  const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
+  const amount = Number(payload.amount.toFixed(2));
+  const customer = {
+    email,
+    first_name: payload.username.slice(0, 64),
+    country: resolveCustomerCountry()
+  };
+  const metadata = {
+    transactionId: payload.transactionId,
+    transaction_id: payload.transactionId,
+    orderId: payload.orderId,
+    order_id: payload.orderId,
+    external_order_id: payload.orderId,
+    username: payload.username
+  };
+  const shared = {
+    customer,
+    currency: payload.currency,
+    return_url: payload.returnUrl,
+    cancel_url: payload.returnUrl,
+    webhook_url: payload.webhookUrl,
+    metadata
+  };
+
+  return [
+    {
+      endpointSuffix: "/api/v1/checkout/init/product",
+      body: {
+        product: {
+          name: itemName,
+          price: amount,
+          currency: payload.currency,
+          external_id: payload.orderId
+        },
+        quantity: 1,
+        ...shared
+      }
+    },
+    {
+      endpointSuffix: "/api/v1/checkout/init",
+      body: {
+        items: [
+          {
+            name: itemName,
+            price: amount,
+            quantity: 1
+          }
+        ],
+        ...shared
+      }
+    },
+    {
+      endpointSuffix: "/api/v1/checkout/init",
+      body: {
+        items: [
+          {
+            name: itemName,
+            price: amount,
+            unit_price: amount,
+            quantity: 1
+          }
+        ],
+        ...shared
+      }
+    }
+  ] as const;
+}
+
+async function parseProviderResponseBody(response: Response) {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (contentType.includes("application/json")) {
+    const parsed = (await response.json().catch(() => null)) as unknown;
+    if (parsed && typeof parsed === "object") {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  }
+  const text = await response.text().catch(() => "");
+  const normalized = text.trim();
+  if (!normalized) {
+    return {};
+  }
+  return {
+    message: normalized.slice(0, 500)
+  };
 }
 
 function toStringValue(value: unknown) {
@@ -169,36 +283,6 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     throw new Error("VENPAYR_NOT_CONFIGURED");
   }
 
-  const email = resolveCustomerEmail(payload);
-  const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
-  const requestBody = {
-    items: [
-      {
-        name: itemName,
-        price: payload.amount,
-        unit_price: payload.amount,
-        quantity: 1
-      }
-    ],
-    customer: {
-      email,
-      first_name: payload.username.slice(0, 64),
-      country: resolveCustomerCountry()
-    },
-    currency: payload.currency,
-    return_url: payload.returnUrl,
-    cancel_url: payload.returnUrl,
-    webhook_url: payload.webhookUrl,
-    metadata: {
-      transactionId: payload.transactionId,
-      transaction_id: payload.transactionId,
-      orderId: payload.orderId,
-      order_id: payload.orderId,
-      external_order_id: payload.orderId,
-      username: payload.username
-    }
-  };
-
   const authHeaderVariants: Array<Record<string, string>> = [
     {
       Authorization: `Bearer ${apiKey}`,
@@ -225,8 +309,11 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   let lastNetworkError = "";
   let lastApiError = "";
 
-  const endpoints = getBaseUrlCandidates().map((base) => `${base}/api/v1/checkout/init`);
-  for (const endpoint of endpoints) {
+  const attempts = buildCheckoutAttempts(payload);
+  const endpoints = getBaseUrlCandidates();
+  for (const base of endpoints) {
+    for (const attempt of attempts) {
+      const endpoint = `${base}${attempt.endpointSuffix}`;
     for (const authHeaders of authHeaderVariants) {
       try {
         response = await fetch(endpoint, {
@@ -236,7 +323,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
             "Content-Type": "application/json",
             Accept: "application/json"
           },
-          body: JSON.stringify(requestBody)
+          body: JSON.stringify(attempt.body)
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Network error";
@@ -244,21 +331,22 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
         continue;
       }
 
-      raw = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      raw = await parseProviderResponseBody(response);
       if (response.ok) {
         break;
       }
 
-      const message =
-        toStringValue(raw.error) ??
-        toStringValue(raw.message) ??
-        `Payment session creation failed (${response.status})`;
+      const message = getBodyErrorMessage(raw) ?? `Payment session creation failed (${response.status})`;
       lastApiError = `${response.status}: ${message}`;
 
       if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
         break;
       }
     }
+    if (response?.ok) {
+      break;
+    }
+  }
     if (response?.ok) {
       break;
     }
@@ -277,18 +365,23 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment session creation failed (${response.status})`}`);
   }
 
-  if (raw.success === false) {
+  const root = toRecord(raw.data) ?? raw;
+  if (raw.success === false || root.success === false) {
     const message =
-      toStringValue(raw.error) ?? toStringValue(raw.message) ?? "Payment session creation failed";
+      getBodyErrorMessage(raw) ?? "Payment session creation failed";
     throw new Error(message);
   }
 
   const payRef =
+    toStringValue(root.pay_ref) ??
+    toStringValue(root.payRef) ??
     toStringValue(raw.pay_ref) ??
     toStringValue(raw.payRef) ??
     null;
 
   const invoiceId =
+    toStringValue(root.invoice_id) ??
+    toStringValue(root.invoiceId) ??
     toStringValue(raw.invoice_id) ??
     toStringValue(raw.invoiceId) ??
     null;
@@ -296,6 +389,8 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const providerPaymentId =
     payRef ??
     invoiceId ??
+    toStringValue(root.paymentId) ??
+    toStringValue(root.id) ??
     toStringValue(raw.paymentId) ??
     toStringValue(raw.id) ??
     "";
@@ -308,9 +403,13 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
       : null;
 
   const checkoutUrl =
+    toStringValue(root.checkout_url) ??
+    toStringValue(root.checkoutUrl) ??
+    toStringValue(root.url) ??
     toStringValue(raw.checkout_url) ??
     toStringValue(raw.checkoutUrl) ??
     toStringValue(raw.url) ??
+    (payRef ? `https://buyerstore.venpayr.com/invoice/${encodeURIComponent(payRef)}` : null) ??
     "";
 
   if (!providerPaymentId || !checkoutUrl) {
