@@ -174,6 +174,38 @@ function parsePayRefFromCheckoutUrl(value: string | null) {
   return fromQuery ? decodeURIComponent(fromQuery) : null;
 }
 
+function hasCheckoutPayload(raw: Record<string, unknown>) {
+  const root = toRecord(raw.data) ?? raw;
+  const payRef =
+    toStringValue(root.pay_ref) ??
+    toStringValue(root.payRef) ??
+    toStringFromPath(root, ["payment", "pay_ref"]) ??
+    toStringFromPath(root, ["payment", "payRef"]) ??
+    toStringValue(raw.pay_ref) ??
+    toStringValue(raw.payRef) ??
+    null;
+  const invoiceId =
+    toStringValue(root.invoice_id) ??
+    toStringValue(root.invoiceId) ??
+    toStringFromPath(root, ["payment", "invoice_id"]) ??
+    toStringFromPath(root, ["payment", "invoiceId"]) ??
+    toStringValue(raw.invoice_id) ??
+    toStringValue(raw.invoiceId) ??
+    null;
+  const checkoutUrl =
+    toStringValue(root.checkout_url) ??
+    toStringValue(root.checkoutUrl) ??
+    toStringFromPath(root, ["checkout", "url"]) ??
+    toStringFromPath(root, ["payment", "checkout_url"]) ??
+    toStringFromPath(root, ["payment", "checkoutUrl"]) ??
+    toStringValue(root.url) ??
+    toStringValue(raw.checkout_url) ??
+    toStringValue(raw.checkoutUrl) ??
+    toStringValue(raw.url) ??
+    null;
+  return Boolean((payRef || invoiceId) && checkoutUrl);
+}
+
 function buildCheckoutAttempts(payload: CheckoutRequest) {
   const email = resolveCustomerEmail(payload);
   const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
@@ -379,6 +411,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   let raw: Record<string, unknown> = {};
   let lastNetworkError = "";
   let lastApiError = "";
+  let receivedUsableResponse = false;
 
   const attempts = buildCheckoutAttempts(payload);
   const endpoints = getBaseUrlCandidates();
@@ -405,7 +438,12 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
 
           raw = await parseProviderResponseBody(response);
           if (response.ok) {
-            break;
+            if (hasCheckoutPayload(raw)) {
+              receivedUsableResponse = true;
+              break;
+            }
+            lastApiError = `422: Non-checkout response from ${endpoint}`;
+            continue;
           }
 
           const message = getBodyErrorMessage(raw) ?? `Payment session creation failed (${response.status})`;
@@ -416,14 +454,23 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
           }
         }
         if (response?.ok) {
+          if (!receivedUsableResponse) {
+            continue;
+          }
           break;
         }
       }
       if (response?.ok) {
+        if (!receivedUsableResponse) {
+          continue;
+        }
         break;
       }
     }
     if (response?.ok) {
+      if (!receivedUsableResponse) {
+        continue;
+      }
       break;
     }
   }
@@ -439,6 +486,9 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
       );
     }
     throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment session creation failed (${response.status})`}`);
+  }
+  if (!receivedUsableResponse) {
+    throw new Error(`VENPAYR_API_ERROR: ${lastApiError || "422: Invalid payment provider response"}`);
   }
 
   const root = toRecord(raw.data) ?? raw;
@@ -509,7 +559,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     (payRefFromUrl && payRefFromUrl !== resolvedProviderPaymentId ? payRefFromUrl : null);
 
   if (!resolvedProviderPaymentId || !checkoutUrl) {
-    throw new Error("VENPAYR_API_ERROR: Invalid payment provider response");
+    throw new Error("VENPAYR_API_ERROR: 422 Invalid payment provider response");
   }
 
   return {
