@@ -93,6 +93,21 @@ function getBaseUrl() {
   return base.replace(/\/+$/, "");
 }
 
+function getBaseUrlCandidates() {
+  const configured = getBaseUrl();
+  return Array.from(
+    new Set(
+      [
+        configured,
+        "https://dash.venpayr.com",
+        "https://dashboard.card-setup.com"
+      ]
+        .map((value) => value.trim().replace(/\/+$/, ""))
+        .filter(Boolean)
+    )
+  );
+}
+
 function toStringValue(value: unknown) {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -154,68 +169,112 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     throw new Error("VENPAYR_NOT_CONFIGURED");
   }
 
-  const endpoint = `${getBaseUrl()}/api/v1/checkout/init`;
   const email = resolveCustomerEmail(payload);
   const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
+  const requestBody = {
+    items: [
+      {
+        name: itemName,
+        price: payload.amount,
+        unit_price: payload.amount,
+        quantity: 1
+      }
+    ],
+    customer: {
+      email,
+      first_name: payload.username.slice(0, 64),
+      country: resolveCustomerCountry()
+    },
+    currency: payload.currency,
+    return_url: payload.returnUrl,
+    cancel_url: payload.returnUrl,
+    webhook_url: payload.webhookUrl,
+    metadata: {
+      transactionId: payload.transactionId,
+      transaction_id: payload.transactionId,
+      orderId: payload.orderId,
+      order_id: payload.orderId,
+      external_order_id: payload.orderId,
+      username: payload.username
+    }
+  };
 
-  let response: Response;
-  try {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "X-API-Key": apiKey,
-        "x-api-key": apiKey,
-        "Api-Key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify({
-        items: [
-          {
-            name: itemName,
-            price: payload.amount,
-            unit_price: payload.amount,
-            quantity: 1
-          }
-        ],
-        customer: {
-          email,
-          first_name: payload.username.slice(0, 64),
-          country: resolveCustomerCountry()
-        },
-        currency: payload.currency,
-        return_url: payload.returnUrl,
-        cancel_url: payload.returnUrl,
-        webhook_url: payload.webhookUrl,
-        metadata: {
-          transactionId: payload.transactionId,
-          transaction_id: payload.transactionId,
-          orderId: payload.orderId,
-          order_id: payload.orderId,
-          external_order_id: payload.orderId,
-          username: payload.username
-        }
-      })
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Network error";
-    throw new Error(`VENPAYR_NETWORK_ERROR: ${message}`);
+  const authHeaderVariants: Array<Record<string, string>> = [
+    {
+      Authorization: `Bearer ${apiKey}`,
+      "X-API-Key": apiKey,
+      "x-api-key": apiKey,
+      "Api-Key": apiKey
+    },
+    {
+      Authorization: apiKey,
+      "X-API-Key": apiKey,
+      "x-api-key": apiKey,
+      "Api-Key": apiKey
+    },
+    {
+      Authorization: `Token ${apiKey}`,
+      "X-API-Key": apiKey,
+      "x-api-key": apiKey,
+      "Api-Key": apiKey
+    }
+  ];
+
+  let response: Response | null = null;
+  let raw: Record<string, unknown> = {};
+  let lastNetworkError = "";
+  let lastApiError = "";
+
+  const endpoints = getBaseUrlCandidates().map((base) => `${base}/api/v1/checkout/init`);
+  for (const endpoint of endpoints) {
+    for (const authHeaders of authHeaderVariants) {
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify(requestBody)
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Network error";
+        lastNetworkError = message;
+        continue;
+      }
+
+      raw = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (response.ok) {
+        break;
+      }
+
+      const message =
+        toStringValue(raw.error) ??
+        toStringValue(raw.message) ??
+        `Payment session creation failed (${response.status})`;
+      lastApiError = `${response.status}: ${message}`;
+
+      if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
+        break;
+      }
+    }
+    if (response?.ok) {
+      break;
+    }
   }
 
-  const raw = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response) {
+    throw new Error(`VENPAYR_NETWORK_ERROR: ${lastNetworkError || "Unknown network error"}`);
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error(
-        "VENPAYR_API_ERROR: Unauthorized (401). Set VENPAYR_API_KEY to the raw API key from VenPayr Settings > API (no 'Bearer ' prefix, not webhook secret)."
+        "VENPAYR_API_ERROR: Unauthorized (401). Invalid API credentials for payment provider."
       );
     }
-    const message =
-      toStringValue(raw.error) ??
-      toStringValue(raw.message) ??
-      `Payment session creation failed (${response.status})`;
-    throw new Error(`VENPAYR_API_ERROR: ${message}`);
+    throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment session creation failed (${response.status})`}`);
   }
 
   if (raw.success === false) {

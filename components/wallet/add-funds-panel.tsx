@@ -93,6 +93,15 @@ export function AddFundsPanel() {
         <Button className="w-full" disabled={loading}>
           {loading ? "Redirecting..." : `Continue with $${Number.isFinite(numericAmount) ? numericAmount.toFixed(2) : "0.00"}`}
         </Button>
+        <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-xs text-zinc-300 sm:text-sm">
+          <p className="font-medium text-zinc-100">Payment instructions</p>
+          <p className="mt-1">
+            Keep this site open until payment is complete and you are redirected back.
+          </p>
+          <p className="mt-1">
+            After you return, the system verifies the payment and credits your wallet automatically.
+          </p>
+        </div>
       </form>
     </div>
   );

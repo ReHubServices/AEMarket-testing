@@ -1713,7 +1713,7 @@ export function MarketSearch({
             )}
             {viewer && (
               <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-                <div className="inline-flex h-12 w-full min-w-[180px] items-center justify-center gap-2 rounded-xl border border-white/15 bg-black/35 px-4 text-sm text-zinc-200 sm:w-auto">
+                <div className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-black/35 px-4 text-sm text-zinc-200 sm:w-auto sm:min-w-[180px]">
                   <Wallet size={16} />
                   Balance {formatPrice(viewer.balance, "USD")}
                 </div>
