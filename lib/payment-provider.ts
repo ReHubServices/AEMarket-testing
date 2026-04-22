@@ -27,11 +27,17 @@ export type WebhookPaymentData = {
 };
 
 function getApiKey() {
-  return (process.env.VENPAYR_API_KEY ?? "").trim();
+  const raw = (process.env.VENPAYR_API_KEY ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  const withoutQuotes = raw.replace(/^['"]|['"]$/g, "");
+  return withoutQuotes.replace(/^bearer\s+/i, "").trim();
 }
 
 function getWebhookSecret() {
-  const explicitSecret = (process.env.VENPAYR_WEBHOOK_SECRET ?? "").trim();
+  const explicitSecretRaw = (process.env.VENPAYR_WEBHOOK_SECRET ?? "").trim();
+  const explicitSecret = explicitSecretRaw.replace(/^['"]|['"]$/g, "").trim();
   if (explicitSecret) {
     return explicitSecret;
   }
@@ -153,6 +159,11 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const raw = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(
+        "VENPAYR_API_ERROR: Unauthorized (401). Set VENPAYR_API_KEY to the raw API key from VenPayr Settings > API (no 'Bearer ' prefix, not webhook secret)."
+      );
+    }
     const message =
       toStringValue(raw.error) ??
       toStringValue(raw.message) ??
