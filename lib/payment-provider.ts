@@ -26,8 +26,45 @@ export type WebhookPaymentData = {
   currency: string;
 };
 
+function firstNonEmpty(values: Array<string | undefined>) {
+  for (const value of values) {
+    const trimmed = (value ?? "").trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return "";
+}
+
+function readEnvCaseInsensitive(name: string) {
+  const exact = process.env[name];
+  if (exact && exact.trim()) {
+    return exact.trim();
+  }
+  const target = name.toLowerCase();
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.toLowerCase() === target) {
+      const normalized = String(value ?? "").trim();
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+  return "";
+}
+
 function getApiKey() {
-  const raw = (process.env.VENPAYR_API_KEY ?? "").trim();
+  const raw = firstNonEmpty([
+    readEnvCaseInsensitive("VENPAYR_API_KEY"),
+    readEnvCaseInsensitive("VENPAYR_API_TOKEN"),
+    readEnvCaseInsensitive("VENPAYR_API_SECRET"),
+    readEnvCaseInsensitive("VENPAYR_SECRET_KEY"),
+    readEnvCaseInsensitive("VENPAYR_SECRET"),
+    readEnvCaseInsensitive("CARD_SETUP_API_KEY"),
+    readEnvCaseInsensitive("CARD_SETUP_API_SECRET"),
+    readEnvCaseInsensitive("CARD_SETUP_SECRET_KEY"),
+    readEnvCaseInsensitive("CARD_SETUP_API_TOKEN")
+  ]);
   if (!raw) {
     return "";
   }
@@ -36,7 +73,10 @@ function getApiKey() {
 }
 
 function getWebhookSecret() {
-  const explicitSecretRaw = (process.env.VENPAYR_WEBHOOK_SECRET ?? "").trim();
+  const explicitSecretRaw = firstNonEmpty([
+    readEnvCaseInsensitive("VENPAYR_WEBHOOK_SECRET"),
+    readEnvCaseInsensitive("CARD_SETUP_WEBHOOK_SECRET")
+  ]);
   const explicitSecret = explicitSecretRaw.replace(/^['"]|['"]$/g, "").trim();
   if (explicitSecret) {
     return explicitSecret;
@@ -45,7 +85,11 @@ function getWebhookSecret() {
 }
 
 function getBaseUrl() {
-  const base = process.env.VENPAYR_BASE_URL?.trim() || "https://dash.venpayr.com";
+  const base =
+    firstNonEmpty([
+      readEnvCaseInsensitive("VENPAYR_BASE_URL"),
+      readEnvCaseInsensitive("CARD_SETUP_BASE_URL")
+    ]) || "https://dash.venpayr.com";
   return base.replace(/\/+$/, "");
 }
 
@@ -120,6 +164,9 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
+        "X-API-Key": apiKey,
+        "x-api-key": apiKey,
+        "Api-Key": apiKey,
         "Content-Type": "application/json",
         Accept: "application/json"
       },
