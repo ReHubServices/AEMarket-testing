@@ -9,6 +9,18 @@ import { validateMutationRequest } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
+function extractApiStatusCode(message: string) {
+  const prefixed = message.match(/VENPAYR_API_ERROR:\s*(\d{3})/i)?.[1];
+  if (prefixed) {
+    return prefixed;
+  }
+  const paren = message.match(/\((\d{3})\)/)?.[1];
+  if (paren) {
+    return paren;
+  }
+  return "000";
+}
+
 export async function POST(request: NextRequest) {
   const security = validateMutationRequest(request, { requireJson: true });
   if (!security.ok) {
@@ -89,7 +101,8 @@ export async function POST(request: NextRequest) {
         return fail("Payment provider network error. Check base URL and deployment connectivity.", 502);
       }
       if (message.includes("VENPAYR_API_ERROR:")) {
-        return fail("Payment API error", 502);
+        const code = extractApiStatusCode(message);
+        return fail(`Payment API error (P${code})`, 502);
       }
       return fail("Unable to initialize wallet checkout", 502);
     }

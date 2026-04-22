@@ -122,7 +122,13 @@ function toRecord(value: unknown) {
 
 function getBodyErrorMessage(raw: Record<string, unknown>) {
   const data = toRecord(raw.data);
+  const rootErrors = Array.isArray(raw.errors) ? raw.errors : [];
+  const dataErrors = data && Array.isArray(data.errors) ? data.errors : [];
+  const firstRootError = rootErrors.length > 0 ? toStringValue(rootErrors[0]) : null;
+  const firstDataError = dataErrors.length > 0 ? toStringValue(dataErrors[0]) : null;
   return (
+    firstRootError ??
+    firstDataError ??
     toStringValue(raw.error) ??
     toStringValue(raw.message) ??
     toStringValue(raw.detail) ??
@@ -131,6 +137,29 @@ function getBodyErrorMessage(raw: Record<string, unknown>) {
     toStringValue(data?.message) ??
     null
   );
+}
+
+function toStringFromPath(value: unknown, path: string[]) {
+  let current: unknown = value;
+  for (const key of path) {
+    if (!current || typeof current !== "object") {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return toStringValue(current);
+}
+
+function parsePayRefFromCheckoutUrl(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const fromPath = value.match(/\/invoice\/([A-Za-z0-9_-]+)/i)?.[1] ?? null;
+  if (fromPath) {
+    return fromPath;
+  }
+  const fromQuery = value.match(/[?&](?:pay_ref|payRef)=([^&]+)/i)?.[1] ?? null;
+  return fromQuery ? decodeURIComponent(fromQuery) : null;
 }
 
 function buildCheckoutAttempts(payload: CheckoutRequest) {
@@ -375,6 +404,10 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const payRef =
     toStringValue(root.pay_ref) ??
     toStringValue(root.payRef) ??
+    toStringFromPath(root, ["payment", "pay_ref"]) ??
+    toStringFromPath(root, ["payment", "payRef"]) ??
+    toStringFromPath(raw, ["payment", "pay_ref"]) ??
+    toStringFromPath(raw, ["payment", "payRef"]) ??
     toStringValue(raw.pay_ref) ??
     toStringValue(raw.payRef) ??
     null;
@@ -382,6 +415,10 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const invoiceId =
     toStringValue(root.invoice_id) ??
     toStringValue(root.invoiceId) ??
+    toStringFromPath(root, ["payment", "invoice_id"]) ??
+    toStringFromPath(root, ["payment", "invoiceId"]) ??
+    toStringFromPath(raw, ["payment", "invoice_id"]) ??
+    toStringFromPath(raw, ["payment", "invoiceId"]) ??
     toStringValue(raw.invoice_id) ??
     toStringValue(raw.invoiceId) ??
     null;
@@ -405,6 +442,12 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const checkoutUrl =
     toStringValue(root.checkout_url) ??
     toStringValue(root.checkoutUrl) ??
+    toStringFromPath(root, ["checkout", "url"]) ??
+    toStringFromPath(raw, ["checkout", "url"]) ??
+    toStringFromPath(root, ["payment", "checkout_url"]) ??
+    toStringFromPath(root, ["payment", "checkoutUrl"]) ??
+    toStringFromPath(raw, ["payment", "checkout_url"]) ??
+    toStringFromPath(raw, ["payment", "checkoutUrl"]) ??
     toStringValue(root.url) ??
     toStringValue(raw.checkout_url) ??
     toStringValue(raw.checkoutUrl) ??
@@ -412,13 +455,19 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     (payRef ? `https://buyerstore.venpayr.com/invoice/${encodeURIComponent(payRef)}` : null) ??
     "";
 
-  if (!providerPaymentId || !checkoutUrl) {
+  const payRefFromUrl = parsePayRefFromCheckoutUrl(checkoutUrl);
+  const resolvedProviderPaymentId = providerPaymentId || payRefFromUrl || "";
+  const resolvedAltPaymentId =
+    providerAltPaymentId ||
+    (payRefFromUrl && payRefFromUrl !== resolvedProviderPaymentId ? payRefFromUrl : null);
+
+  if (!resolvedProviderPaymentId || !checkoutUrl) {
     throw new Error("Invalid payment provider response");
   }
 
   return {
-    providerPaymentId,
-    providerAltPaymentId,
+    providerPaymentId: resolvedProviderPaymentId,
+    providerAltPaymentId: resolvedAltPaymentId,
     checkoutUrl
   };
 }
