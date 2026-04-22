@@ -213,26 +213,69 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
   const customer = {
     email,
     first_name: payload.username.slice(0, 64),
+    last_name: "Customer",
     country: resolveCustomerCountry()
   };
   const metadata = {
-    transactionId: payload.transactionId,
-    transaction_id: payload.transactionId,
-    orderId: payload.orderId,
-    order_id: payload.orderId,
-    external_order_id: payload.orderId,
-    username: payload.username
+    transactionId: String(payload.transactionId),
+    transaction_id: String(payload.transactionId),
+    orderId: String(payload.orderId),
+    order_id: String(payload.orderId),
+    external_order_id: String(payload.orderId),
+    username: String(payload.username)
   };
   const shared = {
     customer,
     currency: payload.currency,
     return_url: payload.returnUrl,
     cancel_url: payload.returnUrl,
-    webhook_url: payload.webhookUrl,
     metadata
   };
+  const sharedWithWebhook = payload.webhookUrl
+    ? {
+        ...shared,
+        webhook_url: payload.webhookUrl
+      }
+    : shared;
+  const sharedWithoutWebhook = { ...shared };
+  const configuredProductId = firstNonEmpty([
+    readEnvCaseInsensitive("VENPAYR_TOPUP_PRODUCT_ID"),
+    readEnvCaseInsensitive("VENPAYR_PRODUCT_ID"),
+    readEnvCaseInsensitive("CARD_SETUP_PRODUCT_ID")
+  ]);
 
-  return [
+  const attempts = [];
+
+  if (configuredProductId) {
+    attempts.push({
+      endpointSuffixes: [
+        "/api/v1/checkout/init/product",
+        "/api/checkout/init/product",
+        "/v1/checkout/init/product",
+        "/checkout/init/product"
+      ],
+      body: {
+        product_id: configuredProductId,
+        quantity: 1,
+        ...sharedWithWebhook
+      }
+    });
+    attempts.push({
+      endpointSuffixes: [
+        "/api/v1/checkout/init/product",
+        "/api/checkout/init/product",
+        "/v1/checkout/init/product",
+        "/checkout/init/product"
+      ],
+      body: {
+        product_id: configuredProductId,
+        quantity: 1,
+        ...sharedWithoutWebhook
+      }
+    });
+  }
+
+  attempts.push(
     {
       endpointSuffixes: [
         "/api/v1/checkout/init/product",
@@ -248,7 +291,25 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
           external_id: payload.orderId
         },
         quantity: 1,
-        ...shared
+        ...sharedWithWebhook
+      }
+    },
+    {
+      endpointSuffixes: [
+        "/api/v1/checkout/init/product",
+        "/api/checkout/init/product",
+        "/v1/checkout/init/product",
+        "/checkout/init/product"
+      ],
+      body: {
+        product: {
+          name: itemName,
+          price: amount,
+          currency: payload.currency,
+          external_id: payload.orderId
+        },
+        quantity: 1,
+        ...sharedWithoutWebhook
       }
     },
     {
@@ -266,7 +327,25 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
             quantity: 1
           }
         ],
-        ...shared
+        ...sharedWithWebhook
+      }
+    },
+    {
+      endpointSuffixes: [
+        "/api/v1/checkout/init",
+        "/api/checkout/init",
+        "/v1/checkout/init",
+        "/checkout/init"
+      ],
+      body: {
+        items: [
+          {
+            name: itemName,
+            price: amount,
+            quantity: 1
+          }
+        ],
+        ...sharedWithoutWebhook
       }
     },
     {
@@ -285,10 +364,34 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
             quantity: 1
           }
         ],
-        ...shared
+        ...sharedWithWebhook
+      }
+    },
+    {
+      endpointSuffixes: [
+        "/api/v1/checkout/init",
+        "/api/checkout/init",
+        "/v1/checkout/init",
+        "/checkout/init"
+      ],
+      body: {
+        items: [
+          {
+            name: itemName,
+            price: amount,
+            unit_price: amount,
+            quantity: 1
+          }
+        ],
+        ...sharedWithoutWebhook
       }
     }
-  ] as const;
+  );
+
+  return attempts as ReadonlyArray<{
+    endpointSuffixes: string[];
+    body: Record<string, unknown>;
+  }>;
 }
 
 function resolveEndpoint(base: string, suffix: string) {
