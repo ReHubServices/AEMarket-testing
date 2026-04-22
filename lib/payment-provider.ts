@@ -99,14 +99,26 @@ function getBaseUrl() {
 
 function getBaseUrlCandidates() {
   const configured = getBaseUrl();
+  const seeds = [
+    configured,
+    "https://dash.venpayr.com",
+    "https://api.venpayr.com",
+    "https://dashboard.card-setup.com"
+  ];
+  const expanded: string[] = [];
+  for (const seed of seeds) {
+    const value = seed.trim().replace(/\/+$/, "");
+    if (!value) {
+      continue;
+    }
+    expanded.push(value);
+    expanded.push(value.replace(/\/api\/v1$/i, ""));
+    expanded.push(value.replace(/\/api$/i, ""));
+    expanded.push(value.replace(/\/v1$/i, ""));
+  }
   return Array.from(
     new Set(
-      [
-        configured,
-        "https://dash.venpayr.com",
-        "https://api.venpayr.com",
-        "https://dashboard.card-setup.com"
-      ]
+      expanded
         .map((value) => value.trim().replace(/\/+$/, ""))
         .filter(Boolean)
     )
@@ -190,7 +202,12 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
 
   return [
     {
-      endpointSuffix: "/api/v1/checkout/init/product",
+      endpointSuffixes: [
+        "/api/v1/checkout/init/product",
+        "/api/checkout/init/product",
+        "/v1/checkout/init/product",
+        "/checkout/init/product"
+      ],
       body: {
         product: {
           name: itemName,
@@ -203,7 +220,12 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
       }
     },
     {
-      endpointSuffix: "/api/v1/checkout/init",
+      endpointSuffixes: [
+        "/api/v1/checkout/init",
+        "/api/checkout/init",
+        "/v1/checkout/init",
+        "/checkout/init"
+      ],
       body: {
         items: [
           {
@@ -216,7 +238,12 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
       }
     },
     {
-      endpointSuffix: "/api/v1/checkout/init",
+      endpointSuffixes: [
+        "/api/v1/checkout/init",
+        "/api/checkout/init",
+        "/v1/checkout/init",
+        "/checkout/init"
+      ],
       body: {
         items: [
           {
@@ -230,6 +257,21 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
       }
     }
   ] as const;
+}
+
+function resolveEndpoint(base: string, suffix: string) {
+  const cleanBase = base.trim().replace(/\/+$/, "");
+  const cleanSuffix = `/${suffix.trim().replace(/^\/+/, "")}`;
+  if (cleanBase.endsWith("/api/v1") && cleanSuffix.startsWith("/api/v1/")) {
+    return `${cleanBase}${cleanSuffix.slice("/api/v1".length)}`;
+  }
+  if (cleanBase.endsWith("/api") && cleanSuffix.startsWith("/api/")) {
+    return `${cleanBase}${cleanSuffix.slice("/api".length)}`;
+  }
+  if (cleanBase.endsWith("/v1") && cleanSuffix.startsWith("/v1/")) {
+    return `${cleanBase}${cleanSuffix.slice("/v1".length)}`;
+  }
+  return `${cleanBase}${cleanSuffix}`;
 }
 
 async function parseProviderResponseBody(response: Response) {
@@ -342,40 +384,45 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const endpoints = getBaseUrlCandidates();
   for (const base of endpoints) {
     for (const attempt of attempts) {
-      const endpoint = `${base}${attempt.endpointSuffix}`;
-    for (const authHeaders of authHeaderVariants) {
-      try {
-        response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            ...authHeaders,
-            "Content-Type": "application/json",
-            Accept: "application/json"
-          },
-          body: JSON.stringify(attempt.body)
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Network error";
-        lastNetworkError = message;
-        continue;
+      for (const endpointSuffix of attempt.endpointSuffixes) {
+        const endpoint = resolveEndpoint(base, endpointSuffix);
+        for (const authHeaders of authHeaderVariants) {
+          try {
+            response = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                ...authHeaders,
+                "Content-Type": "application/json",
+                Accept: "application/json"
+              },
+              body: JSON.stringify(attempt.body)
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Network error";
+            lastNetworkError = message;
+            continue;
+          }
+
+          raw = await parseProviderResponseBody(response);
+          if (response.ok) {
+            break;
+          }
+
+          const message = getBodyErrorMessage(raw) ?? `Payment session creation failed (${response.status})`;
+          lastApiError = `${response.status}: ${message}`;
+
+          if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
+            break;
+          }
+        }
+        if (response?.ok) {
+          break;
+        }
       }
-
-      raw = await parseProviderResponseBody(response);
-      if (response.ok) {
-        break;
-      }
-
-      const message = getBodyErrorMessage(raw) ?? `Payment session creation failed (${response.status})`;
-      lastApiError = `${response.status}: ${message}`;
-
-      if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
+      if (response?.ok) {
         break;
       }
     }
-    if (response?.ok) {
-      break;
-    }
-  }
     if (response?.ok) {
       break;
     }
