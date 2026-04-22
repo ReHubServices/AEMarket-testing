@@ -85,6 +85,11 @@ function resolveCustomerEmail(payload: CheckoutRequest) {
   return `${fallbackLocal}@example.com`;
 }
 
+function resolveCustomerCountry() {
+  const raw = (process.env.VENPAYR_CUSTOMER_COUNTRY ?? "US").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(raw) ? raw : "US";
+}
+
 export function isPaymentProviderConfigured() {
   return Boolean(getApiKey());
 }
@@ -103,39 +108,47 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const email = resolveCustomerEmail(payload);
   const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    },
-    body: JSON.stringify({
-      items: [
-        {
-          name: itemName,
-          price: payload.amount,
-          quantity: 1
-        }
-      ],
-      customer: {
-        email,
-        first_name: payload.username
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json"
       },
-      currency: payload.currency,
-      return_url: payload.returnUrl,
-      cancel_url: payload.returnUrl,
-      webhook_url: payload.webhookUrl,
-      metadata: {
-        transactionId: payload.transactionId,
-        transaction_id: payload.transactionId,
-        orderId: payload.orderId,
-        order_id: payload.orderId,
-        external_order_id: payload.orderId,
-        username: payload.username
-      }
-    })
-  });
+      body: JSON.stringify({
+        items: [
+          {
+            name: itemName,
+            price: payload.amount,
+            unit_price: payload.amount,
+            quantity: 1
+          }
+        ],
+        customer: {
+          email,
+          first_name: payload.username.slice(0, 64),
+          country: resolveCustomerCountry()
+        },
+        currency: payload.currency,
+        return_url: payload.returnUrl,
+        cancel_url: payload.returnUrl,
+        webhook_url: payload.webhookUrl,
+        metadata: {
+          transactionId: payload.transactionId,
+          transaction_id: payload.transactionId,
+          orderId: payload.orderId,
+          order_id: payload.orderId,
+          external_order_id: payload.orderId,
+          username: payload.username
+        }
+      })
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network error";
+    throw new Error(`VENPAYR_NETWORK_ERROR: ${message}`);
+  }
 
   const raw = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
@@ -144,7 +157,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
       toStringValue(raw.error) ??
       toStringValue(raw.message) ??
       `Payment session creation failed (${response.status})`;
-    throw new Error(message);
+    throw new Error(`VENPAYR_API_ERROR: ${message}`);
   }
 
   if (raw.success === false) {
