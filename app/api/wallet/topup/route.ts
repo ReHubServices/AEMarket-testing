@@ -104,6 +104,9 @@ export async function POST(request: NextRequest) {
         const code = extractApiStatusCode(message);
         return fail(`Payment API error (P${code})`, 502);
       }
+      if (message.toLowerCase().includes("payment") || message.toLowerCase().includes("checkout")) {
+        return fail("Payment API error (P000)", 502);
+      }
       return fail("Unable to initialize wallet checkout", 502);
     }
   } catch (error) {

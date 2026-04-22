@@ -445,7 +445,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   if (raw.success === false || root.success === false) {
     const message =
       getBodyErrorMessage(raw) ?? "Payment session creation failed";
-    throw new Error(message);
+    throw new Error(`VENPAYR_API_ERROR: ${message}`);
   }
 
   const payRef =
@@ -509,7 +509,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     (payRefFromUrl && payRefFromUrl !== resolvedProviderPaymentId ? payRefFromUrl : null);
 
   if (!resolvedProviderPaymentId || !checkoutUrl) {
-    throw new Error("Invalid payment provider response");
+    throw new Error("VENPAYR_API_ERROR: Invalid payment provider response");
   }
 
   return {
