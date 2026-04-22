@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Sparkles, Wallet, X } from "lucide-react";
+import { Search, Wallet, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { MarketListing, PublicViewer } from "@/lib/types";
@@ -1637,10 +1637,6 @@ export function MarketSearch({
       <header className="glass-panel rounded-3xl px-4 py-5 sm:px-6 sm:py-7 md:px-8">
         <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/8 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-zinc-300 sm:text-[11px] sm:tracking-[0.2em]">
-              <Sparkles size={13} />
-              AE Empire Accounts
-            </div>
             <div className="space-y-2">
               <h1 className="text-glow font-[var(--font-space-grotesk)] text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">
                 {homeTitle}

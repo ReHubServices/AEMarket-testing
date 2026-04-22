@@ -89,9 +89,9 @@ export async function POST(request: NextRequest) {
         return fail("Payment provider network error. Check base URL and deployment connectivity.", 502);
       }
       if (message.includes("VENPAYR_API_ERROR:")) {
-        return fail(message.replace("VENPAYR_API_ERROR:", "").trim(), 502);
+        return fail("Payment API error", 502);
       }
-      return fail(message || "Unable to initialize wallet checkout", 502);
+      return fail("Unable to initialize wallet checkout", 502);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Top-up failed";
