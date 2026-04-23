@@ -5107,6 +5107,28 @@ export async function buyFromSupplier(listingId: string) {
     { listing_id: listingId },
     { listingId }
   ];
+  const extractSupplierErrorMessage = (parsed: Record<string, unknown>, responseText: string) => {
+    const nestedData =
+      parsed.data && typeof parsed.data === "object"
+        ? (parsed.data as Record<string, unknown>)
+        : null;
+    const fromStructured = extractText(
+      parsed.error ??
+        parsed.message ??
+        parsed.detail ??
+        parsed.errors ??
+        nestedData?.error ??
+        nestedData?.message ??
+        nestedData?.detail ??
+        nestedData?.errors,
+      ""
+    );
+    if (fromStructured) {
+      return fromStructured;
+    }
+    const fromBody = extractText(responseText, "");
+    return fromBody || "Supplier purchase failed";
+  };
   let data: Record<string, unknown> | null = null;
   let lastErrorMessage = "Supplier purchase failed";
 
@@ -5138,10 +5160,7 @@ export async function buyFromSupplier(listingId: string) {
       }
 
       if (!response.ok) {
-        lastErrorMessage = extractText(
-          parsed.error ?? parsed.message ?? parsed.detail ?? responseText,
-          "Supplier purchase failed"
-        );
+        lastErrorMessage = extractSupplierErrorMessage(parsed, responseText);
         const loweredResponseText = responseText.toLowerCase();
         if (
           loweredResponseText.includes("_dfjs/b.js") ||
@@ -5154,9 +5173,15 @@ export async function buyFromSupplier(listingId: string) {
       }
 
       const statusText = extractText(parsed.status, "").toLowerCase();
-      const explicitError = extractText(parsed.error ?? parsed.message ?? parsed.detail, "");
+      const explicitError = extractSupplierErrorMessage(parsed, responseText);
       const plainText = responseText.trim().toLowerCase();
       const hasParsedPayload = Object.keys(parsed).length > 0;
+      const hasSupplierErrorsArray = Array.isArray(parsed.errors) && parsed.errors.length > 0;
+      const successFlag =
+        parsed.success === false ||
+        parsed.success === 0 ||
+        extractText(parsed.success, "").toLowerCase() === "false" ||
+        extractText(parsed.success, "").toLowerCase() === "0";
       const plainTextFailure =
         !hasParsedPayload &&
         Boolean(plainText) &&
@@ -5166,15 +5191,13 @@ export async function buyFromSupplier(listingId: string) {
       const explicitFailure =
         statusText === "failed" ||
         statusText === "error" ||
-        extractText(parsed.success, "").toLowerCase() === "false" ||
+        successFlag ||
+        hasSupplierErrorsArray ||
         Boolean(explicitError && (statusText === "failed" || statusText === "error")) ||
         plainTextFailure;
 
       if (explicitFailure) {
-        lastErrorMessage =
-          explicitError ||
-          extractText(responseText, "Supplier purchase failed") ||
-          "Supplier purchase failed";
+        lastErrorMessage = explicitError || "Supplier purchase failed";
         if (
           plainText.includes("_dfjs/b.js") ||
           plainText.includes("cloudflare") ||
