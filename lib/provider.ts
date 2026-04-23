@@ -1721,6 +1721,12 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "media_verified",
     "media_platform"
   ]);
+  const supplierSafeFortniteKeys = new Set([
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders"
+  ]);
   if (normalizedQuery) {
     url.searchParams.set("q", normalizedQuery);
     url.searchParams.set("query", normalizedQuery);
@@ -1756,7 +1762,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
       }
       if (
         localOnlySupplierKeys.has(normalizedKey) ||
-        normalizedKey.startsWith("fortnite_") ||
+        (normalizedKey.startsWith("fortnite_") && !supplierSafeFortniteKeys.has(normalizedKey)) ||
         normalizedKey.startsWith("riot_") ||
         normalizedKey.startsWith("lol_") ||
         normalizedKey.startsWith("valorant_") ||
@@ -4061,26 +4067,22 @@ function applyLocalFilters(
   if (mediaVerified === "0") {
     output = output.filter((item) => !isVerifiedMedia(item));
   }
-  if (fortniteOutfits.length > 0) {
-    output = output.filter((item) =>
-      fortniteOutfits.every((term) => matchesSelectedTerm(item, term))
+  const applyFortniteSelectedTerms = (terms: string[]) => {
+    if (terms.length === 0 || phase === "pre") {
+      return;
+    }
+    const matches = output.map((item) =>
+      terms.every((term) => matchesSelectedTerm(item, term))
     );
-  }
-  if (fortnitePickaxes.length > 0) {
-    output = output.filter((item) =>
-      fortnitePickaxes.every((term) => matchesSelectedTerm(item, term))
-    );
-  }
-  if (fortniteEmotes.length > 0) {
-    output = output.filter((item) =>
-      fortniteEmotes.every((term) => matchesSelectedTerm(item, term))
-    );
-  }
-  if (fortniteGliders.length > 0) {
-    output = output.filter((item) =>
-      fortniteGliders.every((term) => matchesSelectedTerm(item, term))
-    );
-  }
+    if (!matches.some(Boolean)) {
+      return;
+    }
+    output = output.filter((_, index) => matches[index]);
+  };
+  applyFortniteSelectedTerms(fortniteOutfits);
+  applyFortniteSelectedTerms(fortnitePickaxes);
+  applyFortniteSelectedTerms(fortniteEmotes);
+  applyFortniteSelectedTerms(fortniteGliders);
   if (options.hasImage) {
     output = output.filter((item) => hasRealImage(item.imageUrl));
   }
