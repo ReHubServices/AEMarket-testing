@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Wallet, X } from "lucide-react";
+import { MessageCircle, Search, Wallet, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { MarketListing, PublicViewer } from "@/lib/types";
@@ -114,6 +114,8 @@ type GameFilterTarget =
   | "steam"
   | "cs2"
   | "battlenet";
+
+const DISCORD_CONTACT_URL = (process.env.NEXT_PUBLIC_DISCORD_CONTACT_URL ?? "").trim();
 
 const GAME_SEARCH_PARAMS: Record<
   GameFilterTarget,
@@ -542,6 +544,67 @@ const FORTNITE_SELECTOR_LABEL_HINTS: Record<FortniteSelectorKey, string[]> = {
   fortnite_gliders: ["glider", "gliders"]
 };
 
+const FORTNITE_SELECTOR_BLOCKED_GENERIC_TOKENS = [
+  "level",
+  "wins",
+  "last match",
+  "last activity",
+  "inactive",
+  "days",
+  "vbucks",
+  "v bucks",
+  "battle pass",
+  "price",
+  "mail access",
+  "account",
+  "cur",
+  "current"
+];
+
+function isLikelyFortniteSelectorOption(value: string, selectorKey: FortniteSelectorKey) {
+  const normalized = normalizeSuggestionValue(value);
+  if (!normalized) {
+    return false;
+  }
+  if (!/[a-z]/i.test(value)) {
+    return false;
+  }
+  if (normalized.length < 2 || normalized.length > 64) {
+    return false;
+  }
+  if (/^\d+$/.test(normalized)) {
+    return false;
+  }
+  if (/:\s*\d/.test(value)) {
+    return false;
+  }
+  if (/^\d+\s*(skins?|outfits?|pickaxes?|axes?|emotes?|dances?|gliders?)\b/i.test(value)) {
+    return false;
+  }
+  if (
+    FORTNITE_SELECTOR_BLOCKED_GENERIC_TOKENS.some((token) =>
+      normalized.includes(normalizeSuggestionValue(token))
+    )
+  ) {
+    return false;
+  }
+
+  if (selectorKey !== "fortnite_outfits" && /\bskins?\b/i.test(value)) {
+    return false;
+  }
+  if (selectorKey !== "fortnite_pickaxes" && /\bpickaxes?\b|\baxes?\b|\bharvesting\b/i.test(value)) {
+    return false;
+  }
+  if (selectorKey !== "fortnite_emotes" && /\bemotes?\b|\bdances?\b/i.test(value)) {
+    return false;
+  }
+  if (selectorKey !== "fortnite_gliders" && /\bgliders?\b/i.test(value)) {
+    return false;
+  }
+
+  return true;
+}
+
 function splitFortniteSelectorParts(value: string) {
   return value
     .replace(/\[[^\]]+]/g, " ")
@@ -562,7 +625,7 @@ function extractFortniteSelectorListingOptions(
     if (normalized.length < 2 || normalized.length > 64) {
       return;
     }
-    if (/^\d+$/.test(normalized)) {
+    if (!isLikelyFortniteSelectorOption(normalized, selectorKey)) {
       return;
     }
     output.add(normalized);
@@ -588,12 +651,6 @@ function extractFortniteSelectorListingOptions(
   const pattern = patternBySelector[selectorKey];
   for (const match of listing.description.matchAll(pattern)) {
     for (const part of splitFortniteSelectorParts(match[1] ?? "")) {
-      add(part);
-    }
-  }
-
-  if (selectorKey === "fortnite_outfits") {
-    for (const part of splitFortniteSelectorParts(listing.title)) {
       add(part);
     }
   }
@@ -1119,6 +1176,7 @@ export function MarketSearch({
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const normalized = debouncedQuery.trim();
     const hasSearchContext = Boolean(normalized) || selectedGame !== "all";
 
@@ -1171,7 +1229,8 @@ export function MarketSearch({
         }
 
         const response = await fetch(`/api/search?${params.toString()}`, {
-          cache: "no-store"
+          cache: "no-store",
+          signal: controller.signal
         });
         if (!response.ok) {
           const payload = (await response.json().catch(() => ({}))) as {
@@ -1185,7 +1244,7 @@ export function MarketSearch({
           setHasMore(Boolean(data.pagination?.hasMore));
         }
       } catch (searchError) {
-        if (!cancelled) {
+        if (!cancelled && !(searchError instanceof DOMException && searchError.name === "AbortError")) {
           setListings([]);
           setHasMore(false);
           const message =
@@ -1204,6 +1263,7 @@ export function MarketSearch({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     debouncedQuery,
@@ -1867,6 +1927,19 @@ export function MarketSearch({
                   </Button>
                 </a>
               </div>
+            )}
+            {DISCORD_CONTACT_URL && (
+              <a
+                href={DISCORD_CONTACT_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full md:w-auto"
+              >
+                <Button variant="ghost" className="h-12 w-full gap-2 md:w-auto">
+                  <MessageCircle size={16} />
+                  Contact Us
+                </Button>
+              </a>
             )}
           </div>
 

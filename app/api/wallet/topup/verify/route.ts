@@ -36,20 +36,46 @@ export async function POST(request: NextRequest) {
     };
     const payRef = String(body.payRef ?? "").trim();
     const providedTransactionId = String(body.transactionId ?? "").trim() || null;
+    const store = await readStore();
+    const knownTransaction = providedTransactionId
+      ? store.transactions.find((tx) => tx.id === providedTransactionId)
+      : null;
 
-    if (!payRef) {
+    if (knownTransaction && knownTransaction.userId !== viewer.id) {
+      return fail("Payment reference does not belong to current user", 403);
+    }
+    const verificationReference =
+      payRef ||
+      knownTransaction?.providerPaymentId?.trim() ||
+      knownTransaction?.providerAltPaymentId?.trim() ||
+      "";
+
+    if (!verificationReference) {
+      if (knownTransaction?.status === "completed") {
+        const user = store.users.find((item) => item.id === viewer.id);
+        return ok({
+          status: "already_processed",
+          balance: user?.balance ?? viewer.balance
+        });
+      }
       return fail("Payment reference is required", 400);
     }
 
-    const verification = await verifyCheckoutPayment(payRef);
+    const verification = await verifyCheckoutPayment(verificationReference);
     if (!verification.confirmed) {
+      if (knownTransaction?.status === "completed") {
+        const user = store.users.find((item) => item.id === viewer.id);
+        return ok({
+          status: "already_processed",
+          balance: user?.balance ?? viewer.balance
+        });
+      }
       return fail("Payment not completed yet", 409);
     }
 
     let amount = verification.amount;
     let currency = verification.currency;
     if (!(amount > 0) || !currency) {
-      const store = await readStore();
       const fallbackTransaction = store.transactions.find((tx) => {
         if (verification.transactionId && tx.id === verification.transactionId) {
           return true;
@@ -76,8 +102,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (!reservation) {
-      const store = await readStore();
-      const user = store.users.find((item) => item.id === viewer.id);
+      const refreshedStore = await readStore();
+      const user = refreshedStore.users.find((item) => item.id === viewer.id);
       return ok({
         status: "already_processed",
         balance: user?.balance ?? viewer.balance
@@ -92,8 +118,8 @@ export async function POST(request: NextRequest) {
       return fail("Unsupported payment type", 400);
     }
 
-    const store = await readStore();
-    const user = store.users.find((item) => item.id === viewer.id);
+    const refreshedStore = await readStore();
+    const user = refreshedStore.users.find((item) => item.id === viewer.id);
     return ok({
       status: "credited",
       balance: user?.balance ?? viewer.balance

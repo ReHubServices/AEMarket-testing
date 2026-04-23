@@ -206,6 +206,22 @@ function parsePayRefFromCheckoutUrl(value: string | null) {
   return fromQuery ? decodeURIComponent(fromQuery) : null;
 }
 
+function normalizeTransactionReference(value: string | null) {
+  const normalized = toStringValue(value);
+  if (!normalized) {
+    return null;
+  }
+  const walletPrefixed = normalized.match(/wallet_(txn_[a-z0-9_]+)/i)?.[1] ?? null;
+  if (walletPrefixed) {
+    return walletPrefixed;
+  }
+  const embedded = normalized.match(/(txn_[a-z0-9_]+)/i)?.[1] ?? null;
+  if (embedded) {
+    return embedded;
+  }
+  return normalized;
+}
+
 function hasCheckoutPayload(raw: Record<string, unknown>) {
   const root = toRecord(raw.data) ?? raw;
   const payRef =
@@ -613,7 +629,7 @@ function parseTransactionIdFromVerifyPayload(payload: Record<string, unknown>) {
     toMetadata(root.metadata) ??
     toMetadata(payload.metadata) ??
     toMetadata(nestedData?.metadata);
-  return (
+  return normalizeTransactionReference(
     toStringValue(metadata?.transactionId) ??
     toStringValue(metadata?.transaction_id) ??
     toStringValue(root.transaction_id) ??
@@ -839,13 +855,15 @@ export function parseWebhookPayload(input: unknown): WebhookPaymentData | null {
     "";
 
   const transactionId =
-    toStringValue(metadata?.transactionId) ??
-    toStringValue(metadata?.transaction_id) ??
-    toStringValue(payload.transaction_id) ??
-    toStringValue(root.transaction_id) ??
-    toStringValue(metadata?.external_order_id) ??
-    toStringValue(metadata?.order_id) ??
-    null;
+    normalizeTransactionReference(
+      toStringValue(metadata?.transactionId) ??
+      toStringValue(metadata?.transaction_id) ??
+      toStringValue(payload.transaction_id) ??
+      toStringValue(root.transaction_id) ??
+      toStringValue(metadata?.external_order_id) ??
+      toStringValue(metadata?.order_id) ??
+      null
+    );
 
   return {
     providerPaymentId,

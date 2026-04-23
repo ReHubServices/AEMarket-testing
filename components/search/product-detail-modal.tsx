@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import { MarketListing, PublicViewer } from "@/lib/types";
 import {
   getListingImageGallery,
@@ -245,9 +246,10 @@ export function ProductDetailModal({
                 <p className="text-sm leading-6 text-red-200">{descriptionError}</p>
               )}
               {!descriptionLoading && !descriptionError && (
-                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-zinc-300">
-                  {listing.description || "Listing details are being synchronized."}
-                </p>
+                <LinkifiedText
+                  text={listing.description || "Listing details are being synchronized."}
+                  className="text-sm leading-6 text-zinc-300"
+                />
               )}
               {!descriptionLoading && !descriptionError && visibleSpecs.length > 0 && (
                 <div className="grid gap-2 rounded-2xl border border-white/15 bg-black/30 p-3">
@@ -257,7 +259,7 @@ export function ProductDetailModal({
                       className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-[130px_1fr] sm:gap-3 md:text-sm"
                     >
                       <p className="text-zinc-400">{spec.label}</p>
-                      <p className="break-words text-zinc-200">{spec.value}</p>
+                      <LinkifiedText text={spec.value} className="text-zinc-200" />
                     </div>
                   ))}
                 </div>

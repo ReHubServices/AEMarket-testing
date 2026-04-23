@@ -25,12 +25,22 @@ const DATABASE_URL =
   process.env.NEON_DATABASE_URL?.trim() ||
   "";
 
+function resolveDefaultMarkupPercent() {
+  const raw = Number(process.env.DEFAULT_MARKUP_PERCENT ?? "150");
+  if (!Number.isFinite(raw)) {
+    return 150;
+  }
+  return Math.min(500, Math.max(0, raw));
+}
+
+const DEFAULT_MARKUP_PERCENT = resolveDefaultMarkupPercent();
+
 const defaultStore: StoreData = {
   users: [],
   orders: [],
   transactions: [],
   settings: {
-    markupPercent: 50,
+    markupPercent: DEFAULT_MARKUP_PERCENT,
     homeTitle: "Welcome to AE EMPIRE",
     homeSubtitle:
       "Premium digital account marketplace with secure balance payments and instant automated delivery.",
@@ -72,10 +82,16 @@ function normalizeStore(raw: unknown): StoreData {
   }
 
   const data = raw as Partial<StoreData>;
-  const markup =
+  const rawSettings =
+    data.settings && typeof data.settings === "object"
+      ? (data.settings as Record<string, unknown>)
+      : null;
+  const hasLegacyDefaultMarkup = Number((rawSettings as Record<string, unknown> | null)?.markupPercent) === 50;
+  const parsedMarkup =
     typeof data.settings?.markupPercent === "number" && Number.isFinite(data.settings.markupPercent)
       ? data.settings.markupPercent
       : defaultStore.settings.markupPercent;
+  const markup = hasLegacyDefaultMarkup ? DEFAULT_MARKUP_PERCENT : parsedMarkup;
   const homeTitle =
     typeof data.settings?.homeTitle === "string" && data.settings.homeTitle.trim()
       ? data.settings.homeTitle.trim().slice(0, 120)

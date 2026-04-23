@@ -28,6 +28,8 @@ export type SearchOptions = {
 
 const translationCache = new Map<string, string>();
 const fortniteCosmeticImageCache = new Map<string, { imageUrl: string; expiresAt: number }>();
+const searchResultCache = new Map<string, { expiresAt: number; result: SearchResult }>();
+const SEARCH_RESULT_CACHE_TTL_MS = 20_000;
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
@@ -37,6 +39,64 @@ const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
 function getLztBaseUrl() {
   const raw = (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim();
   return raw.replace(/\/+$/, "");
+}
+
+function buildSupplierFilterCacheKey(filters: Record<string, string> | undefined) {
+  if (!filters) {
+    return "";
+  }
+  const entries = Object.entries(filters)
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .filter(([key, value]) => key.length > 0 && value.length > 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) {
+    return "";
+  }
+  return entries.map(([key, value]) => `${key}=${value}`).join("&");
+}
+
+function buildSearchResultCacheKey(
+  query: string,
+  options: SearchOptions,
+  markupPercent: number
+) {
+  return JSON.stringify({
+    q: query.trim().toLowerCase(),
+    sort: options.sort ?? "relevance",
+    minPrice: Number.isFinite(options.minPrice ?? NaN) ? Number(options.minPrice) : null,
+    maxPrice: Number.isFinite(options.maxPrice ?? NaN) ? Number(options.maxPrice) : null,
+    game: options.game?.trim().toLowerCase() ?? "",
+    category: options.category?.trim().toLowerCase() ?? "",
+    page: Number.isFinite(options.page ?? NaN) ? Number(options.page) : 1,
+    pageSize: Number.isFinite(options.pageSize ?? NaN) ? Number(options.pageSize) : 15,
+    hasImage: Boolean(options.hasImage),
+    hasDescription: Boolean(options.hasDescription),
+    hasSpecs: Boolean(options.hasSpecs),
+    supplierFilters: buildSupplierFilterCacheKey(options.supplierFilters),
+    markupPercent
+  });
+}
+
+function readSearchResultCache(cacheKey: string): SearchResult | null {
+  const cached = searchResultCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+  if (Date.now() > cached.expiresAt) {
+    searchResultCache.delete(cacheKey);
+    return null;
+  }
+  return structuredClone(cached.result);
+}
+
+function writeSearchResultCache(cacheKey: string, result: SearchResult) {
+  if (!cacheKey) {
+    return;
+  }
+  searchResultCache.set(cacheKey, {
+    expiresAt: Date.now() + SEARCH_RESULT_CACHE_TTL_MS,
+    result: structuredClone(result)
+  });
 }
 
 function getSearchEndpoint() {
@@ -1696,6 +1756,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
       }
       if (
         localOnlySupplierKeys.has(normalizedKey) ||
+        normalizedKey.startsWith("fortnite_") ||
         normalizedKey.startsWith("riot_") ||
         normalizedKey.startsWith("lol_") ||
         normalizedKey.startsWith("valorant_") ||
@@ -2710,27 +2771,39 @@ function applyLocalFilters(
     if (haystack.includes(normalizedTerm)) {
       return true;
     }
-    const compactHaystack = haystack.replace(/\s+/g, "");
-    const compactTerm = normalizedTerm.replace(/\s+/g, "");
-    if (compactTerm.length >= 4 && compactHaystack.includes(compactTerm)) {
-      return true;
-    }
-    const termTokens = normalizedTerm.split(" ").filter((token) => token.length > 1);
+    const words = haystack.split(" ").filter(Boolean);
+    const ignoredTokens = new Set([
+      "fortnite",
+      "account",
+      "accounts",
+      "skin",
+      "skins",
+      "outfit",
+      "outfits",
+      "pickaxe",
+      "pickaxes",
+      "emote",
+      "emotes",
+      "dance",
+      "dances",
+      "glider",
+      "gliders",
+      "og",
+      "full",
+      "stacked"
+    ]);
+    const termTokens = normalizedTerm
+      .split(" ")
+      .filter((token) => token.length >= 2)
+      .filter((token) => !ignoredTokens.has(token));
     if (termTokens.length === 0) {
       return false;
     }
-    let matchedTokens = 0;
-    for (const token of termTokens) {
-      if (haystack.includes(token)) {
-        matchedTokens += 1;
-        continue;
-      }
-      if (token.length >= 4 && isSubsequence(compactHaystack, token)) {
-        matchedTokens += 1;
-      }
-    }
-    const requiredTokens = Math.max(1, Math.ceil(termTokens.length * 0.5));
-    return matchedTokens >= requiredTokens;
+    return termTokens.every((token) =>
+      words.some(
+        (word) => word === token || (token.length >= 5 && word.startsWith(token))
+      )
+    );
   };
 
   const hasFortniteSignal = (item: MarketListing) => {
@@ -2986,20 +3059,43 @@ function applyLocalFilters(
       return 0;
     }
 
-    const isCostContext = (text: string) =>
-      text.includes("vbucks") ||
-      text.includes("v bucks") ||
-      text.includes("v-bucks") ||
-      text.includes("cost") ||
-      text.includes("value");
     const extractNumberTokens = (text: string) =>
       Array.from(text.matchAll(/\d+(?:[.,]\d+)?\s*[kmb]?/gi))
         .map((match) => parseCompactNumber(match[0]))
         .filter((value) => Number.isFinite(value) && value > 0);
-    const pickCountValue = (text: string) => {
+    const pickPaidCountValue = (text: string) => {
+      const normalized = normalizeText(text);
+      if (!normalized || (!normalized.includes("paid") && !normalized.includes("shop"))) {
+        return 0;
+      }
+      const candidates: number[] = [];
+      for (const match of normalized.matchAll(
+        /(?:paid|shop)[^\d]{0,8}(\d+(?:[.,]\d+)?\s*[kmb]?)/gi
+      )) {
+        candidates.push(parseCompactNumber(match[1] ?? ""));
+      }
+      for (const match of normalized.matchAll(
+        /(\d+(?:[.,]\d+)?\s*[kmb]?)[^\d]{0,8}(?:paid|shop)/gi
+      )) {
+        candidates.push(parseCompactNumber(match[1] ?? ""));
+      }
+      const parsed = candidates.filter((value) => Number.isFinite(value) && value > 0);
+      if (parsed.length === 0) {
+        return 0;
+      }
+      return Math.max(...parsed);
+    };
+    const pickCountValue = (text: string, currentMode: "core" | "paid") => {
       const tokens = extractNumberTokens(text);
       if (tokens.length === 0) {
         return 0;
+      }
+      if (currentMode === "paid") {
+        const paidCount = pickPaidCountValue(text);
+        if (paidCount > 0) {
+          return paidCount;
+        }
+        return tokens.length > 1 ? tokens[1] : tokens[0];
       }
       if (
         /\d+(?:[.,]\d+)?\s*[kmb]?\s*[-–—~]\s*\d+(?:[.,]\d+)?\s*[kmb]?/i.test(text) ||
@@ -3062,14 +3158,11 @@ function applyLocalFilters(
       if (!preferredLabels.some((entry) => label.includes(entry))) {
         continue;
       }
-      const hasPaid = combined.includes("paid");
-      if (mode === "core" && (hasPaid || isCostContext(combined))) {
-        continue;
-      }
+      const hasPaid = combined.includes("paid") || combined.includes("shop");
       if (mode === "paid" && !hasPaid) {
         continue;
       }
-      max = Math.max(max, pickCountValue(spec.value));
+      max = Math.max(max, pickCountValue(spec.value, mode));
     }
     if (max > 0) {
       return max;
@@ -3084,10 +3177,7 @@ function applyLocalFilters(
       if (!normalizedAliases.some((alias) => sourceNormalized.includes(alias))) {
         return;
       }
-      const hasPaid = sourceNormalized.includes("paid");
-      if (mode === "core" && (hasPaid || isCostContext(sourceNormalized))) {
-        return;
-      }
+      const hasPaid = sourceNormalized.includes("paid") || sourceNormalized.includes("shop");
       if (mode === "paid" && !hasPaid) {
         return;
       }
@@ -3105,10 +3195,10 @@ function applyLocalFilters(
           "gi"
         );
         for (const match of source.matchAll(forwardRegex)) {
-          max = Math.max(max, pickCountValue(match[1] ?? ""));
+          max = Math.max(max, pickCountValue(match[1] ?? "", mode));
         }
         for (const match of source.matchAll(backwardRegex)) {
-          max = Math.max(max, pickCountValue(match[1] ?? ""));
+          max = Math.max(max, pickCountValue(match[1] ?? "", mode));
         }
       }
     };
@@ -3123,14 +3213,11 @@ function applyLocalFilters(
       if (!normalizedAliases.some((alias) => combined.includes(alias) || label.includes(alias))) {
         continue;
       }
-      const hasPaid = combined.includes("paid");
-      if (mode === "core" && (hasPaid || isCostContext(combined))) {
-        continue;
-      }
+      const hasPaid = combined.includes("paid") || combined.includes("shop");
       if (mode === "paid" && !hasPaid) {
         continue;
       }
-      max = Math.max(max, pickCountValue(spec.value));
+      max = Math.max(max, pickCountValue(spec.value, mode));
     }
 
     if (max > 0) {
@@ -3976,22 +4063,22 @@ function applyLocalFilters(
   }
   if (fortniteOutfits.length > 0) {
     output = output.filter((item) =>
-      fortniteOutfits.some((term) => matchesSelectedTerm(item, term))
+      fortniteOutfits.every((term) => matchesSelectedTerm(item, term))
     );
   }
   if (fortnitePickaxes.length > 0) {
     output = output.filter((item) =>
-      fortnitePickaxes.some((term) => matchesSelectedTerm(item, term))
+      fortnitePickaxes.every((term) => matchesSelectedTerm(item, term))
     );
   }
   if (fortniteEmotes.length > 0) {
     output = output.filter((item) =>
-      fortniteEmotes.some((term) => matchesSelectedTerm(item, term))
+      fortniteEmotes.every((term) => matchesSelectedTerm(item, term))
     );
   }
   if (fortniteGliders.length > 0) {
     output = output.filter((item) =>
-      fortniteGliders.some((term) => matchesSelectedTerm(item, term))
+      fortniteGliders.every((term) => matchesSelectedTerm(item, term))
     );
   }
   if (options.hasImage) {
@@ -4625,7 +4712,6 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
   const store = await readStore();
   const endpoint = getSearchEndpoint();
-  const token = await getLztAccessToken();
   const trimmedQuery = query.trim();
   const explicitScope = Boolean(options.game?.trim() || options.category?.trim());
   const inferredScope = !explicitScope ? detectQueryIntent(trimmedQuery) : "";
@@ -4646,6 +4732,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
     page,
     pageSize: fetchPageSize
   };
+  const cacheKey = buildSearchResultCacheKey(trimmedQuery, normalizedOptions, store.settings.markupPercent);
+  const cachedResult = readSearchResultCache(cacheKey);
+  if (cachedResult) {
+    return cachedResult;
+  }
 
   if (!trimmedQuery && !hasBrowseScope) {
     return {
@@ -4655,6 +4746,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       pageSize
     };
   }
+  const token = await getLztAccessToken();
   if (!token) {
     throw new Error("LZT_AUTH_MISSING");
   }
@@ -4919,29 +5011,23 @@ export async function searchListings(query: string, options: SearchOptions = {})
       token,
       needsStrictFortniteCountFinalPass ? Math.min(finalPassPool.length, 180) : 24
     );
-    const translated = await translateListingsToEnglish(enriched);
-    const withSharedImages = applySharedImageFallback(translated, trimmedQuery);
-    const withFortniteApiImages = await enrichFortniteListingImages(withSharedImages);
-    const finalFiltered = applyLocalFilters(withFortniteApiImages, effectiveOptions, trimmedQuery, "final");
+    const finalFiltered = applyLocalFilters(enriched, effectiveOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);
     const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
     const finalHasMore = hasMore || uniqueFinal.length > targetEnd;
-    const displayEnriched = await enrichListingsWithDetails(
-      finalWindow,
-      token,
-      finalWindow.length
-    );
-    const displayTranslated = await translateListingsToEnglish(displayEnriched);
+    const displayTranslated = await translateListingsToEnglish(finalWindow);
     const displayWithSharedImages = applySharedImageFallback(displayTranslated, trimmedQuery);
     const displayWithFortniteApiImages = await enrichFortniteListingImages(displayWithSharedImages);
     const diversified = withFortniteImageDiversity(displayWithFortniteApiImages);
     const pagedListings = withMarkup(diversified, store.settings.markupPercent);
-    return {
+    const result: SearchResult = {
       listings: pagedListings,
       hasMore: finalHasMore,
       page,
       pageSize
     };
+    writeSearchResultCache(cacheKey, result);
+    return result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("LZT_AUTH_")) {
       throw error;

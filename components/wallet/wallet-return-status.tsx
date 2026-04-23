@@ -65,13 +65,15 @@ export function WalletReturnStatus() {
         ? window.sessionStorage.getItem("wallet_pending_transaction_id")
         : "") || "";
 
-    if (!payRef) {
+    const resolvedTransactionId = transactionIdFromUrl || pendingTransactionId;
+    if (!payRef && !resolvedTransactionId) {
       setPhase("pending");
       setMessage("Payment return detected. Waiting for payment confirmation.");
       return;
     }
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const run = async () => {
       setPhase("verifying");
       setMessage("Verifying payment...");
@@ -82,8 +84,8 @@ export function WalletReturnStatus() {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            payRef,
-            transactionId: transactionIdFromUrl || pendingTransactionId || undefined
+            payRef: payRef || undefined,
+            transactionId: resolvedTransactionId || undefined
           })
         });
 
@@ -112,6 +114,11 @@ export function WalletReturnStatus() {
         if (response.status === 409) {
           setPhase("pending");
           setMessage(payload.error || "Payment is still processing. Please wait.");
+          retryTimer = setTimeout(() => {
+            if (!cancelled) {
+              run();
+            }
+          }, 3000);
           return;
         }
 
@@ -128,6 +135,9 @@ export function WalletReturnStatus() {
     run();
     return () => {
       cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
     };
   }, [walletFlag, payRef, transactionIdFromUrl, router]);
 

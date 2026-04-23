@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getViewerFromCookies } from "@/lib/viewer";
 import { getUserOrderById } from "@/lib/order-flow";
 import { Button } from "@/components/ui/button";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 
 export const runtime = "nodejs";
 
@@ -77,19 +78,25 @@ export default async function OrderDetailPage({
           <div className="mt-4 grid gap-3 rounded-2xl border border-white/15 bg-black/35 p-4 text-sm md:grid-cols-2">
             <div>
               <p className="text-zinc-400">Account Username</p>
-              <p className="font-medium text-white">{order.delivery.accountUsername}</p>
+              <LinkifiedText text={order.delivery.accountUsername} className="font-medium text-white" />
             </div>
             <div>
               <p className="text-zinc-400">Account Password</p>
-              <p className="font-medium text-white">{order.delivery.accountPassword}</p>
+              <LinkifiedText text={order.delivery.accountPassword} className="font-medium text-white" />
             </div>
             <div>
               <p className="text-zinc-400">Account Email</p>
-              <p className="font-medium text-white">{order.delivery.accountEmail || "Not provided"}</p>
+              <LinkifiedText
+                text={order.delivery.accountEmail || "Not provided"}
+                className="font-medium text-white"
+              />
             </div>
             <div>
               <p className="text-zinc-400">Notes</p>
-              <p className="font-medium text-white">{order.delivery.notes || "No additional notes"}</p>
+              <LinkifiedText
+                text={order.delivery.notes || "No additional notes"}
+                className="font-medium text-white"
+              />
             </div>
           </div>
 
@@ -104,7 +111,7 @@ export default async function OrderDetailPage({
                     <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
                       {item.label}
                     </p>
-                    <p className="mt-1 break-words text-sm text-white">{item.value}</p>
+                    <LinkifiedText text={item.value} className="mt-1 text-sm text-white" />
                   </div>
                 ))}
                 {deliveredItems.length === 0 && (
@@ -125,7 +132,7 @@ export default async function OrderDetailPage({
                     className="grid grid-cols-[1.2fr_1fr] gap-4 border-b border-white/5 px-4 py-2 text-sm last:border-b-0"
                   >
                     <p className="text-zinc-300">{item.label}</p>
-                    <p className="break-words text-white">{item.value}</p>
+                    <LinkifiedText text={item.value} className="text-white" />
                   </div>
                 ))}
                 {deliveredItems.length === 0 && (

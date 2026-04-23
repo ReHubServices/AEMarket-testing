@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 
 export async function SiteHeader() {
   const viewer = await getViewerFromCookies();
+  const discordContactUrl =
+    process.env.NEXT_PUBLIC_DISCORD_CONTACT_URL?.trim() ||
+    process.env.DISCORD_CONTACT_URL?.trim() ||
+    "";
 
   return (
     <header className="glass-panel sticky top-3 z-30 mb-5 rounded-2xl px-2.5 py-2.5 sm:px-3 sm:py-3 md:top-4 md:mb-7 md:px-6">
@@ -27,6 +31,16 @@ export async function SiteHeader() {
             <Link href="/" className="transition hover:text-white">
               Marketplace
             </Link>
+            {discordContactUrl && (
+              <a
+                href={discordContactUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="transition hover:text-white"
+              >
+                Contact Us
+              </a>
+            )}
             {viewer && (
               <Link href="/dashboard" className="transition hover:text-white">
                 Dashboard
@@ -81,6 +95,16 @@ export async function SiteHeader() {
         >
           Marketplace
         </Link>
+        {discordContactUrl && (
+          <a
+            href={discordContactUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="whitespace-nowrap rounded-lg border border-white/15 bg-black/35 px-3 py-1.5"
+          >
+            Contact Us
+          </a>
+        )}
         {viewer && (
           <Link
             href="/dashboard"
