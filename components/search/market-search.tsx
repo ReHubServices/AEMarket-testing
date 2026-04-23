@@ -533,6 +533,72 @@ const FORTNITE_SELECTOR_CONFIG: FortniteSelectorConfig[] = [
   }
 ];
 
+const FORTNITE_SELECTOR_LABEL_HINTS: Record<FortniteSelectorKey, string[]> = {
+  fortnite_outfits: ["outfit", "outfits", "skin", "skins"],
+  fortnite_pickaxes: ["pickaxe", "pickaxes", "axe", "harvesting"],
+  fortnite_emotes: ["emote", "emotes", "dance", "dances"],
+  fortnite_gliders: ["glider", "gliders"]
+};
+
+function splitFortniteSelectorParts(value: string) {
+  return value
+    .replace(/\[[^\]]+]/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .split(/(?:\s*\|\s*|,\s*|;\s*|\/\s*|\n+|•)+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function extractFortniteSelectorListingOptions(
+  listing: MarketListing,
+  selectorKey: FortniteSelectorKey
+) {
+  const hintTokens = FORTNITE_SELECTOR_LABEL_HINTS[selectorKey] ?? [];
+  const output = new Set<string>();
+  const add = (raw: string) => {
+    const normalized = normalizeSelectorTerm(raw);
+    if (normalized.length < 2 || normalized.length > 64) {
+      return;
+    }
+    if (/^\d+$/.test(normalized)) {
+      return;
+    }
+    output.add(normalized);
+  };
+
+  for (const spec of listing.specs) {
+    const normalizedLabel = normalizeSuggestionValue(spec.label);
+    if (!hintTokens.some((hint) => normalizedLabel.includes(hint))) {
+      continue;
+    }
+    for (const part of splitFortniteSelectorParts(spec.value)) {
+      add(part);
+    }
+  }
+
+  const patternBySelector: Record<FortniteSelectorKey, RegExp> = {
+    fortnite_outfits: /\b(?:outfits?|skins?)\s*[:=-]\s*([^\n\r]{2,280})/gi,
+    fortnite_pickaxes: /\b(?:pickaxes?|axes?)\s*[:=-]\s*([^\n\r]{2,280})/gi,
+    fortnite_emotes: /\b(?:emotes?|dances?)\s*[:=-]\s*([^\n\r]{2,280})/gi,
+    fortnite_gliders: /\b(?:gliders?)\s*[:=-]\s*([^\n\r]{2,280})/gi
+  };
+
+  const pattern = patternBySelector[selectorKey];
+  for (const match of listing.description.matchAll(pattern)) {
+    for (const part of splitFortniteSelectorParts(match[1] ?? "")) {
+      add(part);
+    }
+  }
+
+  if (selectorKey === "fortnite_outfits") {
+    for (const part of splitFortniteSelectorParts(listing.title)) {
+      add(part);
+    }
+  }
+
+  return Array.from(output).slice(0, 42);
+}
+
 type FilterOption = {
   value: string;
   label: string;
@@ -1027,7 +1093,10 @@ export function MarketSearch({
   );
   const [fortniteSelectorSearch, setFortniteSelectorSearch] = useState("");
   const [fortniteSelectorDraft, setFortniteSelectorDraft] = useState<string[]>([]);
+  const [fortniteSelectorRemoteOptions, setFortniteSelectorRemoteOptions] = useState<string[]>([]);
+  const [fortniteSelectorRemoteLoading, setFortniteSelectorRemoteLoading] = useState(false);
   const debouncedQuery = useDebouncedValue(query);
+  const debouncedFortniteSelectorSearch = useDebouncedValue(fortniteSelectorSearch, 220);
 
   function changePage(nextPage: number) {
     const normalized = Math.max(1, nextPage);
@@ -1042,7 +1111,61 @@ export function MarketSearch({
     setFortniteSelectorOpen(null);
     setFortniteSelectorSearch("");
     setFortniteSelectorDraft([]);
+    setFortniteSelectorRemoteOptions([]);
+    setFortniteSelectorRemoteLoading(false);
   }, [selectedGame]);
+
+  useEffect(() => {
+    if (!fortniteSelectorOpen) {
+      setFortniteSelectorRemoteOptions([]);
+      setFortniteSelectorRemoteLoading(false);
+      return;
+    }
+
+    const queryValue = debouncedFortniteSelectorSearch.trim();
+    if (queryValue.length < 2) {
+      setFortniteSelectorRemoteOptions([]);
+      setFortniteSelectorRemoteLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      setFortniteSelectorRemoteLoading(true);
+      try {
+        const params = new URLSearchParams({
+          q: queryValue,
+          selector: fortniteSelectorOpen
+        });
+        const response = await fetch(`/api/fortnite/cosmetics?${params.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          setFortniteSelectorRemoteOptions([]);
+          return;
+        }
+        const payload = (await response.json()) as { options?: string[] };
+        const options = Array.isArray(payload.options)
+          ? payload.options
+              .map((value) => normalizeSelectorTerm(String(value ?? "")))
+              .filter((value) => value.length >= 2 && value.length <= 64)
+          : [];
+        setFortniteSelectorRemoteOptions(options);
+      } catch {
+        if (!controller.signal.aborted) {
+          setFortniteSelectorRemoteOptions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setFortniteSelectorRemoteLoading(false);
+        }
+      }
+    };
+
+    run();
+    return () => controller.abort();
+  }, [fortniteSelectorOpen, debouncedFortniteSelectorSearch]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1596,19 +1719,91 @@ export function MarketSearch({
         source.set(signature, normalized);
       }
     }
+    if (selectedGame === "fortnite") {
+      for (const listing of listings) {
+        const extracted = extractFortniteSelectorListingOptions(
+          listing,
+          activeFortniteSelector.key
+        );
+        for (const value of extracted) {
+          const normalized = normalizeSelectorTerm(value);
+          if (!normalized) {
+            continue;
+          }
+          const signature = normalized.toLowerCase();
+          if (!source.has(signature)) {
+            source.set(signature, normalized);
+          }
+        }
+      }
+    }
+    for (const value of fortniteSelectorRemoteOptions) {
+      const normalized = normalizeSelectorTerm(value);
+      if (!normalized) {
+        continue;
+      }
+      const signature = normalized.toLowerCase();
+      if (!source.has(signature)) {
+        source.set(signature, normalized);
+      }
+    }
     return Array.from(source.values());
-  }, [activeFortniteSelector, gameFilters, fortniteSelectorDraft]);
+  }, [
+    activeFortniteSelector,
+    gameFilters,
+    fortniteSelectorDraft,
+    fortniteSelectorRemoteOptions,
+    selectedGame,
+    listings
+  ]);
   const fortniteSelectorOptions = useMemo(() => {
     if (!activeFortniteSelector) {
       return [];
     }
     const normalized = normalizeSuggestionValue(fortniteSelectorSearch);
     if (!normalized) {
-      return fortniteSelectorBaseOptions;
+      return fortniteSelectorBaseOptions.slice(0, 340);
     }
-    return fortniteSelectorBaseOptions.filter((option) =>
-      normalizeSuggestionValue(option).includes(normalized)
-    );
+    const compactNormalized = normalized.replace(/\s+/g, "");
+    return fortniteSelectorBaseOptions
+      .map((option) => {
+        const normalizedOption = normalizeSuggestionValue(option);
+        if (!normalizedOption) {
+          return null;
+        }
+        const compactOption = normalizedOption.replace(/\s+/g, "");
+        const starts = normalizedOption.startsWith(normalized);
+        const contains = normalizedOption.includes(normalized);
+        const wordStarts = normalized
+          .split(" ")
+          .filter(Boolean)
+          .every((queryToken) =>
+            normalizedOption
+              .split(" ")
+              .filter(Boolean)
+              .some((optionToken) => optionToken.startsWith(queryToken))
+          );
+        const subsequence = isSubsequenceMatch(compactOption, compactNormalized);
+        if (!starts && !contains && !wordStarts && !subsequence) {
+          return null;
+        }
+        const score = starts ? 0 : wordStarts ? 1 : contains ? 2 : 3;
+        return { option, score };
+      })
+      .filter((entry): entry is { option: string; score: number } => Boolean(entry))
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return a.score - b.score;
+        }
+        const aNorm = normalizeSuggestionValue(a.option);
+        const bNorm = normalizeSuggestionValue(b.option);
+        if (aNorm.length !== bNorm.length) {
+          return aNorm.length - bNorm.length;
+        }
+        return aNorm.localeCompare(bNorm);
+      })
+      .slice(0, 360)
+      .map((entry) => entry.option);
   }, [activeFortniteSelector, fortniteSelectorSearch, fortniteSelectorBaseOptions]);
   const fortniteSelectorCustomCandidate = useMemo(() => {
     if (!activeFortniteSelector) {
@@ -3120,6 +3315,9 @@ export function MarketSearch({
               <p className="text-xs text-zinc-400">
                 Selected: {fortniteSelectorDraft.length}
               </p>
+              {fortniteSelectorRemoteLoading && (
+                <p className="text-xs text-zinc-500">Loading more cosmetic names...</p>
+              )}
             </div>
 
             <div className="min-h-[200px] flex-1 space-y-1 overflow-y-auto px-4 pb-2 md:px-5">
