@@ -636,39 +636,6 @@ const ANY_MAYBE_NO_OPTIONS: FilterOption[] = [
   { value: "0", label: "No" }
 ];
 
-const FORTNITE_LEFT_TEXT_FILTERS: TextFilterConfig[] = [
-  { label: "Account origin", key: "fortnite_account_origin", placeholder: "Any" },
-  {
-    label: "Exclude account origin",
-    key: "fortnite_exclude_account_origin",
-    placeholder: "Exclude"
-  },
-  { label: "Account login", key: "fortnite_account_login", placeholder: "Any" },
-  { label: "Email domain", key: "fortnite_email_domain", placeholder: "Any" },
-  {
-    label: "Exclude mail domain",
-    key: "fortnite_exclude_mail_domain",
-    placeholder: "Exclude"
-  },
-  { label: "Mail provider", key: "fortnite_mail_provider", placeholder: "Any" },
-  {
-    label: "Exclude mail provider",
-    key: "fortnite_exclude_mail_provider",
-    placeholder: "Exclude"
-  }
-];
-
-const FORTNITE_LEFT_FLAGS: Array<{ key: string; label: string }> = [
-  { key: "fortnite_not_sold_before", label: "Not sold before" },
-  { key: "fortnite_sold_before", label: "Sold before" },
-  { key: "fortnite_not_sold_before_by_me", label: "Not sold before by me" },
-  { key: "fortnite_sold_before_by_me", label: "Sold before by me" },
-  {
-    key: "fortnite_rocket_league_purchases",
-    label: "There are Rocket League purchases"
-  }
-];
-
 const FORTNITE_CORE_RANGE_FILTERS: RangeFilterConfig[] = [
   {
     label: "Outfits",
@@ -700,68 +667,6 @@ const FORTNITE_CORE_RANGE_FILTERS: RangeFilterConfig[] = [
   }
 ];
 
-const FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS: RangeFilterConfig[] = [
-  {
-    label: "Outfits",
-    minKey: "fortnite_vbucks_cost_outfits_min",
-    maxKey: "fortnite_vbucks_cost_outfits_max",
-    minPlaceholder: "Outfits value from",
-    maxPlaceholder: "up to"
-  },
-  {
-    label: "Pickaxes",
-    minKey: "fortnite_vbucks_cost_pickaxes_min",
-    maxKey: "fortnite_vbucks_cost_pickaxes_max",
-    minPlaceholder: "Pickaxes value from",
-    maxPlaceholder: "up to"
-  },
-  {
-    label: "Dances",
-    minKey: "fortnite_vbucks_cost_emotes_min",
-    maxKey: "fortnite_vbucks_cost_emotes_max",
-    minPlaceholder: "Dances value from",
-    maxPlaceholder: "up to"
-  },
-  {
-    label: "Gliders",
-    minKey: "fortnite_vbucks_cost_gliders_min",
-    maxKey: "fortnite_vbucks_cost_gliders_max",
-    minPlaceholder: "Gliders value from",
-    maxPlaceholder: "up to"
-  }
-];
-
-const FORTNITE_PAID_RANGE_FILTERS: RangeFilterConfig[] = [
-  {
-    label: "Outfits",
-    minKey: "fortnite_paid_skin_count_min",
-    maxKey: "fortnite_paid_skin_count_max",
-    minPlaceholder: "Min outfits",
-    maxPlaceholder: "up to"
-  },
-  {
-    label: "Pickaxes",
-    minKey: "fortnite_paid_pickaxe_count_min",
-    maxKey: "fortnite_paid_pickaxe_count_max",
-    minPlaceholder: "Pickaxes, from",
-    maxPlaceholder: "up to"
-  },
-  {
-    label: "Dances",
-    minKey: "fortnite_paid_emote_count_min",
-    maxKey: "fortnite_paid_emote_count_max",
-    minPlaceholder: "Dances, from",
-    maxPlaceholder: "up to"
-  },
-  {
-    label: "Gliders",
-    minKey: "fortnite_paid_glider_count_min",
-    maxKey: "fortnite_paid_glider_count_max",
-    minPlaceholder: "Gliders, from",
-    maxPlaceholder: "up to"
-  }
-];
-
 const FORTNITE_TRI_STATE_FILTERS: TriStateFilterConfig[] = [
   {
     label: "Changeable email",
@@ -777,11 +682,6 @@ const FORTNITE_TRI_STATE_FILTERS: TriStateFilterConfig[] = [
     label: "PSN linkable",
     key: "fortnite_psn_linkable",
     options: ANY_MAYBE_NO_OPTIONS
-  },
-  {
-    label: "Battle Pass",
-    key: "fortnite_battle_pass",
-    options: ANY_YES_NO_OPTIONS
   }
 ];
 
@@ -2073,38 +1973,6 @@ export function MarketSearch({
                             </select>
                           </label>
 
-                          {FORTNITE_LEFT_TEXT_FILTERS.map((field) => (
-                            <label key={field.key} className="space-y-1 text-xs text-zinc-400">
-                              {field.label}
-                              <Input
-                                value={gameFilters[field.key] ?? ""}
-                                onChange={(event) =>
-                                  setGameFilter(field.key, event.target.value)
-                                }
-                                placeholder={field.placeholder}
-                                className="h-10"
-                              />
-                            </label>
-                          ))}
-
-                          <div className="space-y-1.5 pt-1">
-                            {FORTNITE_LEFT_FLAGS.map((flag) => (
-                              <label
-                                key={flag.key}
-                                className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={(gameFilters[flag.key] ?? "") === "1"}
-                                  onChange={(event) =>
-                                    setGameFilter(flag.key, event.target.checked ? "1" : "")
-                                  }
-                                  className="h-4 w-4"
-                                />
-                                {flag.label}
-                              </label>
-                            ))}
-                          </div>
                         </div>
 
                         <div className="space-y-2">
@@ -2180,77 +2048,6 @@ export function MarketSearch({
                             </div>
                           ))}
 
-                          <div className="space-y-1 rounded-xl border border-white/10 bg-black/25 p-2">
-                            {FORTNITE_TOTAL_VBUCKS_RANGE_FILTERS.map((field) => (
-                              <div key={field.minKey} className="space-y-1.5">
-                                <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-400">
-                                  {field.label}
-                                </p>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    value={gameFilters[field.minKey] ?? ""}
-                                    onChange={(event) =>
-                                      setGameFilter(field.minKey, event.target.value)
-                                    }
-                                    placeholder={field.minPlaceholder}
-                                    className="h-9"
-                                  />
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    value={gameFilters[field.maxKey] ?? ""}
-                                    onChange={(event) =>
-                                      setGameFilter(field.maxKey, event.target.value)
-                                    }
-                                    placeholder={field.maxPlaceholder}
-                                    className="h-9"
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_refund_credits_min ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_refund_credits_min", event.target.value)
-                              }
-                              placeholder="Refund credits from"
-                              className="h-9"
-                            />
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_refund_credits_max ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_refund_credits_max", event.target.value)
-                              }
-                              placeholder="up to"
-                              className="h-9"
-                            />
-                          </div>
-
-                          <Input
-                            value={gameFilters.fortnite_stw_edition ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_stw_edition", event.target.value)
-                            }
-                            placeholder="STW edition"
-                            className="h-9"
-                          />
-                          <Input
-                            value={gameFilters.fortnite_exclude_stw_edition ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_exclude_stw_edition", event.target.value)
-                            }
-                            placeholder="Exclude STW edition"
-                            className="h-9"
-                          />
                         </div>
 
                         <div className="space-y-2">
@@ -2325,142 +2122,6 @@ export function MarketSearch({
                             />
                           </div>
 
-                          <div className="space-y-1 rounded-xl border border-white/10 bg-black/25 p-2">
-                            <p className="text-xs font-medium text-zinc-300">Paid Items</p>
-                            {FORTNITE_PAID_RANGE_FILTERS.map((field) => (
-                              <div key={field.minKey} className="grid grid-cols-2 gap-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={gameFilters[field.minKey] ?? ""}
-                                  onChange={(event) =>
-                                    setGameFilter(field.minKey, event.target.value)
-                                  }
-                                  placeholder={field.minPlaceholder}
-                                  className="h-9"
-                                />
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={gameFilters[field.maxKey] ?? ""}
-                                  onChange={(event) =>
-                                    setGameFilter(field.maxKey, event.target.value)
-                                  }
-                                  placeholder={field.maxPlaceholder}
-                                  className="h-9"
-                                />
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="space-y-1 text-xs text-zinc-400">
-                            <p>Battle Pass</p>
-                            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/15 bg-black/35 p-1">
-                              {FORTNITE_TRI_STATE_FILTERS[3].options.map((option) => (
-                                <button
-                                  key={`fortnite_battle_pass_${option.value || "any"}`}
-                                  type="button"
-                                  onClick={() =>
-                                    setGameFilter("fortnite_battle_pass", option.value)
-                                  }
-                                  className={cn(
-                                    "h-8 rounded-lg px-2 text-xs transition",
-                                    (gameFilters.fortnite_battle_pass ?? "") === option.value
-                                      ? "bg-emerald-500/20 text-emerald-300"
-                                      : "text-zinc-300 hover:bg-white/10"
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_battle_pass_level_min ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_battle_pass_level_min", event.target.value)
-                              }
-                              placeholder="Battle Pass level from"
-                              className="h-9"
-                            />
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_battle_pass_level_max ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_battle_pass_level_max", event.target.value)
-                              }
-                              placeholder="up to"
-                              className="h-9"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_last_transaction_years_min ?? ""}
-                              onChange={(event) =>
-                                setGameFilter(
-                                  "fortnite_last_transaction_years_min",
-                                  event.target.value
-                                )
-                              }
-                              placeholder="Last transaction >"
-                              className="h-9"
-                            />
-                            <Input value="years ago" disabled className="h-9 opacity-80" />
-                          </div>
-
-                          <label className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200">
-                            <input
-                              type="checkbox"
-                              checked={(gameFilters.fortnite_no_transactions ?? "") === "1"}
-                              onChange={(event) =>
-                                setGameFilter(
-                                  "fortnite_no_transactions",
-                                  event.target.checked ? "1" : ""
-                                )
-                              }
-                              className="h-4 w-4"
-                            />
-                            No transactions
-                          </label>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={gameFilters.fortnite_registered_years_min ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_registered_years_min", event.target.value)
-                              }
-                              placeholder="Registered earlier"
-                              className="h-9"
-                            />
-                            <Input value="years ago" disabled className="h-9 opacity-80" />
-                          </div>
-
-                          <Input
-                            value={gameFilters.fortnite_country ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_country", event.target.value)
-                            }
-                            placeholder="Country"
-                            className="h-9"
-                          />
-                          <Input
-                            value={gameFilters.fortnite_exclude_country ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("fortnite_exclude_country", event.target.value)
-                            }
-                            placeholder="Exclude country"
-                            className="h-9"
-                          />
                         </div>
                       </div>
                     )}
