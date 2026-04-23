@@ -168,6 +168,7 @@ const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
     "Galaxy Scout",
     "Galaxy Grappler",
     "Skull Trooper",
+    "Ghoul Trooper",
     "Renegade Raider",
     "Black Knight",
     "Aerial Assault Trooper",
@@ -338,6 +339,7 @@ const GLOBAL_SUGGESTION_POOL = [
   "Ikonik",
   "Black Knight",
   "Skull Trooper",
+  "Ghoul Trooper",
   "Renegade Raider",
   "Aerial Assault Trooper",
   "Travis Scott",
@@ -995,6 +997,7 @@ export function MarketSearch({
   const [fortniteSelectorDraft, setFortniteSelectorDraft] = useState<string[]>([]);
   const [fortniteSelectorRemoteOptions, setFortniteSelectorRemoteOptions] = useState<string[]>([]);
   const [fortniteSelectorRemoteLoading, setFortniteSelectorRemoteLoading] = useState(false);
+  const [fortniteTypingSuggestions, setFortniteTypingSuggestions] = useState<string[]>([]);
   const debouncedQuery = useDebouncedValue(query);
   const debouncedFortniteSelectorSearch = useDebouncedValue(fortniteSelectorSearch, 220);
 
@@ -1013,6 +1016,7 @@ export function MarketSearch({
     setFortniteSelectorDraft([]);
     setFortniteSelectorRemoteOptions([]);
     setFortniteSelectorRemoteLoading(false);
+    setFortniteTypingSuggestions([]);
   }, [selectedGame]);
 
   useEffect(() => {
@@ -1066,6 +1070,48 @@ export function MarketSearch({
     run();
     return () => controller.abort();
   }, [fortniteSelectorOpen, debouncedFortniteSelectorSearch]);
+
+  useEffect(() => {
+    if (selectedGame !== "fortnite") {
+      setFortniteTypingSuggestions([]);
+      return;
+    }
+    const queryValue = debouncedQuery.trim();
+    if (queryValue.length < 2) {
+      setFortniteTypingSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const params = new URLSearchParams({ q: queryValue });
+        const response = await fetch(`/api/fortnite/cosmetics?${params.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          setFortniteTypingSuggestions([]);
+          return;
+        }
+        const payload = (await response.json()) as { options?: string[] };
+        const options = Array.isArray(payload.options)
+          ? payload.options
+              .map((value) => normalizeSelectorTerm(String(value ?? "")))
+              .filter((value) => value.length >= 2 && value.length <= 64)
+              .slice(0, 160)
+          : [];
+        setFortniteTypingSuggestions(options);
+      } catch {
+        if (!controller.signal.aborted) {
+          setFortniteTypingSuggestions([]);
+        }
+      }
+    };
+
+    run();
+    return () => controller.abort();
+  }, [selectedGame, debouncedQuery]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1507,6 +1553,9 @@ export function MarketSearch({
       source.add(global);
     }
     if (selectedGame === "fortnite") {
+      for (const remote of fortniteTypingSuggestions) {
+        source.add(remote);
+      }
       for (const selector of FORTNITE_SELECTOR_CONFIG) {
         for (const option of selector.options) {
           source.add(option);
@@ -1577,7 +1626,7 @@ export function MarketSearch({
       .map((entry) => entry.value);
 
     return scored;
-  }, [query, selectedGame, listings, gameFilters]);
+  }, [query, selectedGame, listings, gameFilters, fortniteTypingSuggestions]);
   const showSuggestions = searchFocused && suggestions.length > 0;
   const activeFortniteSelector = useMemo(
     () =>

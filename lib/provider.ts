@@ -4526,46 +4526,100 @@ function withMarkup(listings: MarketListing[], markupPercent: number) {
   });
 }
 
-function buildSupplierQueryVariants(query: string) {
+function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) {
   const normalized = query.trim();
-  if (!normalized) {
+  const variants = new Set<string>();
+  const addVariant = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    variants.add(trimmed);
+  };
+  const tokenize = (value: string) =>
+    Array.from(
+      new Set(
+        value
+          .toLowerCase()
+          .split(/[^a-z0-9а-яё]+/gi)
+          .map((token) => token.trim())
+          .filter((token) => token.length >= 2)
+      )
+    );
+  const addTokenizedVariants = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    addVariant(trimmed);
+    const tokens = tokenize(trimmed);
+    if (tokens.length > 0) {
+      addVariant(tokens.join(" "));
+    }
+    for (const token of tokens) {
+      if (token.length >= 3) {
+        addVariant(token);
+      }
+    }
+    for (let index = 0; index < tokens.length - 1; index += 1) {
+      const pair = `${tokens[index]} ${tokens[index + 1]}`.trim();
+      if (pair.length >= 4) {
+        addVariant(pair);
+      }
+    }
+  };
+  const parseMultiValue = (raw: string | undefined) =>
+    (raw ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+  if (normalized) {
+    addTokenizedVariants(normalized);
+  }
+
+  const inferredIntent = detectQueryIntent(normalized);
+  if (inferredIntent) {
+    addVariant(inferredIntent);
+    for (const alias of QUERY_INTENT_ALIASES[inferredIntent] ?? []) {
+      addVariant(alias);
+    }
+  }
+
+  const supplierFilters = options.supplierFilters ?? {};
+  const hasFortniteFilterKeys = Object.keys(supplierFilters).some((key) =>
+    key.startsWith("fortnite_")
+  );
+  const scopeText = `${options.game ?? ""} ${options.category ?? ""}`.toLowerCase();
+  const isFortniteScope = hasFortniteFilterKeys || scopeText.includes("fortnite");
+
+  if (isFortniteScope) {
+    const selectedTerms = [
+      ...parseMultiValue(supplierFilters.fortnite_outfits),
+      ...parseMultiValue(supplierFilters.fortnite_pickaxes),
+      ...parseMultiValue(supplierFilters.fortnite_emotes),
+      ...parseMultiValue(supplierFilters.fortnite_gliders)
+    ]
+      .map((term) => term.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, 26);
+
+    for (const term of selectedTerms) {
+      addTokenizedVariants(term);
+      addVariant(`fortnite ${term}`);
+      addVariant(`${term} fortnite`);
+    }
+
+    if (!normalized && selectedTerms.length === 0) {
+      addVariant("fortnite");
+    }
+  }
+
+  if (variants.size === 0) {
     return [""];
   }
 
-  const tokens = Array.from(
-    new Set(
-      normalized
-        .toLowerCase()
-        .split(/[^a-z0-9а-яё]+/gi)
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2)
-    )
-  );
-
-  const variants = new Set<string>([normalized]);
-  const inferredIntent = detectQueryIntent(normalized);
-  if (inferredIntent) {
-    variants.add(inferredIntent);
-    for (const alias of QUERY_INTENT_ALIASES[inferredIntent] ?? []) {
-      variants.add(alias);
-    }
-  }
-  if (tokens.length > 0) {
-    variants.add(tokens.join(" "));
-  }
-  for (const token of tokens) {
-    if (token.length >= 3) {
-      variants.add(token);
-    }
-  }
-  for (let index = 0; index < tokens.length - 1; index += 1) {
-    const pair = `${tokens[index]} ${tokens[index + 1]}`.trim();
-    if (pair.length >= 4) {
-      variants.add(pair);
-    }
-  }
-
-  return Array.from(variants).filter(Boolean).slice(0, 8);
+  return Array.from(variants).filter(Boolean).slice(0, 24);
 }
 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
@@ -4690,9 +4744,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       return applyLocalFilters(combined, effectiveOptions, trimmedQuery, "pre");
     };
 
-    let activeSupplierQueries = trimmedQuery
-      ? buildSupplierQueryVariants(trimmedQuery)
-      : [trimmedQuery];
+    let activeSupplierQueries = buildSupplierQueryVariants(trimmedQuery, effectiveOptions);
     let usingEmptySupplierQueryFallback = false;
     let filteredCurrentPage = await loadFilteredPage(
       page,
