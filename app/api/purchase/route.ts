@@ -52,8 +52,17 @@ export async function POST(request: NextRequest) {
       });
     } catch (error) {
       const code = error instanceof Error ? error.message : "B99";
+      if (code === "B01") {
+        return fail("This listing is no longer available. Refresh and choose another listing.", 409);
+      }
+      if (code === "B02") {
+        return fail("Supplier is busy right now. Please try again in a moment.", 503);
+      }
       if (code === "B03") {
         return fail("Listing is temporarily unavailable. Refresh and try another listing.", 409);
+      }
+      if (code === "B04") {
+        return fail("Supplier verification is temporarily blocking purchases. Please try again shortly.", 503);
       }
       if (code === "B00" || code === "B99") {
         return fail(`Something Failed, Contact Support and Give them this error code: ${code}`, 502);

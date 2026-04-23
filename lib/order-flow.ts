@@ -172,12 +172,78 @@ function isSupplierPurchaseCooldown(message: string) {
   return patterns.some((pattern) => text.includes(pattern));
 }
 
+function isSupplierListingUnavailable(message: string) {
+  const text = message.toLowerCase();
+  const patterns = [
+    "listing not found",
+    "item not found",
+    "requested page could not be found",
+    "could not be found",
+    "not available",
+    "unavailable",
+    "already sold",
+    "sold out",
+    "no longer available",
+    "cannot be purchased",
+    "cant be purchased"
+  ];
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
+function isSupplierRateLimited(message: string) {
+  const text = message.toLowerCase();
+  const patterns = [
+    "too many requests",
+    "rate limit",
+    "retry later",
+    "temporarily unavailable",
+    "service unavailable",
+    "gateway timeout"
+  ];
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
+function isSupplierProtectedOrUnauthorized(message: string) {
+  const text = message.toLowerCase();
+  const patterns = [
+    "unauthorized",
+    "forbidden",
+    "cloudflare",
+    "_dfjs/b.js",
+    "access denied",
+    "captcha",
+    "bot protection"
+  ];
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
 function mapFulfillmentFailure(error: unknown) {
   const internalMessage = error instanceof Error ? error.message : "Purchase failed";
+  if (isSupplierListingUnavailable(internalMessage)) {
+    return {
+      code: "B01",
+      publicMessage: "This listing is no longer available. Please refresh and choose another listing.",
+      internalMessage
+    };
+  }
   if (isSupplierPurchaseCooldown(internalMessage)) {
     return {
       code: "B03",
       publicMessage: "Listing is temporarily unavailable. Refresh and try another listing.",
+      internalMessage
+    };
+  }
+  if (isSupplierRateLimited(internalMessage)) {
+    return {
+      code: "B02",
+      publicMessage: "Supplier is busy right now. Please try again in a moment.",
+      internalMessage
+    };
+  }
+  if (isSupplierProtectedOrUnauthorized(internalMessage)) {
+    return {
+      code: "B04",
+      publicMessage: "Supplier verification is temporarily blocking purchases. Please try again shortly.",
       internalMessage
     };
   }

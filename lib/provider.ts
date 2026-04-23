@@ -5142,6 +5142,14 @@ export async function buyFromSupplier(listingId: string) {
           parsed.error ?? parsed.message ?? parsed.detail ?? responseText,
           "Supplier purchase failed"
         );
+        const loweredResponseText = responseText.toLowerCase();
+        if (
+          loweredResponseText.includes("_dfjs/b.js") ||
+          loweredResponseText.includes("cloudflare") ||
+          loweredResponseText.includes("captcha")
+        ) {
+          lastErrorMessage = `Supplier protection triggered: ${lastErrorMessage}`;
+        }
         continue;
       }
 
@@ -5167,6 +5175,13 @@ export async function buyFromSupplier(listingId: string) {
           explicitError ||
           extractText(responseText, "Supplier purchase failed") ||
           "Supplier purchase failed";
+        if (
+          plainText.includes("_dfjs/b.js") ||
+          plainText.includes("cloudflare") ||
+          plainText.includes("captcha")
+        ) {
+          lastErrorMessage = `Supplier protection triggered: ${lastErrorMessage}`;
+        }
         continue;
       }
 
