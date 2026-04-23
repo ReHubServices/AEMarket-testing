@@ -210,12 +210,13 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
   const email = resolveCustomerEmail(payload);
   const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
   const amount = Number(payload.amount.toFixed(2));
-  const customer = {
-    email,
-    first_name: payload.username.slice(0, 64),
-    last_name: "Customer",
-    country: resolveCustomerCountry()
-  };
+  const country = resolveCustomerCountry();
+  const normalizedFirstName = payload.username.replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 32);
+  const customers: Array<Record<string, unknown>> = [
+    { email },
+    { email, country },
+    { email, first_name: normalizedFirstName || "Customer", country }
+  ];
   const metadata = {
     transactionId: String(payload.transactionId),
     transaction_id: String(payload.transactionId),
@@ -224,128 +225,89 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
     external_order_id: String(payload.orderId),
     username: String(payload.username)
   };
-  const shared = {
-    customer,
-    currency: payload.currency,
-    return_url: payload.returnUrl,
-    cancel_url: payload.returnUrl,
-    metadata
+  const withAndWithoutWebhook = (base: Record<string, unknown>) => {
+    const baseWithoutWebhook = { ...base };
+    const baseWithWebhook = payload.webhookUrl
+      ? {
+          ...base,
+          webhook_url: payload.webhookUrl
+        }
+      : base;
+    return [baseWithWebhook, baseWithoutWebhook];
   };
-  const sharedWithWebhook = payload.webhookUrl
-    ? {
-        ...shared,
-        webhook_url: payload.webhookUrl
-      }
-    : shared;
-  const sharedWithoutWebhook = { ...shared };
-  const attempts = [
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init",
-        "/api/checkout/init",
-        "/v1/checkout/init",
-        "/checkout/init"
-      ],
-      body: {
-        items: [
-          {
-            name: itemName,
-            price: amount,
-            quantity: 1
-          }
-        ],
-        ...sharedWithWebhook
-      }
-    },
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init",
-        "/api/checkout/init",
-        "/v1/checkout/init",
-        "/checkout/init"
-      ],
-      body: {
-        items: [
-          {
-            name: itemName,
-            price: amount,
-            quantity: 1
-          }
-        ],
-        ...sharedWithoutWebhook
-      }
-    },
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init",
-        "/api/checkout/init",
-        "/v1/checkout/init",
-        "/checkout/init"
-      ],
-      body: {
-        items: [
-          {
-            name: itemName,
-            price: amount,
-            unit_price: amount,
-            quantity: 1
-          }
-        ],
-        ...sharedWithWebhook
-      }
-    },
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init",
-        "/api/checkout/init",
-        "/v1/checkout/init",
-        "/checkout/init"
-      ],
-      body: {
-        items: [
-          {
-            name: itemName,
-            price: amount,
-            unit_price: amount,
-            quantity: 1
-          }
-        ],
-        ...sharedWithoutWebhook
-      }
-    },
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init",
-        "/api/checkout/init",
-        "/v1/checkout/init",
-        "/checkout/init"
-      ],
-      body: {
-        item: {
-          name: itemName,
-          price: amount,
-          quantity: 1
-        },
-        ...sharedWithWebhook
-      }
-    },
-    {
-      endpointSuffixes: [
-        "/api/v1/checkout/init",
-        "/api/checkout/init",
-        "/v1/checkout/init",
-        "/checkout/init"
-      ],
-      body: {
-        item: {
-          name: itemName,
-          price: amount,
-          quantity: 1
-        },
-        ...sharedWithoutWebhook
-      }
-    }
+  const amountString = amount.toFixed(2);
+  const endpoints = [
+    "/api/v1/checkout/init",
+    "/api/checkout/init",
+    "/v1/checkout/init",
+    "/checkout/init"
   ];
+  const attempts: Array<{
+    endpointSuffixes: string[];
+    body: Record<string, unknown>;
+  }> = [];
+
+  for (const customer of customers) {
+    for (const sharedBase of withAndWithoutWebhook({
+      customer,
+      currency: payload.currency,
+      return_url: payload.returnUrl,
+      cancel_url: payload.returnUrl,
+      metadata
+    })) {
+      attempts.push({
+        endpointSuffixes: endpoints,
+        body: {
+          items: [
+            {
+              name: itemName,
+              price: amount,
+              quantity: 1
+            }
+          ],
+          ...sharedBase
+        }
+      });
+      attempts.push({
+        endpointSuffixes: endpoints,
+        body: {
+          items: [
+            {
+              name: itemName,
+              price: amountString,
+              quantity: 1
+            }
+          ],
+          ...sharedBase
+        }
+      });
+      attempts.push({
+        endpointSuffixes: endpoints,
+        body: {
+          items: [
+            {
+              name: itemName,
+              price: amount,
+              unit_price: amount,
+              quantity: 1
+            }
+          ],
+          ...sharedBase
+        }
+      });
+      attempts.push({
+        endpointSuffixes: endpoints,
+        body: {
+          item: {
+            name: itemName,
+            price: amount,
+            quantity: 1
+          },
+          ...sharedBase
+        }
+      });
+    }
+  }
 
   return attempts as ReadonlyArray<{
     endpointSuffixes: string[];
