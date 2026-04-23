@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getViewerFromCookies } from "@/lib/viewer";
 import { getUserOrders } from "@/lib/order-flow";
 import { Button } from "@/components/ui/button";
+import { WalletReturnStatus } from "@/components/wallet/wallet-return-status";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,8 @@ export default async function DashboardPage() {
           </a>
         </div>
       </section>
+
+      <WalletReturnStatus />
 
       {latestCompleted && (
         <section className="glass-panel rounded-2xl border border-emerald-300/20 bg-emerald-950/20 p-4">

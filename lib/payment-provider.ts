@@ -26,6 +26,15 @@ export type WebhookPaymentData = {
   currency: string;
 };
 
+export type CheckoutVerificationData = {
+  providerPaymentId: string;
+  transactionId: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  confirmed: boolean;
+};
+
 function firstNonEmpty(values: Array<string | undefined>) {
   for (const value of values) {
     const trimmed = (value ?? "").trim();
@@ -149,6 +158,29 @@ function getBodyErrorMessage(raw: Record<string, unknown>) {
     toStringValue(data?.message) ??
     null
   );
+}
+
+function buildAuthHeaderVariants(apiKey: string): Array<Record<string, string>> {
+  return [
+    {
+      Authorization: `Bearer ${apiKey}`,
+      "X-API-Key": apiKey,
+      "x-api-key": apiKey,
+      "Api-Key": apiKey
+    },
+    {
+      Authorization: apiKey,
+      "X-API-Key": apiKey,
+      "x-api-key": apiKey,
+      "Api-Key": apiKey
+    },
+    {
+      Authorization: `Token ${apiKey}`,
+      "X-API-Key": apiKey,
+      "x-api-key": apiKey,
+      "Api-Key": apiKey
+    }
+  ];
 }
 
 function toStringFromPath(value: unknown, path: string[]) {
@@ -410,26 +442,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     throw new Error("VENPAYR_NOT_CONFIGURED");
   }
 
-  const authHeaderVariants: Array<Record<string, string>> = [
-    {
-      Authorization: `Bearer ${apiKey}`,
-      "X-API-Key": apiKey,
-      "x-api-key": apiKey,
-      "Api-Key": apiKey
-    },
-    {
-      Authorization: apiKey,
-      "X-API-Key": apiKey,
-      "x-api-key": apiKey,
-      "Api-Key": apiKey
-    },
-    {
-      Authorization: `Token ${apiKey}`,
-      "X-API-Key": apiKey,
-      "x-api-key": apiKey,
-      "Api-Key": apiKey
-    }
-  ];
+  const authHeaderVariants = buildAuthHeaderVariants(apiKey);
 
   let response: Response | null = null;
   let raw: Record<string, unknown> = {};
@@ -591,6 +604,163 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     providerAltPaymentId: resolvedAltPaymentId,
     checkoutUrl
   };
+}
+
+function parseTransactionIdFromVerifyPayload(payload: Record<string, unknown>) {
+  const root = toRecord(payload.data) ?? payload;
+  const nestedData = toRecord(root.data);
+  const metadata =
+    toMetadata(root.metadata) ??
+    toMetadata(payload.metadata) ??
+    toMetadata(nestedData?.metadata);
+  return (
+    toStringValue(metadata?.transactionId) ??
+    toStringValue(metadata?.transaction_id) ??
+    toStringValue(root.transaction_id) ??
+    toStringValue(payload.transaction_id) ??
+    toStringValue(metadata?.external_order_id) ??
+    toStringValue(metadata?.order_id) ??
+    null
+  );
+}
+
+function parseProviderPaymentIdFromVerifyPayload(payload: Record<string, unknown>, fallback: string) {
+  const root = toRecord(payload.data) ?? payload;
+  return (
+    toStringValue(root.pay_ref) ??
+    toStringValue(root.payRef) ??
+    toStringValue(payload.pay_ref) ??
+    toStringValue(payload.payRef) ??
+    toStringValue(root.invoice_id) ??
+    toStringValue(root.invoiceId) ??
+    toStringValue(payload.invoice_id) ??
+    toStringValue(payload.invoiceId) ??
+    fallback
+  );
+}
+
+function parseVerificationStatus(payload: Record<string, unknown>) {
+  const root = toRecord(payload.data) ?? payload;
+  const status =
+    toStringValue(root.status) ??
+    toStringValue(root.checkout_status) ??
+    toStringValue(payload.status) ??
+    toStringValue(payload.checkout_status) ??
+    "";
+  const verified =
+    root.verified === true ||
+    root.is_complete === true ||
+    payload.verified === true ||
+    payload.is_complete === true;
+  return {
+    status,
+    confirmed: verified || isPaymentConfirmed(status)
+  };
+}
+
+function parseVerificationAmountCurrency(payload: Record<string, unknown>) {
+  const root = toRecord(payload.data) ?? payload;
+  const amount =
+    toNumberValue(root.amount) ||
+    toNumberValue(payload.amount) ||
+    toNumberValue(root.total) ||
+    0;
+  const currency =
+    toStringValue(root.currency) ??
+    toStringValue(payload.currency) ??
+    "USD";
+  return { amount, currency };
+}
+
+export async function verifyCheckoutPayment(payRef: string): Promise<CheckoutVerificationData> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("VENPAYR_NOT_CONFIGURED");
+  }
+  const normalizedRef = payRef.trim();
+  if (!normalizedRef) {
+    throw new Error("VENPAYR_VERIFY_INVALID_REFERENCE");
+  }
+
+  const authHeaderVariants = buildAuthHeaderVariants(apiKey);
+  const refEncoded = encodeURIComponent(normalizedRef);
+  const endpointSuffixes = [
+    `/api/v1/checkout/verify/${refEncoded}`,
+    `/api/checkout/verify/${refEncoded}`,
+    `/v1/checkout/verify/${refEncoded}`,
+    `/checkout/verify/${refEncoded}`,
+    `/api/v1/checkout/status/${refEncoded}`,
+    `/api/checkout/status/${refEncoded}`,
+    `/v1/checkout/status/${refEncoded}`,
+    `/checkout/status/${refEncoded}`
+  ];
+
+  let response: Response | null = null;
+  let raw: Record<string, unknown> = {};
+  let lastNetworkError = "";
+  let lastApiError = "";
+
+  const baseCandidates = getBaseUrlCandidates();
+  for (const base of baseCandidates) {
+    for (const suffix of endpointSuffixes) {
+      const endpoint = resolveEndpoint(base, suffix);
+      for (const authHeaders of authHeaderVariants) {
+        try {
+          response = await fetch(endpoint, {
+            method: "GET",
+            headers: {
+              ...authHeaders,
+              Accept: "application/json"
+            },
+            cache: "no-store"
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Network error";
+          lastNetworkError = message;
+          continue;
+        }
+
+        raw = await parseProviderResponseBody(response);
+        if (response.ok) {
+          const providerPaymentId = parseProviderPaymentIdFromVerifyPayload(raw, normalizedRef);
+          const { status, confirmed } = parseVerificationStatus(raw);
+          const { amount, currency } = parseVerificationAmountCurrency(raw);
+          if (!providerPaymentId) {
+            lastApiError = "422: Missing payment reference in verify response";
+            continue;
+          }
+          return {
+            providerPaymentId,
+            transactionId: parseTransactionIdFromVerifyPayload(raw),
+            status,
+            amount,
+            currency,
+            confirmed
+          };
+        }
+
+        const message = getBodyErrorMessage(raw) ?? `Payment verification failed (${response.status})`;
+        lastApiError = `${response.status}: ${message}`;
+        if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
+          break;
+        }
+      }
+      if (response?.ok) {
+        break;
+      }
+    }
+    if (response?.ok) {
+      break;
+    }
+  }
+
+  if (!response) {
+    throw new Error(`VENPAYR_NETWORK_ERROR: ${lastNetworkError || "Unknown network error"}`);
+  }
+  if (!response.ok) {
+    throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment verification failed (${response.status})`}`);
+  }
+  throw new Error("VENPAYR_API_ERROR: Invalid verification response");
 }
 
 export function verifyWebhookSignature(rawBody: string, signatureHeader: string | null) {

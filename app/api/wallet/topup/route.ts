@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         username: viewer.username,
         customerEmail: viewer.email,
         itemName: "Wallet Top-up",
-        returnUrl: `${request.nextUrl.origin}/dashboard?wallet=1`,
+        returnUrl: `${request.nextUrl.origin}/dashboard?wallet=1&transactionId=${encodeURIComponent(pending.transaction.id)}`,
         webhookUrl: `${request.nextUrl.origin}/api/webhooks/venpayr`
       });
 

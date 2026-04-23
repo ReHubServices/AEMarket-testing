@@ -31,12 +31,19 @@ export function AddFundsPanel() {
           currency: "USD"
         })
       });
-      const payload = (await response.json()) as { checkoutUrl?: string; error?: string };
+      const payload = (await response.json()) as {
+        checkoutUrl?: string;
+        transactionId?: string;
+        error?: string;
+      };
       if (!response.ok) {
         throw new Error(payload.error || "Unable to create top-up");
       }
       if (!payload.checkoutUrl) {
         throw new Error("Checkout URL missing");
+      }
+      if (payload.transactionId && typeof window !== "undefined") {
+        window.sessionStorage.setItem("wallet_pending_transaction_id", payload.transactionId);
       }
       window.location.assign(payload.checkoutUrl);
     } catch (submitError) {
