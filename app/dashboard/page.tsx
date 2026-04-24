@@ -4,6 +4,7 @@ import { getViewerFromCookies } from "@/lib/viewer";
 import { getUserOrders } from "@/lib/order-flow";
 import { Button } from "@/components/ui/button";
 import { WalletReturnStatus } from "@/components/wallet/wallet-return-status";
+import { WalletAutoReconcile } from "@/components/wallet/wallet-auto-reconcile";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      <WalletAutoReconcile />
       <WalletReturnStatus />
 
       {latestCompleted && (

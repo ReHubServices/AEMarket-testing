@@ -9,6 +9,66 @@ import { getViewerFromRequest } from "@/lib/viewer";
 
 export const runtime = "nodejs";
 
+type VerificationAttempt = {
+  reference: string;
+  confirmed: boolean;
+  providerPaymentId: string;
+  transactionId: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+};
+
+function collectReferences(input: Array<string | null | undefined>) {
+  const references: string[] = [];
+  for (const raw of input) {
+    const value = String(raw ?? "").trim();
+    if (!value) {
+      continue;
+    }
+    if (!references.includes(value)) {
+      references.push(value);
+    }
+  }
+  return references;
+}
+
+async function verifyUsingReferences(references: string[]) {
+  let pending: VerificationAttempt | null = null;
+  let lastError: unknown = null;
+
+  for (const reference of references) {
+    try {
+      const verification = await verifyCheckoutPayment(reference);
+      const attempt: VerificationAttempt = {
+        reference,
+        confirmed: verification.confirmed,
+        providerPaymentId: verification.providerPaymentId,
+        transactionId: verification.transactionId,
+        status: verification.status,
+        amount: verification.amount,
+        currency: verification.currency
+      };
+      if (attempt.confirmed) {
+        return attempt;
+      }
+      if (!pending) {
+        pending = attempt;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (pending) {
+    return pending;
+  }
+  if (lastError) {
+    throw lastError;
+  }
+  throw new Error("Payment reference is required");
+}
+
 export async function POST(request: NextRequest) {
   const security = validateMutationRequest(request, { requireJson: true });
   if (!security.ok) {
@@ -44,13 +104,13 @@ export async function POST(request: NextRequest) {
     if (knownTransaction && knownTransaction.userId !== viewer.id) {
       return fail("Payment reference does not belong to current user", 403);
     }
-    const verificationReference =
-      payRef ||
-      knownTransaction?.providerPaymentId?.trim() ||
-      knownTransaction?.providerAltPaymentId?.trim() ||
-      "";
+    const verificationReferences = collectReferences([
+      payRef,
+      knownTransaction?.providerPaymentId,
+      knownTransaction?.providerAltPaymentId
+    ]);
 
-    if (!verificationReference) {
+    if (verificationReferences.length === 0) {
       if (knownTransaction?.status === "completed") {
         const user = store.users.find((item) => item.id === viewer.id);
         return ok({
@@ -61,7 +121,7 @@ export async function POST(request: NextRequest) {
       return fail("Payment reference is required", 400);
     }
 
-    const verification = await verifyCheckoutPayment(verificationReference);
+    const verification = await verifyUsingReferences(verificationReferences);
     if (!verification.confirmed) {
       if (knownTransaction?.status === "completed") {
         const user = store.users.find((item) => item.id === viewer.id);
@@ -85,7 +145,9 @@ export async function POST(request: NextRequest) {
         }
         return (
           tx.providerPaymentId === verification.providerPaymentId ||
-          tx.providerAltPaymentId === verification.providerPaymentId
+          tx.providerAltPaymentId === verification.providerPaymentId ||
+          tx.providerPaymentId === verification.reference ||
+          tx.providerAltPaymentId === verification.reference
         );
       });
       if (fallbackTransaction) {
@@ -96,7 +158,7 @@ export async function POST(request: NextRequest) {
 
     const reservation = await confirmPaymentAndReservePurchase({
       transactionId: verification.transactionId ?? providedTransactionId,
-      providerPaymentId: verification.providerPaymentId,
+      providerPaymentId: verification.reference,
       amount,
       currency
     });

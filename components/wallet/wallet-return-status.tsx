@@ -53,17 +53,20 @@ export function WalletReturnStatus() {
   );
 
   useEffect(() => {
-    if (!walletFlag) {
+    const pendingTransactionId =
+      (typeof window !== "undefined"
+        ? window.sessionStorage.getItem("wallet_pending_transaction_id")
+        : "") || "";
+
+    const shouldHandleReturn =
+      walletFlag || Boolean(payRef) || Boolean(transactionIdFromUrl) || Boolean(pendingTransactionId);
+
+    if (!shouldHandleReturn) {
       setPhase("idle");
       setMessage("");
       setBalance(null);
       return;
     }
-
-    const pendingTransactionId =
-      (typeof window !== "undefined"
-        ? window.sessionStorage.getItem("wallet_pending_transaction_id")
-        : "") || "";
 
     const resolvedTransactionId = transactionIdFromUrl || pendingTransactionId;
     if (!payRef && !resolvedTransactionId) {
