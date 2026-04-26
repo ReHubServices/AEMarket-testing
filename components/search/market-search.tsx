@@ -2216,24 +2216,6 @@ export function MarketSearch({
                       <div className="grid gap-3 xl:grid-cols-3">
                         <div className="space-y-2">
                           <label className="space-y-1 text-xs text-zinc-400">
-                            Platform
-                            <select
-                              value={gameFilters.fortnite_platform ?? ""}
-                              onChange={(event) =>
-                                setGameFilter("fortnite_platform", event.target.value)
-                              }
-                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
-                            >
-                              <option value="">Any platform</option>
-                              <option value="pc">PC</option>
-                              <option value="xbox">Xbox</option>
-                              <option value="psn">PlayStation</option>
-                              <option value="switch">Nintendo Switch</option>
-                              <option value="mobile">Mobile</option>
-                            </select>
-                          </label>
-
-                          <label className="space-y-1 text-xs text-zinc-400">
                             Access to email
                             <select
                               value={gameFilters.ma ?? ""}

@@ -2471,7 +2471,6 @@ function applyLocalFilters(
   );
   const fortniteBattlePass = options.supplierFilters?.fortnite_battle_pass?.trim() ?? "";
   const fortniteNoTransactions = options.supplierFilters?.fortnite_no_transactions?.trim() ?? "";
-  const fortnitePlatformRaw = options.supplierFilters?.fortnite_platform ?? "";
   const fortniteAccountOriginRaw = options.supplierFilters?.fortnite_account_origin ?? "";
   const fortniteExcludeAccountOriginRaw =
     options.supplierFilters?.fortnite_exclude_account_origin ?? "";
@@ -2607,7 +2606,6 @@ function applyLocalFilters(
       .replace(/[^a-z0-9а-яё]+/gi, " ")
       .replace(/\s+/g, " ")
       .trim();
-  const fortnitePlatform = normalizeText(fortnitePlatformRaw);
   const fortniteAccountOrigin = normalizeText(fortniteAccountOriginRaw);
   const fortniteExcludeAccountOrigin = normalizeText(fortniteExcludeAccountOriginRaw);
   const fortniteAccountLogin = normalizeText(fortniteAccountLoginRaw);
@@ -3422,12 +3420,132 @@ function applyLocalFilters(
     );
   };
   const applyMetricRange = (aliases: string[], min: number, max: number) => {
-    if (Number.isFinite(min) && min > 0) {
-      output = output.filter((item) => extractMetricValue(item, aliases) >= min);
+    const hasMin = Number.isFinite(min) && min > 0;
+    const hasMax = Number.isFinite(max) && max > 0;
+    if (!hasMin && !hasMax) {
+      return;
     }
-    if (Number.isFinite(max) && max > 0) {
-      output = output.filter((item) => extractMetricValue(item, aliases) <= max);
+    const values = output.map((item) => extractMetricValue(item, aliases));
+    const parsableCount = values.filter((value) => value > 0).length;
+    if (phase === "final" && parsableCount === 0) {
+      return;
     }
+    output = output.filter((_, index) => {
+      const value = values[index] ?? 0;
+      if (value <= 0) {
+        return phase === "pre";
+      }
+      if (hasMin && value < min) {
+        return false;
+      }
+      if (hasMax && value > max) {
+        return false;
+      }
+      return true;
+    });
+  };
+  const extractScopedMetricValue = (
+    item: MarketListing,
+    scopeAliases: string[],
+    metricAliases: string[]
+  ) => {
+    const normalizedScopes = scopeAliases.map((alias) => normalizeText(alias)).filter(Boolean);
+    const normalizedMetrics = metricAliases.map((alias) => normalizeText(alias)).filter(Boolean);
+    if (normalizedScopes.length === 0 || normalizedMetrics.length === 0) {
+      return 0;
+    }
+
+    let max = 0;
+    for (const spec of item.specs) {
+      const label = normalizeText(spec.label);
+      const value = normalizeText(spec.value);
+      const combined = `${label} ${value}`.trim();
+      if (!combined) {
+        continue;
+      }
+      const hasScope = normalizedScopes.some(
+        (scope) => label.includes(scope) || combined.includes(scope)
+      );
+      if (!hasScope) {
+        continue;
+      }
+      const hasMetric = normalizedMetrics.some(
+        (metric) => label.includes(metric) || combined.includes(metric)
+      );
+      if (!hasMetric) {
+        continue;
+      }
+      max = Math.max(max, parseLooseNumber(spec.value));
+    }
+
+    if (max > 0) {
+      return max;
+    }
+
+    const sources = [item.title, item.description];
+    for (const source of sources) {
+      const normalized = normalizeText(source);
+      if (!normalized) {
+        continue;
+      }
+      for (const scope of normalizedScopes) {
+        if (!normalized.includes(scope)) {
+          continue;
+        }
+        for (const metric of normalizedMetrics) {
+          const escapedScope = scope.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const escapedMetric = metric.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const forward = new RegExp(
+            `${escapedScope}[\\s\\S]{0,48}${escapedMetric}[^\\d]{0,12}(\\d[\\d\\s.,kmb]*)`,
+            "gi"
+          );
+          const backward = new RegExp(
+            `(\\d[\\d\\s.,kmb]*)[^\\d]{0,12}${escapedMetric}[\\s\\S]{0,48}${escapedScope}`,
+            "gi"
+          );
+          for (const match of source.matchAll(forward)) {
+            max = Math.max(max, parseLooseNumber(match[1] ?? ""));
+          }
+          for (const match of source.matchAll(backward)) {
+            max = Math.max(max, parseLooseNumber(match[1] ?? ""));
+          }
+        }
+      }
+    }
+
+    return max;
+  };
+  const applyScopedMetricRange = (
+    scopeAliases: string[],
+    metricAliases: string[],
+    min: number,
+    max: number
+  ) => {
+    const hasMin = Number.isFinite(min) && min > 0;
+    const hasMax = Number.isFinite(max) && max > 0;
+    if (!hasMin && !hasMax) {
+      return;
+    }
+    const values = output.map((item) =>
+      extractScopedMetricValue(item, scopeAliases, metricAliases)
+    );
+    const parsableCount = values.filter((value) => value > 0).length;
+    if (phase === "final" && parsableCount === 0) {
+      return;
+    }
+    output = output.filter((_, index) => {
+      const value = values[index] ?? 0;
+      if (value <= 0) {
+        return phase === "pre";
+      }
+      if (hasMin && value < min) {
+        return false;
+      }
+      if (hasMax && value > max) {
+        return false;
+      }
+      return true;
+    });
   };
   const applyIncludeTokens = (raw: string) => {
     const tokens = toFilterTokens(raw);
@@ -3442,13 +3560,6 @@ function applyLocalFilters(
       return;
     }
     output = output.filter((item) => !matchesTokens(itemSearchText(item), tokens));
-  };
-  const fortnitePlatformAliases: Record<string, string[]> = {
-    pc: ["pc", "computer", "windows"],
-    xbox: ["xbox"],
-    psn: ["playstation", "psn", "ps4", "ps5"],
-    switch: ["switch", "nintendo"],
-    mobile: ["mobile", "android", "ios", "iphone"]
   };
   const valorantRankOrder = [
     "iron",
@@ -3642,13 +3753,6 @@ function applyLocalFilters(
   if (Number.isFinite(mediaFollowersMin) && mediaFollowersMin > 0) {
     output = output.filter((item) => extractFollowers(item) >= mediaFollowersMin);
   }
-  if (fortnitePlatform) {
-    const platformTokens = fortnitePlatformAliases[fortnitePlatform] ?? [fortnitePlatform];
-    output = output.filter((item) => {
-      const text = itemSearchText(item);
-      return platformTokens.some((token) => text.includes(token));
-    });
-  }
   applyIncludeTokens(fortniteAccountOrigin);
   applyExcludeTokens(fortniteExcludeAccountOrigin);
   applyIncludeTokens(fortniteAccountLogin);
@@ -3793,47 +3897,56 @@ function applyLocalFilters(
   if (riotSoldBeforeByMe === "1") {
     output = output.filter((item) => hasSoldBefore(item));
   }
-  applyMetricRange(
-    ["skins", "skin", "inventory", "collection"],
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
+    ["skins", "skin", "weapon skins", "inventory", "collection"],
     valorantSkinCountMin,
     valorantSkinCountMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["agents", "agent"],
     valorantAgentsCountMin,
     valorantAgentsCountMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["knives", "knife", "melee"],
     valorantKnifeCountMin,
     valorantKnifeCountMax
   );
-  applyMetricRange(
-    ["gun buddy", "gunbuddies", "buddies"],
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
+    ["gun buddy", "gun buddies", "gunbuddies", "buddies"],
     valorantGunBuddiesMin,
     valorantGunBuddiesMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["level", "account level"],
     valorantLevelMin,
     valorantLevelMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["vp", "valorant points"],
     valorantVpMin,
     valorantVpMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["inventory value", "collection value", "inventory"],
     valorantInventoryValueMin,
     valorantInventoryValueMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["rp", "radianite", "radianite points"],
     valorantRpMin,
     valorantRpMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["valorant", "riot valorant", "vlt", "val"],
     ["free agents", "unlocked agents"],
     valorantFreeAgentsMin,
     valorantFreeAgentsMax
@@ -3844,7 +3957,9 @@ function applyLocalFilters(
     output = output.filter((item) => itemSearchText(item).includes(valorantRank));
   }
   if (valorantHasKnife === "1") {
-    output = output.filter((item) => hasValorantKnife(item));
+    if (phase === "final") {
+      output = output.filter((item) => hasValorantKnife(item));
+    }
   }
   if (valorantRankMin) {
     const target = rankIndex(valorantRankMin, valorantRankOrder);
@@ -3891,42 +4006,50 @@ function applyLocalFilters(
       });
     }
   }
-  applyMetricRange(
-    ["lol skins", "league skins", "skins"],
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
+    ["skins", "skin", "lol skins", "league skins"],
     lolSkinCountMin,
     lolSkinCountMax
   );
-  applyMetricRange(
-    ["champions", "champs"],
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
+    ["champions", "champs", "champion"],
     lolChampionsMin,
     lolChampionsMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
     ["level", "summoner level"],
     lolLevelMin,
     lolLevelMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
     ["winrate", "win rate"],
     lolWinrateMin,
     lolWinrateMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
     ["blue essence", "be"],
     lolBlueEssenceMin,
     lolBlueEssenceMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
     ["orange essence"],
     lolOrangeEssenceMin,
     lolOrangeEssenceMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
     ["mythic essence"],
     lolMythicEssenceMin,
     lolMythicEssenceMax
   );
-  applyMetricRange(
+  applyScopedMetricRange(
+    ["league of legends", "league", "lol", "riot lol"],
     ["riot points", "rp"],
     lolRiotPointsMin,
     lolRiotPointsMax
@@ -4724,6 +4847,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
       }
     : options;
   const hasBrowseScope = Boolean(effectiveOptions.game?.trim() || effectiveOptions.category?.trim());
+  const hasActiveSupplierFilters = Object.values(effectiveOptions.supplierFilters ?? {}).some(
+    (value) => String(value ?? "").trim().length > 0
+  );
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
   const pageSize = Number.isFinite(options.pageSize ?? NaN)
     ? Math.min(60, Math.max(1, Number(options.pageSize)))
@@ -4881,7 +5007,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
         }
       }
     }
-    if (trimmedQuery && filteredCurrentPage.length === 0 && hasBrowseScope) {
+    if (
+      trimmedQuery &&
+      filteredCurrentPage.length === 0 &&
+      hasBrowseScope &&
+      !hasActiveSupplierFilters &&
+      !explicitScope
+    ) {
       const scopeOnly = await loadFilteredPage(page, false, [""]);
       if (scopeOnly.length > 0) {
         filteredCurrentPage = scopeOnly;
@@ -5004,14 +5136,16 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const needsStrictFortniteCountFinalPass = strictFortniteCountFilterKeys.some((key) =>
       Boolean(effectiveOptions.supplierFilters?.[key]?.trim())
     );
-    const finalPassPoolSize = needsStrictFortniteCountFinalPass
-      ? Math.min(260, Math.max(targetEnd + pageSize * 10, 140))
+    const needsDeepFilterFinalPass =
+      hasActiveSupplierFilters || needsStrictFortniteCountFinalPass;
+    const finalPassPoolSize = needsDeepFilterFinalPass
+      ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
       : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const enriched = await enrichListingsWithDetails(
       finalPassPool,
       token,
-      needsStrictFortniteCountFinalPass ? Math.min(finalPassPool.length, 180) : 24
+      needsDeepFilterFinalPass ? Math.min(finalPassPool.length, 320) : 24
     );
     const finalFiltered = applyLocalFilters(enriched, effectiveOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);

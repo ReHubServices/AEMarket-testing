@@ -24,7 +24,6 @@ const SUPPLIER_FILTER_KEYS = [
   "fortnite_level_max",
   "fortnite_lifetime_wins_min",
   "fortnite_lifetime_wins_max",
-  "fortnite_platform",
   "fortnite_account_origin",
   "fortnite_exclude_account_origin",
   "fortnite_account_login",
