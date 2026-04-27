@@ -845,12 +845,6 @@ type RangeFilterConfig = {
   maxPlaceholder: string;
 };
 
-type TextFilterConfig = {
-  label: string;
-  key: string;
-  placeholder: string;
-};
-
 type TriStateFilterConfig = {
   label: string;
   key: string;
@@ -916,24 +910,6 @@ const FORTNITE_TRI_STATE_FILTERS: TriStateFilterConfig[] = [
     key: "fortnite_psn_linkable",
     options: ANY_MAYBE_NO_OPTIONS
   }
-];
-
-const RIOT_SHARED_TEXT_FILTERS: TextFilterConfig[] = [
-  { label: "Account origin", key: "riot_account_origin", placeholder: "Any" },
-  { label: "Exclude account origin", key: "riot_exclude_account_origin", placeholder: "Exclude" },
-  { label: "Country", key: "riot_country", placeholder: "Any" },
-  { label: "Exclude country", key: "riot_exclude_country", placeholder: "Exclude" },
-  { label: "Email domain", key: "riot_email_domain", placeholder: "Any" },
-  { label: "Exclude mail domain", key: "riot_exclude_mail_domain", placeholder: "Exclude" },
-  { label: "Mail provider", key: "riot_mail_provider", placeholder: "Any" },
-  { label: "Exclude mail provider", key: "riot_exclude_mail_provider", placeholder: "Exclude" }
-];
-
-const RIOT_SHARED_FLAGS: Array<{ key: string; label: string }> = [
-  { key: "riot_not_sold_before", label: "Not sold before" },
-  { key: "riot_sold_before", label: "Sold before" },
-  { key: "riot_not_sold_before_by_me", label: "Not sold before by me" },
-  { key: "riot_sold_before_by_me", label: "Sold before by me" }
 ];
 
 const VALORANT_RANK_OPTIONS = [
@@ -1086,23 +1062,6 @@ const LOL_RANGE_FILTERS: RangeFilterConfig[] = [
     minPlaceholder: "Riot Points from",
     maxPlaceholder: "up to"
   }
-];
-
-type LztSharedPrefix =
-  | "siege"
-  | "supercell"
-  | "media"
-  | "telegram"
-  | "discord"
-  | "steam"
-  | "cs2"
-  | "battlenet";
-
-const LZT_SHARED_FLAGS: Array<{ suffix: string; label: string }> = [
-  { suffix: "not_sold_before", label: "Not sold before" },
-  { suffix: "sold_before", label: "Sold before" },
-  { suffix: "not_sold_before_by_me", label: "Not sold before by me" },
-  { suffix: "sold_before_by_me", label: "Sold before by me" }
 ];
 
 function parseSelectedValues(raw: string | undefined) {
@@ -1597,101 +1556,6 @@ export function MarketSearch({
           placeholder={maxPlaceholder}
           className="h-9"
         />
-      </div>
-    );
-  }
-
-  function renderLztSharedColumn(prefix: LztSharedPrefix) {
-    const key = (suffix: string) => `${prefix}_${suffix}`;
-
-    return (
-      <div className="space-y-2">
-        <Input
-          value={gameFilters[key("account_origin")] ?? ""}
-          onChange={(event) => setGameFilter(key("account_origin"), event.target.value)}
-          placeholder="Account origin"
-          className="h-9"
-        />
-        <Input
-          value={gameFilters[key("exclude_account_origin")] ?? ""}
-          onChange={(event) => setGameFilter(key("exclude_account_origin"), event.target.value)}
-          placeholder="Exclude account origin"
-          className="h-9"
-        />
-        <Input
-          value={gameFilters[key("country")] ?? ""}
-          onChange={(event) => setGameFilter(key("country"), event.target.value)}
-          placeholder="Country"
-          className="h-9"
-        />
-        <Input
-          value={gameFilters[key("exclude_country")] ?? ""}
-          onChange={(event) => setGameFilter(key("exclude_country"), event.target.value)}
-          placeholder="Exclude country"
-          className="h-9"
-        />
-        <Input
-          type="number"
-          min={0}
-          value={gameFilters[key("last_activity_days_max")] ?? ""}
-          onChange={(event) => setGameFilter(key("last_activity_days_max"), event.target.value)}
-          placeholder="Last activity in days"
-          className="h-9"
-        />
-        <label className="space-y-1 text-xs text-zinc-400">
-          Access to email
-          <select
-            value={gameFilters.ma ?? ""}
-            onChange={(event) => setGameFilter("ma", event.target.value)}
-            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
-          >
-            <option value="">No matter</option>
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-          </select>
-        </label>
-        <Input
-          value={gameFilters[key("email_domain")] ?? ""}
-          onChange={(event) => setGameFilter(key("email_domain"), event.target.value)}
-          placeholder="Email domain"
-          className="h-9"
-        />
-        <Input
-          value={gameFilters[key("exclude_mail_domain")] ?? ""}
-          onChange={(event) => setGameFilter(key("exclude_mail_domain"), event.target.value)}
-          placeholder="Exclude mail domain"
-          className="h-9"
-        />
-        <Input
-          value={gameFilters[key("mail_provider")] ?? ""}
-          onChange={(event) => setGameFilter(key("mail_provider"), event.target.value)}
-          placeholder="Mail provider"
-          className="h-9"
-        />
-        <Input
-          value={gameFilters[key("exclude_mail_provider")] ?? ""}
-          onChange={(event) => setGameFilter(key("exclude_mail_provider"), event.target.value)}
-          placeholder="Exclude mail provider"
-          className="h-9"
-        />
-        <div className="space-y-1.5 pt-1">
-          {LZT_SHARED_FLAGS.map((flag) => (
-            <label
-              key={flag.suffix}
-              className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
-            >
-              <input
-                type="checkbox"
-                checked={(gameFilters[key(flag.suffix)] ?? "") === "1"}
-                onChange={(event) =>
-                  setGameFilter(key(flag.suffix), event.target.checked ? "1" : "")
-                }
-                className="h-4 w-4"
-              />
-              {flag.label}
-            </label>
-          ))}
-        </div>
       </div>
     );
   }
@@ -2238,23 +2102,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "fortnite" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        <div className="space-y-2">
-                          <label className="space-y-1 text-xs text-zinc-400">
-                            Access to email
-                            <select
-                              value={gameFilters.ma ?? ""}
-                              onChange={(event) => setGameFilter("ma", event.target.value)}
-                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
-                            >
-                              <option value="">No matter</option>
-                              <option value="1">Yes</option>
-                              <option value="0">No</option>
-                            </select>
-                          </label>
-
-                        </div>
-
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           {FORTNITE_SELECTOR_CONFIG.map((selector) => {
                             const selectedValues = parseSelectedValues(gameFilters[selector.key]);
@@ -2409,17 +2257,6 @@ export function MarketSearch({
                     {selectedGame === "valorant" && (
                       <div className="grid gap-3 xl:grid-cols-3">
                         <div className="space-y-2">
-                          {RIOT_SHARED_TEXT_FILTERS.slice(0, 4).map((field) => (
-                            <label key={field.key} className="space-y-1 text-xs text-zinc-400">
-                              {field.label}
-                              <Input
-                                value={gameFilters[field.key] ?? ""}
-                                onChange={(event) => setGameFilter(field.key, event.target.value)}
-                                placeholder={field.placeholder}
-                                className="h-10"
-                              />
-                            </label>
-                          ))}
                           <label className="space-y-1 text-xs text-zinc-400">
                             Last activity in days
                             <Input
@@ -2472,47 +2309,6 @@ export function MarketSearch({
                                 </button>
                               ))}
                             </div>
-                          </div>
-                          <label className="space-y-1 text-xs text-zinc-400">
-                            Access to email
-                            <select
-                              value={gameFilters.ma ?? ""}
-                              onChange={(event) => setGameFilter("ma", event.target.value)}
-                              className="h-10 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
-                            >
-                              <option value="">No matter</option>
-                              <option value="1">Yes</option>
-                              <option value="0">No</option>
-                            </select>
-                          </label>
-                          {RIOT_SHARED_TEXT_FILTERS.slice(4).map((field) => (
-                            <label key={field.key} className="space-y-1 text-xs text-zinc-400">
-                              {field.label}
-                              <Input
-                                value={gameFilters[field.key] ?? ""}
-                                onChange={(event) => setGameFilter(field.key, event.target.value)}
-                                placeholder={field.placeholder}
-                                className="h-10"
-                              />
-                            </label>
-                          ))}
-                          <div className="space-y-1.5 pt-1">
-                            {RIOT_SHARED_FLAGS.map((flag) => (
-                              <label
-                                key={flag.key}
-                                className="inline-flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-zinc-200"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={(gameFilters[flag.key] ?? "") === "1"}
-                                  onChange={(event) =>
-                                    setGameFilter(flag.key, event.target.checked ? "1" : "")
-                                  }
-                                  className="h-4 w-4"
-                                />
-                                {flag.label}
-                              </label>
-                            ))}
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -2756,8 +2552,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "siege" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("siege")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Siege Accounts</p>
                           <select
@@ -2801,8 +2596,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "supercell" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("supercell")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Supercell Accounts</p>
                           <Input
@@ -2833,8 +2627,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "media" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("media")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Media Accounts</p>
                           <select
@@ -2882,8 +2675,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "telegram" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("telegram")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Telegram Accounts</p>
                           <select
@@ -2908,8 +2700,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "discord" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("discord")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Discord Accounts</p>
                           <select
@@ -2954,8 +2745,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "steam" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("steam")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Steam Accounts</p>
                           {renderRangePair("steam_game_count_min", "steam_game_count_max", "Games from")}
@@ -3002,8 +2792,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "cs2" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("cs2")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Counter-Strike 2</p>
                           <select
@@ -3050,8 +2839,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "battlenet" && (
-                      <div className="grid gap-3 xl:grid-cols-3">
-                        {renderLztSharedColumn("battlenet")}
+                      <div className="grid gap-3 xl:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-sm font-semibold text-zinc-200">Battle.net Accounts</p>
                           <select
