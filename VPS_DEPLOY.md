@@ -10,14 +10,11 @@
    - `ADMIN_PASSWORD`
    - `LZT_API_TOKEN`
    - `VENPAYR_API_KEY`
-   - `VENPAYR_WEBHOOK_SECRET`
 4. Prepare persistent storage:
    - Recommended: set `DATABASE_URL` to Postgres.
    - If not using Postgres, create a persistent folder and set `STORE_DIR`.
-5. In VenPayr dashboard, set webhook URL to:
-   - `https://market.yourdomain.com/api/webhooks/venpayr`
-6. In VenPayr checkout settings, make sure return/cancel redirects go back to your domain.
-7. Rotate any keys that were ever used in test/public screenshots.
+5. In VenPayr checkout settings, make sure return/cancel redirects go back to your domain.
+6. Rotate any keys that were ever used in test/public screenshots.
 
 ## 2) Server packages
 
@@ -102,7 +99,6 @@ Use these keys in `.env`:
 - `FORTNITE_API_BASE_URL`
 - `VENPAYR_API_KEY`
 - `VENPAYR_BASE_URL`
-- `VENPAYR_WEBHOOK_SECRET`
 - `VENPAYR_CUSTOMER_COUNTRY`
 - `NEXT_PUBLIC_DISCORD_CONTACT_URL` (optional)
 
@@ -111,6 +107,5 @@ Use these keys in `.env`:
 1. Register/login works.
 2. Search returns listings.
 3. Add funds redirects to VenPayr checkout.
-4. VenPayr webhook reaches `/api/webhooks/venpayr` with 200.
-5. Wallet balance updates after confirmed payment.
-6. Purchase flow creates order and delivery appears in dashboard.
+4. Wallet balance updates after confirmed payment.
+5. Purchase flow creates order and delivery appears in dashboard.

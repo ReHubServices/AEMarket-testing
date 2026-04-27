@@ -108,6 +108,7 @@ type GameFilterTarget =
   | "fortnite"
   | "valorant"
   | "siege"
+  | "supercell"
   | "media"
   | "telegram"
   | "discord"
@@ -125,6 +126,7 @@ const GAME_SEARCH_PARAMS: Record<
   fortnite: { game: "fortnite", category: "fortnite" },
   valorant: { game: "valorant", category: "riot" },
   siege: { game: "siege", category: "rainbow-six-siege" },
+  supercell: { game: "supercell", category: "supercell" },
   media: { game: "social", category: "media" },
   telegram: { game: "telegram", category: "telegram" },
   discord: { game: "discord", category: "discord" },
@@ -140,6 +142,7 @@ const GAME_TOGGLE_FILTERS: Record<
   fortnite: [],
   valorant: [],
   siege: [],
+  supercell: [],
   media: [],
   telegram: [],
   discord: [],
@@ -154,6 +157,7 @@ const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
     "Riot Client",
     "Steam",
     "CS2",
+    "Supercell",
     "Telegram",
     "Discord",
     "Instagram",
@@ -223,6 +227,20 @@ const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
     "Rare skins",
     "R6 credits",
     "Ubisoft connect"
+  ],
+  supercell: [
+    "Brawl Stars",
+    "Clash of Clans",
+    "Clash Royale",
+    "Hay Day",
+    "Squad Busters",
+    "High trophies",
+    "Many gems",
+    "High level",
+    "Rare brawlers",
+    "Maxed account",
+    "Legendary cards",
+    "TH16"
   ],
   media: [
     "Instagram",
@@ -384,6 +402,11 @@ const GLOBAL_SUGGESTION_POOL = [
   "GTA V",
   "R6",
   "Rainbow Six Siege",
+  "Supercell",
+  "Brawl Stars",
+  "Clash of Clans",
+  "Clash Royale",
+  "Hay Day",
   "Champion",
   "Elite Skins",
   "Black Ice",
@@ -1067,6 +1090,7 @@ const LOL_RANGE_FILTERS: RangeFilterConfig[] = [
 
 type LztSharedPrefix =
   | "siege"
+  | "supercell"
   | "media"
   | "telegram"
   | "discord"
@@ -2105,7 +2129,8 @@ export function MarketSearch({
                 <option value="all">All Categories</option>
                 <option value="fortnite">Fortnite</option>
                 <option value="valorant">Riot Client</option>
-                <option value="siege">Rainbow Six Siege</option>
+                <option value="siege">Siege Accounts</option>
+                <option value="supercell">Supercell</option>
                 <option value="media">Media Accounts</option>
                 <option value="steam">Steam</option>
                 <option value="cs2">Counter-Strike 2</option>
@@ -2771,6 +2796,38 @@ export function MarketSearch({
                           {renderRangePair("siege_credits_min", "siege_credits_max", "R6 Credits from")}
                           {renderRangePair("siege_kd_min", "siege_kd_max", "KD from")}
                           {renderRangePair("siege_winrate_min", "siege_winrate_max", "WinRate from")}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedGame === "supercell" && (
+                      <div className="grid gap-3 xl:grid-cols-3">
+                        {renderLztSharedColumn("supercell")}
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-zinc-200">Supercell Accounts</p>
+                          <Input
+                            value={gameFilters.supercell_game ?? ""}
+                            onChange={(event) => setGameFilter("supercell_game", event.target.value)}
+                            placeholder="Game (Brawl Stars / Clash of Clans / Clash Royale)"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.supercell_exclude_game ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("supercell_exclude_game", event.target.value)
+                            }
+                            placeholder="Exclude game"
+                            className="h-9"
+                          />
+                          {renderRangePair(
+                            "supercell_trophies_min",
+                            "supercell_trophies_max",
+                            "Trophies from"
+                          )}
+                          {renderRangePair("supercell_gems_min", "supercell_gems_max", "Gems from")}
+                        </div>
+                        <div className="space-y-2">
+                          {renderRangePair("supercell_level_min", "supercell_level_max", "Level from")}
                         </div>
                       </div>
                     )}

@@ -1907,6 +1907,18 @@ const QUERY_INTENT_ALIASES: Record<string, string[]> = {
   ],
   valorant: ["valorant", "riot", "riot client"],
   siege: ["siege", "rainbow six", "rainbow-six-siege", "r6"],
+  supercell: [
+    "supercell",
+    "brawl stars",
+    "brawlstars",
+    "clash of clans",
+    "clashofclans",
+    "clash royale",
+    "clashroyale",
+    "hay day",
+    "hayday",
+    "squad busters"
+  ],
   steam: ["steam", "valve"],
   cs2: ["cs2", "counter strike", "counter-strike", "csgo"],
   battlenet: ["battlenet", "battle net", "battle.net", "blizzard"],
@@ -1975,6 +1987,7 @@ function detectQueryIntent(query: string) {
     "fortnite",
     "valorant",
     "siege",
+    "supercell",
     "cs2",
     "steam",
     "battlenet",
@@ -2066,6 +2079,18 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
     fortnite: ["fortnite"],
     valorant: ["valorant", "riot"],
     siege: ["siege", "rainbow-six-siege", "rainbow6", "r6"],
+    supercell: [
+      "supercell",
+      "brawl-stars",
+      "brawlstars",
+      "clash-of-clans",
+      "clashofclans",
+      "clash-royale",
+      "clashroyale",
+      "hay-day",
+      "hayday",
+      "squad-busters"
+    ],
     steam: ["steam", "cs2", "counter-strike", "counter-strike-2"],
     cs2: ["cs2", "steam", "counter-strike", "counter-strike-2", "csgo"],
     battlenet: ["battlenet", "battle-net", "blizzard"],
@@ -2913,6 +2938,20 @@ function applyLocalFilters(
     }
     if (normalizedToken === "siege") {
       return containsToken("siege") || containsToken("rainbow") || containsToken("r6");
+    }
+    if (normalizedToken === "supercell") {
+      return (
+        containsToken("supercell") ||
+        containsToken("brawl stars") ||
+        containsToken("brawlstars") ||
+        containsToken("clash of clans") ||
+        containsToken("clashofclans") ||
+        containsToken("clash royale") ||
+        containsToken("clashroyale") ||
+        containsToken("hay day") ||
+        containsToken("hayday") ||
+        containsToken("squad busters")
+      );
     }
     if (
       normalizedToken === "valorant" ||
@@ -4066,6 +4105,7 @@ function applyLocalFilters(
   }
   for (const prefix of [
     "siege",
+    "supercell",
     "media",
     "telegram",
     "discord",
@@ -4086,6 +4126,16 @@ function applyLocalFilters(
   applyRangeByKeys("siege_credits_min", "siege_credits_max", ["credits", "r6 credits"]);
   applyRangeByKeys("siege_kd_min", "siege_kd_max", ["kd", "k d"]);
   applyRangeByKeys("siege_winrate_min", "siege_winrate_max", ["winrate", "win rate"]);
+
+  applyIncludeTokens(getRawFilter("supercell_game"));
+  applyExcludeTokens(getRawFilter("supercell_exclude_game"));
+  applyRangeByKeys(
+    "supercell_trophies_min",
+    "supercell_trophies_max",
+    ["trophies", "trophy"]
+  );
+  applyRangeByKeys("supercell_gems_min", "supercell_gems_max", ["gems", "gem"]);
+  applyRangeByKeys("supercell_level_min", "supercell_level_max", ["level", "lvl"]);
 
   applyRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
   applyRangeByKeys("media_following_min", "media_following_max", ["following"]);

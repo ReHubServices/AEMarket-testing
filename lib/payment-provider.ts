@@ -9,7 +9,6 @@ export type CheckoutRequest = {
   customerEmail?: string | null;
   itemName?: string;
   returnUrl: string;
-  webhookUrl: string;
 };
 
 export type CheckoutResponse = {
@@ -273,16 +272,6 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
     external_order_id: String(payload.orderId),
     username: String(payload.username)
   };
-  const withAndWithoutWebhook = (base: Record<string, unknown>) => {
-    const baseWithoutWebhook = { ...base };
-    const baseWithWebhook = payload.webhookUrl
-      ? {
-          ...base,
-          webhook_url: payload.webhookUrl
-        }
-      : base;
-    return [baseWithWebhook, baseWithoutWebhook];
-  };
   const amountString = amount.toFixed(2);
   const endpoints = [
     "/api/v1/checkout/init",
@@ -296,65 +285,64 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
   }> = [];
 
   for (const customer of customers) {
-    for (const sharedBase of withAndWithoutWebhook({
+    const sharedBase = {
       customer,
       currency: payload.currency,
       return_url: payload.returnUrl,
       cancel_url: payload.returnUrl,
       metadata
-    })) {
-      attempts.push({
-        endpointSuffixes: endpoints,
-        body: {
-          items: [
-            {
-              name: itemName,
-              price: amount,
-              quantity: 1
-            }
-          ],
-          ...sharedBase
-        }
-      });
-      attempts.push({
-        endpointSuffixes: endpoints,
-        body: {
-          items: [
-            {
-              name: itemName,
-              price: amountString,
-              quantity: 1
-            }
-          ],
-          ...sharedBase
-        }
-      });
-      attempts.push({
-        endpointSuffixes: endpoints,
-        body: {
-          items: [
-            {
-              name: itemName,
-              price: amount,
-              unit_price: amount,
-              quantity: 1
-            }
-          ],
-          ...sharedBase
-        }
-      });
-      attempts.push({
-        endpointSuffixes: endpoints,
-        body: {
-          item: {
+    };
+    attempts.push({
+      endpointSuffixes: endpoints,
+      body: {
+        items: [
+          {
             name: itemName,
             price: amount,
             quantity: 1
-          },
-          ...sharedBase
-        }
-      });
-    }
+          }
+        ],
+        ...sharedBase
+      }
+    });
+    attempts.push({
+      endpointSuffixes: endpoints,
+      body: {
+        items: [
+          {
+            name: itemName,
+            price: amountString,
+            quantity: 1
+          }
+        ],
+        ...sharedBase
+      }
+    });
+    attempts.push({
+      endpointSuffixes: endpoints,
+      body: {
+        items: [
+          {
+            name: itemName,
+            price: amount,
+            unit_price: amount,
+            quantity: 1
+          }
+        ],
+        ...sharedBase
+      }
+    });
+    attempts.push({
+      endpointSuffixes: endpoints,
+      body: {
+        item: {
+          name: itemName,
+          price: amount,
+          quantity: 1
+        },
+        ...sharedBase
+      }
+    });
   }
 
   return attempts as ReadonlyArray<{
