@@ -3286,6 +3286,7 @@ function applyLocalFilters(
     const values = output.map((item) => extractFortniteCountStrict(item, metric, mode));
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
+      output = [];
       return;
     }
     output = output.filter((item, index) => {
@@ -3467,6 +3468,7 @@ function applyLocalFilters(
     const values = output.map((item) => extractMetricValue(item, aliases));
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
+      output = [];
       return;
     }
     output = output.filter((_, index) => {
@@ -3570,6 +3572,7 @@ function applyLocalFilters(
     );
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
+      output = [];
       return;
     }
     output = output.filter((_, index) => {
@@ -3741,6 +3744,8 @@ function applyLocalFilters(
       if (fallbackFortnite.length > 0) {
         output = fallbackFortnite;
       }
+    } else if (hasExplicitScope || Boolean(inferredQueryGameFilter)) {
+      output = [];
     }
   }
   if (effectiveGameFilter === "fortnite") {
@@ -3753,6 +3758,8 @@ function applyLocalFilters(
     const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
     if (scopedByCategory.length > 0) {
       output = scopedByCategory;
+    } else if (selectedCategoryFilter) {
+      output = [];
     }
   }
   if (hasKeywordQuery) {
