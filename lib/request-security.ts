@@ -24,6 +24,77 @@ function isTrustedFetchSite(value: string) {
   return normalized === "same-origin" || normalized === "same-site" || normalized === "none";
 }
 
+function normalizeHost(value: string) {
+  return value.trim().toLowerCase().replace(/\.$/, "");
+}
+
+function readTrustedOrigins() {
+  const raw = (process.env.TRUSTED_ORIGINS ?? process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const trusted = new Set<string>();
+  for (const entry of raw) {
+    try {
+      trusted.add(new URL(entry).origin.toLowerCase());
+    } catch {
+      continue;
+    }
+  }
+  return trusted;
+}
+
+function splitHeaderValues(value: string | null) {
+  if (!value) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function buildExpectedOrigins(request: NextRequest) {
+  const origins = new Set<string>();
+  const hosts = new Set<string>();
+  const forwardedHosts = splitHeaderValues(request.headers.get("x-forwarded-host"));
+  const directHost = request.headers.get("host");
+  const forwardedProtoRaw = splitHeaderValues(request.headers.get("x-forwarded-proto"))[0] ?? "";
+  const forwardedProto =
+    forwardedProtoRaw.toLowerCase() === "https" || forwardedProtoRaw.toLowerCase() === "http"
+      ? forwardedProtoRaw.toLowerCase()
+      : "";
+
+  const nextUrlHost = normalizeHost(request.nextUrl.host);
+  if (nextUrlHost) {
+    hosts.add(nextUrlHost);
+  }
+  if (directHost) {
+    hosts.add(normalizeHost(directHost));
+  }
+  for (const forwardedHost of forwardedHosts) {
+    hosts.add(normalizeHost(forwardedHost));
+  }
+
+  const nextUrlOrigin = request.nextUrl.origin.trim().toLowerCase();
+  if (nextUrlOrigin) {
+    origins.add(nextUrlOrigin);
+  }
+  for (const host of hosts) {
+    const normalizedHost = normalizeHost(host);
+    if (!normalizedHost) {
+      continue;
+    }
+    origins.add(`https://${normalizedHost}`);
+    origins.add(`http://${normalizedHost}`);
+    if (forwardedProto) {
+      origins.add(`${forwardedProto}://${normalizedHost}`);
+    }
+  }
+
+  return { origins, hosts };
+}
+
 export function validateMutationRequest(
   request: NextRequest,
   options: MutationSecurityOptions = {}
@@ -34,16 +105,23 @@ export function validateMutationRequest(
 
   const allowMissingOrigin = options.allowMissingOrigin !== false;
   const origin = request.headers.get("origin");
-  const expectedOrigin = request.nextUrl.origin;
+  const expected = buildExpectedOrigins(request);
+  const trustedOrigins = readTrustedOrigins();
 
   if (origin) {
-    let normalizedOrigin = "";
+    let parsedOrigin: URL;
     try {
-      normalizedOrigin = new URL(origin).origin;
+      parsedOrigin = new URL(origin);
     } catch {
       return { ok: false, status: 403, message: "Invalid request origin" };
     }
-    if (normalizedOrigin !== expectedOrigin) {
+    const normalizedOrigin = parsedOrigin.origin.toLowerCase();
+    const normalizedHost = normalizeHost(parsedOrigin.host);
+    if (
+      !expected.origins.has(normalizedOrigin) &&
+      !trustedOrigins.has(normalizedOrigin) &&
+      !expected.hosts.has(normalizedHost)
+    ) {
       return { ok: false, status: 403, message: "Untrusted request origin" };
     }
   } else if (!allowMissingOrigin) {
