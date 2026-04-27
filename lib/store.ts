@@ -9,7 +9,8 @@ function resolveStoreDir() {
     return configured;
   }
 
-  if (process.env.NODE_ENV === "production") {
+  const runningOnVercel = Boolean(process.env.VERCEL);
+  if (process.env.NODE_ENV === "production" && runningOnVercel) {
     const runtimeTmp = process.env.TMPDIR?.trim() || process.env.TEMP?.trim() || "/tmp";
     return path.join(runtimeTmp, "ae-empire-store");
   }
