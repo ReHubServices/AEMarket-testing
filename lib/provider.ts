@@ -30,15 +30,41 @@ const translationCache = new Map<string, string>();
 const fortniteCosmeticImageCache = new Map<string, { imageUrl: string; expiresAt: number }>();
 const searchResultCache = new Map<string, { expiresAt: number; result: SearchResult }>();
 const SEARCH_RESULT_CACHE_TTL_MS = 20_000;
+const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
 const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
   /(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)\/(?:market\/)?\d+\/image(?:\?[^ \]\n\r<>"']*)?/gi;
 
+function normalizeSupplierBaseUrl(value: string) {
+  const raw = value.trim();
+  if (!raw) {
+    return DEFAULT_LZT_API_BASE_URL;
+  }
+
+  const withProtocol = /^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withProtocol);
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "lzt.market" ||
+      host === "www.lzt.market" ||
+      host === "lolz.guru" ||
+      host === "lolz.live" ||
+      host === "www.lolz.guru" ||
+      host === "www.lolz.live"
+    ) {
+      return DEFAULT_LZT_API_BASE_URL;
+    }
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return DEFAULT_LZT_API_BASE_URL;
+  }
+}
+
 function getLztBaseUrl() {
-  const raw = (process.env.LZT_API_BASE_URL ?? "https://prod-api.lzt.market").trim();
-  return raw.replace(/\/+$/, "");
+  return normalizeSupplierBaseUrl(process.env.LZT_API_BASE_URL ?? DEFAULT_LZT_API_BASE_URL);
 }
 
 function buildSupplierFilterCacheKey(filters: Record<string, string> | undefined) {
@@ -100,7 +126,11 @@ function writeSearchResultCache(cacheKey: string, result: SearchResult) {
 }
 
 function getSearchEndpoint() {
-  return process.env.LZT_API_SEARCH_URL ?? `${getLztBaseUrl()}/`;
+  const configured = (process.env.LZT_API_SEARCH_URL ?? "").trim();
+  if (!configured) {
+    return `${getLztBaseUrl()}/`;
+  }
+  return `${normalizeSupplierBaseUrl(configured)}/`;
 }
 
 function getItemEndpointBase() {
@@ -4983,15 +5013,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
-      const primary =
-        !explicitScope || broadMode
-          ? await fetchFromEndpointForQueries(
-              endpoint,
-              pageOptions,
-              supplierQueries,
-              supplierPages
-            )
-          : [];
+      const primary = await fetchFromEndpointForQueries(
+        endpoint,
+        pageOptions,
+        supplierQueries,
+        supplierPages
+      );
       const endpointScope = broadMode
         ? {
             ...effectiveOptions,
