@@ -31,6 +31,11 @@ const fortniteCosmeticImageCache = new Map<string, { imageUrl: string; expiresAt
 const searchResultCache = new Map<string, { expiresAt: number; result: SearchResult }>();
 const SEARCH_RESULT_CACHE_TTL_MS = 20_000;
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
+const SUPPLIER_FETCH_TIMEOUT_MS = 7000;
+const SUPPLIER_MAX_QUERY_VARIANTS = 8;
+const SUPPLIER_MAX_PAGE_SPAN = 2;
+const SUPPLIER_MAX_CATEGORY_ENDPOINTS = 4;
+const SUPPLIER_MAX_LOGICAL_PAGES = 12;
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
@@ -1825,7 +1830,8 @@ async function fetchListingsFromEndpoint(input: {
       Authorization: `Bearer ${input.token}`,
       Accept: "application/json"
     },
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(SUPPLIER_FETCH_TIMEOUT_MS)
   });
 
   if (response.status === 401 || response.status === 403) {
@@ -4918,7 +4924,7 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
     return [""];
   }
 
-  return Array.from(variants).filter(Boolean).slice(0, 24);
+  return Array.from(variants).filter(Boolean).slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
 }
 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
@@ -4973,8 +4979,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
       supplierQueries: string[],
       supplierPages: number[]
     ) => {
-      const normalizedQueries = supplierQueries.length > 0 ? supplierQueries : [""];
-      const pageTargets = supplierPages.length > 0 ? supplierPages : [Number(pageOptions.page) || 1];
+      const normalizedQueries = (
+        supplierQueries.length > 0 ? supplierQueries : [""]
+      ).slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
+      const pageTargets = (
+        supplierPages.length > 0 ? supplierPages : [Number(pageOptions.page) || 1]
+      ).slice(0, SUPPLIER_MAX_PAGE_SPAN);
       const tasks: Array<Promise<MarketListing[]>> = [];
       for (const supplierPage of pageTargets) {
         for (const supplierQuery of normalizedQueries) {
@@ -5009,7 +5019,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ...normalizedOptions,
         page: targetPage
       };
-      const supplierPageSpan = hasBrowseScope ? (trimmedQuery ? 4 : 3) : 1;
+      const supplierPageSpan = Math.min(
+        SUPPLIER_MAX_PAGE_SPAN,
+        hasBrowseScope ? (trimmedQuery ? 2 : 1) : 1
+      );
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
@@ -5026,7 +5039,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
             category: null
           }
         : effectiveOptions;
-      const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope);
+      const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope).slice(
+        0,
+        SUPPLIER_MAX_CATEGORY_ENDPOINTS
+      );
       const categoryResultsSettled = await Promise.allSettled(
         categoryEndpoints.map((categoryEndpoint) =>
           fetchFromEndpointForQueries(
@@ -5133,7 +5149,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     };
 
     let logicalCursor = 1;
-    const maxLogicalPages = Math.max(page + 20, 50);
+    const maxLogicalPages = Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
     while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {
