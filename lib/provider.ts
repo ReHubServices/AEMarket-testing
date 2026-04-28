@@ -1851,9 +1851,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "first_owner",
     "media_followers_min",
     "media_verified",
-    "media_platform"
-  ]);
-  const supplierSafeFortniteKeys = new Set([
+    "media_platform",
     "fortnite_outfits",
     "fortnite_pickaxes",
     "fortnite_emotes",
@@ -1894,7 +1892,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
       }
       if (
         localOnlySupplierKeys.has(normalizedKey) ||
-        (normalizedKey.startsWith("fortnite_") && !supplierSafeFortniteKeys.has(normalizedKey)) ||
+        normalizedKey.startsWith("fortnite_") ||
         normalizedKey.startsWith("riot_") ||
         normalizedKey.startsWith("lol_") ||
         normalizedKey.startsWith("valorant_") ||
@@ -2917,6 +2915,30 @@ function applyLocalFilters(
     }
     return score;
   };
+  const matchesStrictPhrase = (item: MarketListing, phrase: string) => {
+    const normalizedPhrase = normalizeText(phrase);
+    if (!normalizedPhrase) {
+      return false;
+    }
+    const haystack = normalizeText(
+      `${item.title} ${item.description} ${item.game} ${item.category} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+    if (!haystack) {
+      return false;
+    }
+    if (haystack.includes(normalizedPhrase)) {
+      return true;
+    }
+    const phraseTokens = normalizedPhrase.split(" ").filter((token) => token.length >= 2);
+    if (phraseTokens.length < 2) {
+      return false;
+    }
+    return phraseTokens.every((token) =>
+      haystack.split(" ").some((word) => word === token || word.startsWith(token))
+    );
+  };
   const matchesSelectedTerm = (item: MarketListing, term: string) => {
     const normalizedTerm = normalizeText(term);
     if (!normalizedTerm) {
@@ -3017,7 +3039,7 @@ function applyLocalFilters(
         return true;
       }
     }
-    return false;
+    return matchesStrictPhrase(item, term);
   };
 
   const hasFortniteSignal = (item: MarketListing) => {
@@ -3985,10 +4007,13 @@ function applyLocalFilters(
       (queryTokens.length >= 2 ||
         effectiveGameFilter === "fortnite" ||
         categoryFilter === "fortnite");
-    if (strictKeywordFilter && matched.length > 0) {
-      output = matched;
-    } else if (strictKeywordFilter && matched.length === 0) {
-      output = [];
+    if (strictKeywordFilter) {
+      const strictMatched = output.filter((item) => matchesStrictPhrase(item, queryTerm));
+      if (strictMatched.length > 0) {
+        output = strictMatched;
+      } else {
+        output = [];
+      }
     } else if (matched.length > 0) {
       const matchedIds = new Set(matched.map((item) => item.id));
       const nonMatched = output.filter((item) => !matchedIds.has(item.id));
