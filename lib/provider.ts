@@ -5249,6 +5249,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
     );
     const finalFiltered = applyLocalFilters(enriched, effectiveOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);
+    if (options.sort === "price_asc") {
+      uniqueFinal.sort((a, b) => a.basePrice - b.basePrice);
+    } else if (options.sort === "price_desc") {
+      uniqueFinal.sort((a, b) => b.basePrice - a.basePrice);
+    } else if (options.sort === "newest") {
+      uniqueFinal.sort((a, b) => b.id.localeCompare(a.id));
+    }
     const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
     const finalHasMore = hasMore || uniqueFinal.length > targetEnd;
     const displayTranslated = await translateListingsToEnglish(finalWindow);
