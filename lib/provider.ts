@@ -3002,6 +3002,8 @@ function applyLocalFilters(
     for (const match of item.description.matchAll(descriptionPatterns[selectorKey])) {
       candidates.push(match[1] ?? "");
     }
+    candidates.push(item.title);
+    candidates.push(item.description);
     if (candidates.length === 0) {
       return false;
     }
@@ -3979,7 +3981,10 @@ function applyLocalFilters(
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.item);
     const strictKeywordFilter =
-      phase === "final" && !effectiveGameFilter && !categoryFilter && !inferredQueryGameFilter;
+      phase === "final" &&
+      (queryTokens.length >= 2 ||
+        effectiveGameFilter === "fortnite" ||
+        categoryFilter === "fortnite");
     if (strictKeywordFilter && matched.length > 0) {
       output = matched;
     } else if (strictKeywordFilter && matched.length === 0) {
