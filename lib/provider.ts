@@ -28,8 +28,12 @@ export type SearchOptions = {
 
 const translationCache = new Map<string, string>();
 const fortniteCosmeticImageCache = new Map<string, { imageUrl: string; expiresAt: number }>();
-const searchResultCache = new Map<string, { expiresAt: number; result: SearchResult }>();
-const SEARCH_RESULT_CACHE_TTL_MS = 20_000;
+const searchResultCache = new Map<string, { expiresAt: number; staleUntil: number; result: SearchResult }>();
+const inFlightSearches = new Map<string, Promise<SearchResult>>();
+const SEARCH_RESULT_CACHE_TTL_MS = Number(process.env.SEARCH_RESULT_CACHE_TTL_MS ?? 45_000);
+const SEARCH_RESULT_STALE_TTL_MS = Number(
+  process.env.SEARCH_RESULT_STALE_TTL_MS ?? 180_000
+);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
 const SUPPLIER_FETCH_TIMEOUT_MS = 7000;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
@@ -108,13 +112,17 @@ function buildSearchResultCacheKey(
   });
 }
 
-function readSearchResultCache(cacheKey: string): SearchResult | null {
+function readSearchResultCache(cacheKey: string, allowStale = false): SearchResult | null {
   const cached = searchResultCache.get(cacheKey);
   if (!cached) {
     return null;
   }
-  if (Date.now() > cached.expiresAt) {
+  const now = Date.now();
+  if (now > cached.staleUntil) {
     searchResultCache.delete(cacheKey);
+    return null;
+  }
+  if (!allowStale && now > cached.expiresAt) {
     return null;
   }
   return structuredClone(cached.result);
@@ -126,6 +134,7 @@ function writeSearchResultCache(cacheKey: string, result: SearchResult) {
   }
   searchResultCache.set(cacheKey, {
     expiresAt: Date.now() + SEARCH_RESULT_CACHE_TTL_MS,
+    staleUntil: Date.now() + SEARCH_RESULT_STALE_TTL_MS,
     result: structuredClone(result)
   });
 }
@@ -4834,6 +4843,14 @@ function withMarkup(listings: MarketListing[], markupPercent: number) {
 function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) {
   const normalized = query.trim();
   const variants = new Set<string>();
+  const hasActiveSupplierFilters = Object.values(options.supplierFilters ?? {}).some(
+    (value) => String(value ?? "").trim().length > 0
+  );
+  const maxVariants = normalized
+    ? hasActiveSupplierFilters
+      ? Math.min(4, SUPPLIER_MAX_QUERY_VARIANTS)
+      : SUPPLIER_MAX_QUERY_VARIANTS
+    : 1;
   const addVariant = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -4920,11 +4937,16 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
     }
   }
 
+  if (!normalized) {
+    return [""];
+  }
+
   if (variants.size === 0) {
     return [""];
   }
 
-  return Array.from(variants).filter(Boolean).slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
+  const finalized = Array.from(variants).filter(Boolean);
+  return finalized.slice(0, maxVariants);
 }
 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
@@ -4958,6 +4980,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
   if (cachedResult) {
     return cachedResult;
   }
+  const inFlight = inFlightSearches.get(cacheKey);
+  if (inFlight) {
+    return structuredClone(await inFlight);
+  }
 
   if (!trimmedQuery && !hasBrowseScope) {
     return {
@@ -4972,7 +4998,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     throw new Error("LZT_AUTH_MISSING");
   }
 
-  try {
+  const executeSearch = async (): Promise<SearchResult> => {
+    try {
     const fetchFromEndpointForQueries = async (
       endpointTarget: string,
       pageOptions: SearchOptions,
@@ -5026,12 +5053,15 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
-      const primary = await fetchFromEndpointForQueries(
-        endpoint,
-        pageOptions,
-        supplierQueries,
-        supplierPages
-      );
+      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode;
+      const primary = shouldUsePrimaryEndpoint
+        ? await fetchFromEndpointForQueries(
+            endpoint,
+            pageOptions,
+            supplierQueries,
+            supplierPages
+          )
+        : [];
       const endpointScope = broadMode
         ? {
             ...effectiveOptions,
@@ -5084,12 +5114,6 @@ export async function searchListings(query: string, options: SearchOptions = {})
           filteredCurrentPage = broadScoped;
         }
 
-        if (filteredCurrentPage.length < pageSize && hasBrowseScope) {
-          const broadUnscoped = await loadFilteredPage(page, true, activeSupplierQueries);
-          if (broadUnscoped.length > filteredCurrentPage.length) {
-            filteredCurrentPage = broadUnscoped;
-          }
-        }
       }
     }
     if (hasBrowseScope && !trimmedQuery && !explicitScope) {
@@ -5099,13 +5123,6 @@ export async function searchListings(query: string, options: SearchOptions = {})
         usingBroadFallback = true;
       }
 
-      if (filteredCurrentPage.length < pageSize) {
-        const broadUnscoped = await loadFilteredPage(page, true, activeSupplierQueries);
-        if (broadUnscoped.length > filteredCurrentPage.length) {
-          filteredCurrentPage = broadUnscoped;
-          usingBroadFallback = true;
-        }
-      }
     }
     if (
       trimmedQuery &&
@@ -5149,7 +5166,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
     };
 
     let logicalCursor = 1;
-    const maxLogicalPages = Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
+    const maxLogicalPages = hasActiveSupplierFilters
+      ? Math.max(page + 2, 6)
+      : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
     while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {
@@ -5245,7 +5264,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const enriched = await enrichListingsWithDetails(
       finalPassPool,
       token,
-      needsDeepFilterFinalPass ? Math.min(finalPassPool.length, 320) : 24
+      needsDeepFilterFinalPass ? Math.min(finalPassPool.length, 140) : 24
     );
     const finalFiltered = applyLocalFilters(enriched, effectiveOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);
@@ -5257,7 +5276,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
       uniqueFinal.sort((a, b) => b.id.localeCompare(a.id));
     }
     const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
-    const finalHasMore = hasMore || uniqueFinal.length > targetEnd;
+    const finalHasMore =
+      uniqueFinal.length > targetEnd ||
+      (!needsDeepFilterFinalPass && hasMore && finalWindow.length >= pageSize);
     const displayTranslated = await translateListingsToEnglish(finalWindow);
     const displayWithSharedImages = applySharedImageFallback(displayTranslated, trimmedQuery);
     const displayWithFortniteApiImages = await enrichFortniteListingImages(displayWithSharedImages);
@@ -5271,16 +5292,33 @@ export async function searchListings(query: string, options: SearchOptions = {})
     };
     writeSearchResultCache(cacheKey, result);
     return result;
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("LZT_AUTH_")) {
-      throw error;
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("LZT_AUTH_")) {
+        throw error;
+      }
+      const staleResult = readSearchResultCache(cacheKey, true);
+      if (staleResult) {
+        return staleResult;
+      }
+      return {
+        listings: [],
+        hasMore: false,
+        page,
+        pageSize
+      };
     }
-    return {
-      listings: [],
-      hasMore: false,
-      page,
-      pageSize
-    };
+  };
+
+  if (!cacheKey) {
+    return executeSearch();
+  }
+
+  const running = executeSearch();
+  inFlightSearches.set(cacheKey, running);
+  try {
+    return structuredClone(await running);
+  } finally {
+    inFlightSearches.delete(cacheKey);
   }
 }
 

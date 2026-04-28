@@ -21,6 +21,29 @@ function extractApiStatusCode(message: string) {
   return "000";
 }
 
+function resolvePublicOrigin(request: NextRequest) {
+  const configured =
+    process.env.APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.PUBLIC_APP_URL?.trim() ||
+    "";
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      return configured.replace(/\/+$/, "");
+    }
+  }
+
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ?? "";
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ?? "";
+  if (forwardedHost) {
+    const proto = forwardedProto === "http" || forwardedProto === "https" ? forwardedProto : "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  return request.nextUrl.origin;
+}
+
 export async function POST(request: NextRequest) {
   const security = validateMutationRequest(request, { requireJson: true });
   if (!security.ok) {
@@ -56,6 +79,7 @@ export async function POST(request: NextRequest) {
     });
 
     try {
+      const publicOrigin = resolvePublicOrigin(request);
       const checkout = await createCheckoutSession({
         amount: pending.transaction.amount,
         currency: pending.transaction.currency,
@@ -64,7 +88,7 @@ export async function POST(request: NextRequest) {
         username: viewer.username,
         customerEmail: viewer.email,
         itemName: "Wallet Top-up",
-        returnUrl: `${request.nextUrl.origin}/dashboard?wallet=1&transactionId=${encodeURIComponent(pending.transaction.id)}`
+        returnUrl: `${publicOrigin}/dashboard?wallet=1&transactionId=${encodeURIComponent(pending.transaction.id)}`
       });
 
       await attachCheckoutToTransaction({

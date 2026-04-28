@@ -1370,7 +1370,8 @@ export function MarketSearch({
           const payload = (await response.json().catch(() => ({}))) as {
             error?: string;
           };
-          throw new Error(payload.error || "Search failed");
+          const fallbackMessage = response.status >= 500 ? "Search timed out. Please retry." : "Search failed";
+          throw new Error(payload.error || fallbackMessage);
         }
         const data: SearchResponse = await response.json();
         if (!cancelled) {
