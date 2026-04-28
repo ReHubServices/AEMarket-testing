@@ -3542,9 +3542,6 @@ function applyLocalFilters(
       }
       return true;
     });
-    if (phase === "final" && filtered.length === 0) {
-      return;
-    }
     output = filtered;
   };
   const extractFollowers = (item: MarketListing) => {
@@ -4518,7 +4515,9 @@ function applyLocalFilters(
     );
     if (looseMatched.length > 0) {
       output = looseMatched;
+      return;
     }
+    output = [];
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
