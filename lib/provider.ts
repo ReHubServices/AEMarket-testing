@@ -3389,6 +3389,26 @@ function applyLocalFilters(
 
     scanSource(item.title);
     scanSource(item.description);
+    for (const spec of item.specs) {
+      scanSource(`${spec.label}: ${spec.value}`);
+    }
+
+    if (max > 0) {
+      return max;
+    }
+
+    const metricPatternMap: Record<FortniteMetricKey, RegExp> = {
+      outfits: /\b(?:skins?|outfits?|fortnite skin count|количество скинов|скинов)\b[^\d]{0,12}(\d+(?:[.,]\d+)?\s*[kmb]?)/gi,
+      pickaxes: /\b(?:pickaxes?|pickaxe|axes?|harvesting tool|количество кирок|кирок)\b[^\d]{0,12}(\d+(?:[.,]\d+)?\s*[kmb]?)/gi,
+      emotes: /\b(?:emotes?|emote|dances?|dance|количество эмоций|эмоций|танцев)\b[^\d]{0,12}(\d+(?:[.,]\d+)?\s*[kmb]?)/gi,
+      gliders: /\b(?:gliders?|glider|глайдеров|дельтапланов)\b[^\d]{0,12}(\d+(?:[.,]\d+)?\s*[kmb]?)/gi
+    };
+    const fallbackSource = `${item.title}\n${item.description}\n${item.specs
+      .map((spec) => `${spec.label}: ${spec.value}`)
+      .join("\n")}`;
+    for (const match of fallbackSource.matchAll(metricPatternMap[metric])) {
+      max = Math.max(max, parseCompactNumber(match[1] ?? ""));
+    }
 
     return max;
   };
@@ -3409,6 +3429,7 @@ function applyLocalFilters(
     const values = output.map((item) => extractFortniteCountStrict(item, metric, mode));
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
+      output = [];
       return;
     }
     const filtered = output.filter((item, index) => {
@@ -3424,16 +3445,6 @@ function applyLocalFilters(
       }
       return true;
     });
-    if (phase === "final" && filtered.length === 0 && parsableCount > 0) {
-      const parseCoverage = output.length > 0 ? parsableCount / output.length : 0;
-      if (parseCoverage < 0.2) {
-        return;
-      }
-    }
-    if (phase === "final" && filtered.length === 0 && parsableCount > 0) {
-      output = [];
-      return;
-    }
     output = filtered;
   };
   const extractFollowers = (item: MarketListing) => {
@@ -4387,9 +4398,6 @@ function applyLocalFilters(
     const matches = output.map((item) =>
       terms.every((term) => matchesSelectedTerm(item, term))
     );
-    if (!matches.some(Boolean)) {
-      return;
-    }
     output = output.filter((_, index) => matches[index]);
   };
   applyFortniteSelectedTerms(fortniteOutfits);
