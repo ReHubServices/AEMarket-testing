@@ -4499,18 +4499,7 @@ function applyLocalFilters(
     const strictMatches = output.map((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
-    const strictCount = strictMatches.filter(Boolean).length;
-    if (strictCount >= 3) {
-      output = output.filter((_, index) => strictMatches[index]);
-      return;
-    }
-    const softMatches = output.map((item) =>
-      terms.every((term) => matchesSelectedTerm(item, term))
-    );
-    const softCount = softMatches.filter(Boolean).length;
-    if (softCount > 0) {
-      output = output.filter((_, index) => softMatches[index]);
-    }
+    output = output.filter((_, index) => strictMatches[index]);
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
