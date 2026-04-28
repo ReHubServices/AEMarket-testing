@@ -5010,6 +5010,7 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
   );
   const scopeText = `${options.game ?? ""} ${options.category ?? ""}`.toLowerCase();
   const isFortniteScope = hasFortniteFilterKeys || scopeText.includes("fortnite");
+  let fortniteSelectedTermCount = 0;
 
   if (isFortniteScope) {
     const selectedTerms = [
@@ -5021,6 +5022,7 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
       .map((term) => term.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, 26);
+    fortniteSelectedTermCount = selectedTerms.length;
 
     for (const term of selectedTerms) {
       addTokenizedVariants(term);
@@ -5034,6 +5036,10 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
   }
 
   if (!normalized) {
+    const finalizedEmpty = Array.from(variants).filter(Boolean);
+    if (finalizedEmpty.length > 0 && fortniteSelectedTermCount > 0) {
+      return finalizedEmpty.slice(0, Math.min(6, SUPPLIER_MAX_QUERY_VARIANTS));
+    }
     return [""];
   }
 
