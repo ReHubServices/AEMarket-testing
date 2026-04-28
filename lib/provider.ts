@@ -2954,6 +2954,58 @@ function applyLocalFilters(
       )
     );
   };
+  type FortniteSelectorKey = "fortnite_outfits" | "fortnite_pickaxes" | "fortnite_emotes" | "fortnite_gliders";
+  const matchesSelectedFortniteTerm = (
+    item: MarketListing,
+    term: string,
+    selectorKey: FortniteSelectorKey
+  ) => {
+    const normalizedTerm = normalizeText(term);
+    if (!normalizedTerm) {
+      return false;
+    }
+    const selectorHints: Record<FortniteSelectorKey, string[]> = {
+      fortnite_outfits: ["outfit", "outfits", "skin", "skins", "character", "hero"],
+      fortnite_pickaxes: ["pickaxe", "pickaxes", "axe", "axes", "harvesting"],
+      fortnite_emotes: ["emote", "emotes", "dance", "dances"],
+      fortnite_gliders: ["glider", "gliders"]
+    };
+    const descriptionPatterns: Record<FortniteSelectorKey, RegExp> = {
+      fortnite_outfits: /\b(?:outfits?|skins?)\s*[:=-]\s*([^\n\r]{2,320})/gi,
+      fortnite_pickaxes: /\b(?:pickaxes?|axes?)\s*[:=-]\s*([^\n\r]{2,320})/gi,
+      fortnite_emotes: /\b(?:emotes?|dances?)\s*[:=-]\s*([^\n\r]{2,320})/gi,
+      fortnite_gliders: /\b(?:gliders?)\s*[:=-]\s*([^\n\r]{2,320})/gi
+    };
+
+    const candidates: string[] = [];
+    for (const spec of item.specs) {
+      const label = normalizeText(spec.label);
+      if (!selectorHints[selectorKey].some((hint) => label.includes(normalizeText(hint)))) {
+        continue;
+      }
+      candidates.push(`${spec.label} ${spec.value}`);
+      candidates.push(spec.value);
+    }
+    for (const match of item.description.matchAll(descriptionPatterns[selectorKey])) {
+      candidates.push(match[1] ?? "");
+    }
+    if (candidates.length === 0) {
+      candidates.push(item.title);
+      candidates.push(item.description);
+    }
+
+    for (const source of candidates) {
+      const normalizedSource = normalizeText(source);
+      if (!normalizedSource) {
+        continue;
+      }
+      if (normalizedSource.includes(normalizedTerm)) {
+        return true;
+      }
+    }
+
+    return matchesSelectedTerm(item, term);
+  };
 
   const hasFortniteSignal = (item: MarketListing) => {
     const text = itemSearchText(item);
@@ -4391,22 +4443,22 @@ function applyLocalFilters(
   if (mediaVerified === "0") {
     output = output.filter((item) => !isVerifiedMedia(item));
   }
-  const applyFortniteSelectedTerms = (terms: string[]) => {
+  const applyFortniteSelectedTerms = (terms: string[], selectorKey: FortniteSelectorKey) => {
     if (terms.length === 0 || phase === "pre") {
       return;
     }
     const matches = output.map((item) =>
-      terms.every((term) => matchesSelectedTerm(item, term))
+      terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
     if (!matches.some(Boolean)) {
       return;
     }
     output = output.filter((_, index) => matches[index]);
   };
-  applyFortniteSelectedTerms(fortniteOutfits);
-  applyFortniteSelectedTerms(fortnitePickaxes);
-  applyFortniteSelectedTerms(fortniteEmotes);
-  applyFortniteSelectedTerms(fortniteGliders);
+  applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
+  applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
+  applyFortniteSelectedTerms(fortniteEmotes, "fortnite_emotes");
+  applyFortniteSelectedTerms(fortniteGliders, "fortnite_gliders");
   if (options.hasImage) {
     output = output.filter((item) => hasRealImage(item.imageUrl));
   }
