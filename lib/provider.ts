@@ -1855,11 +1855,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "first_owner",
     "media_followers_min",
     "media_verified",
-    "media_platform",
-    "fortnite_outfits",
-    "fortnite_pickaxes",
-    "fortnite_emotes",
-    "fortnite_gliders"
+    "media_platform"
   ]);
   if (normalizedQuery) {
     url.searchParams.set("q", normalizedQuery);
@@ -1895,18 +1891,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
         continue;
       }
       if (
-        localOnlySupplierKeys.has(normalizedKey) ||
-        normalizedKey.startsWith("fortnite_") ||
-        normalizedKey.startsWith("riot_") ||
-        normalizedKey.startsWith("lol_") ||
-        normalizedKey.startsWith("valorant_") ||
-        normalizedKey.startsWith("siege_") ||
-        normalizedKey.startsWith("media_") ||
-        normalizedKey.startsWith("telegram_") ||
-        normalizedKey.startsWith("discord_") ||
-        normalizedKey.startsWith("steam_") ||
-        normalizedKey.startsWith("cs2_") ||
-        normalizedKey.startsWith("battlenet_")
+        localOnlySupplierKeys.has(normalizedKey)
       ) {
         continue;
       }
@@ -4502,6 +4487,7 @@ function applyLocalFilters(
     if (terms.length === 0 || phase === "pre") {
       return;
     }
+    const hasSupplierSideTermFiltering = Boolean(options.supplierFilters?.[selectorKey]?.trim());
     const strictMatched = output.filter((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
@@ -4515,6 +4501,9 @@ function applyLocalFilters(
     );
     if (looseMatched.length > 0) {
       output = looseMatched;
+      return;
+    }
+    if (hasSupplierSideTermFiltering) {
       return;
     }
     output = [];
