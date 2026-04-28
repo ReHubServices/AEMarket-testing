@@ -3523,7 +3523,6 @@ function applyLocalFilters(
     const values = output.map((item) => extractFortniteCountStrict(item, metric, mode));
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
-      output = [];
       return;
     }
     const filtered = output.filter((item, index) => {
@@ -3539,6 +3538,9 @@ function applyLocalFilters(
       }
       return true;
     });
+    if (phase === "final" && filtered.length === 0) {
+      return;
+    }
     output = filtered;
   };
   const extractFollowers = (item: MarketListing) => {
@@ -3706,10 +3708,9 @@ function applyLocalFilters(
     const values = output.map((item) => extractMetricValue(item, aliases));
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
-      output = [];
       return;
     }
-    output = output.filter((_, index) => {
+    const filtered = output.filter((_, index) => {
       const value = values[index] ?? 0;
       if (value <= 0) {
         return phase === "pre";
@@ -3722,6 +3723,10 @@ function applyLocalFilters(
       }
       return true;
     });
+    if (phase === "final" && filtered.length === 0) {
+      return;
+    }
+    output = filtered;
   };
   const extractScopedMetricValue = (
     item: MarketListing,
