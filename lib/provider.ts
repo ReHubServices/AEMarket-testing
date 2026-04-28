@@ -40,6 +40,10 @@ const SUPPLIER_MAX_QUERY_VARIANTS = 8;
 const SUPPLIER_MAX_PAGE_SPAN = 2;
 const SUPPLIER_MAX_CATEGORY_ENDPOINTS = 4;
 const SUPPLIER_MAX_LOGICAL_PAGES = 12;
+const HEAVY_FILTER_MAX_QUERY_VARIANTS = 2;
+const HEAVY_FILTER_MAX_PAGE_SPAN = 1;
+const HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS = 1;
+const HEAVY_FILTER_MAX_LOGICAL_PAGES = 10;
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
@@ -5233,14 +5237,16 @@ export async function searchListings(query: string, options: SearchOptions = {})
       endpointTarget: string,
       pageOptions: SearchOptions,
       supplierQueries: string[],
-      supplierPages: number[]
+      supplierPages: number[],
+      queryLimit: number,
+      pageSpanLimit: number
     ) => {
       const normalizedQueries = (
         supplierQueries.length > 0 ? supplierQueries : [""]
-      ).slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
+      ).slice(0, queryLimit);
       const pageTargets = (
         supplierPages.length > 0 ? supplierPages : [Number(pageOptions.page) || 1]
-      ).slice(0, SUPPLIER_MAX_PAGE_SPAN);
+      ).slice(0, pageSpanLimit);
       const tasks: Array<Promise<MarketListing[]>> = [];
       for (const supplierPage of pageTargets) {
         for (const supplierQuery of normalizedQueries) {
@@ -5275,8 +5281,14 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ...normalizedOptions,
         page: targetPage
       };
+      const queryLimit = hasActiveSupplierFilters
+        ? HEAVY_FILTER_MAX_QUERY_VARIANTS
+        : SUPPLIER_MAX_QUERY_VARIANTS;
+      const pageSpanLimit = hasActiveSupplierFilters
+        ? HEAVY_FILTER_MAX_PAGE_SPAN
+        : SUPPLIER_MAX_PAGE_SPAN;
       const supplierPageSpan = Math.min(
-        SUPPLIER_MAX_PAGE_SPAN,
+        pageSpanLimit,
         hasBrowseScope ? (trimmedQuery ? 2 : 1) : 1
       );
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
@@ -5288,7 +5300,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
             endpoint,
             pageOptions,
             supplierQueries,
-            supplierPages
+            supplierPages,
+            queryLimit,
+            pageSpanLimit
           )
         : [];
       const endpointScope = broadMode
@@ -5298,17 +5312,19 @@ export async function searchListings(query: string, options: SearchOptions = {})
             category: null
           }
         : effectiveOptions;
-      const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope).slice(
-        0,
-        SUPPLIER_MAX_CATEGORY_ENDPOINTS
-      );
+      const categoryEndpointLimit = hasActiveSupplierFilters
+        ? HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS
+        : SUPPLIER_MAX_CATEGORY_ENDPOINTS;
+      const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope).slice(0, categoryEndpointLimit);
       const categoryResultsSettled = await Promise.allSettled(
         categoryEndpoints.map((categoryEndpoint) =>
           fetchFromEndpointForQueries(
             categoryEndpoint,
             pageOptions,
             supplierQueries,
-            supplierPages
+            supplierPages,
+            queryLimit,
+            pageSpanLimit
           )
         )
       );
@@ -5379,7 +5395,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const targetEnd = targetStart + pageSize;
     const requiresDeepCandidateScan = hasActiveSupplierFilters;
     const requiredAggregatedSize = requiresDeepCandidateScan
-      ? Math.min(1800, Math.max(targetEnd + pageSize * 32, 420))
+      ? Math.min(900, Math.max(targetEnd + pageSize * 16, 260))
       : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
@@ -5400,7 +5416,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
-      ? Math.max(page + 12, 18)
+      ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
@@ -5437,7 +5453,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
-      const probeLimit = 2;
+      const probeLimit = hasActiveSupplierFilters ? 1 : 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
         const probeChunk = await loadFilteredPage(
