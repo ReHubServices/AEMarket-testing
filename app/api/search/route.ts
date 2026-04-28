@@ -18,6 +18,82 @@ function normalizeSearchTerm(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function clampText(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return value.slice(0, maxLength);
+}
+
+function normalizeSort(value: string): SearchSort {
+  if (value === "price_asc" || value === "price_desc" || value === "newest") {
+    return value;
+  }
+  return "relevance";
+}
+
+function normalizePage(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(numeric));
+}
+
+function normalizePageSize(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 15;
+  }
+  return Math.min(60, Math.max(1, Math.floor(numeric)));
+}
+
+function normalizePrice(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return numeric;
+}
+
+const MULTI_VALUE_FILTER_KEYS = new Set([
+  "fortnite_outfits",
+  "fortnite_pickaxes",
+  "fortnite_emotes",
+  "fortnite_gliders"
+]);
+
+function sanitizeSupplierFilterValue(key: string, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (MULTI_VALUE_FILTER_KEYS.has(key)) {
+    const values = trimmed
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const entry of values) {
+      const normalized = clampText(entry, 80);
+      const dedupeKey = normalized.toLowerCase();
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      unique.push(normalized);
+      if (unique.length >= 30) {
+        break;
+      }
+    }
+    return unique.join(",");
+  }
+
+  return clampText(trimmed, 120);
+}
+
 async function trackSearchTerm(rawQuery: string, page: number) {
   if (page !== 1) {
     return;
@@ -390,68 +466,120 @@ const SUPPLIER_FILTER_KEYS = [
   "battlenet_wow_ilvl_max"
 ] as const;
 
-export async function GET(request: NextRequest) {
-  const limiter = checkRateLimit({
-    key: createRateKey(request, "search"),
-    maxRequests: 90,
-    windowMs: 60_000
-  });
-  if (!limiter.allowed) {
-    return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
-  }
+type ParsedSearchRequest = {
+  query: string;
+  sort: SearchSort;
+  page: number;
+  pageSize: number;
+  minPrice: number | null;
+  maxPrice: number | null;
+  game: string;
+  category: string;
+  hasImage: boolean;
+  hasDescription: boolean;
+  hasSpecs: boolean;
+  supplierFilters: Record<string, string>;
+};
 
-  const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-  const sortParam = request.nextUrl.searchParams.get("sort")?.trim() ?? "";
-  const pageRaw = request.nextUrl.searchParams.get("page");
-  const pageSizeRaw = request.nextUrl.searchParams.get("pageSize");
-  const minPriceRaw = request.nextUrl.searchParams.get("minPrice");
-  const maxPriceRaw = request.nextUrl.searchParams.get("maxPrice");
-  const game = request.nextUrl.searchParams.get("game")?.trim() ?? "";
-  const category = request.nextUrl.searchParams.get("category")?.trim() ?? "";
-  const hasImage = parseFlag(request.nextUrl.searchParams.get("hasImage"));
-  const hasDescription = parseFlag(request.nextUrl.searchParams.get("hasDescription"));
-  const hasSpecs = parseFlag(request.nextUrl.searchParams.get("hasSpecs"));
+function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequest {
+  const query = clampText(params.get("q")?.trim() ?? "", 180);
+  const sort = normalizeSort((params.get("sort") ?? "").trim());
+  const page = normalizePage(params.get("page"));
+  const pageSize = normalizePageSize(params.get("pageSize"));
+  const minPrice = normalizePrice(params.get("minPrice"));
+  const maxPrice = normalizePrice(params.get("maxPrice"));
+  const game = clampText(params.get("game")?.trim() ?? "", 80);
+  const category = clampText(params.get("category")?.trim() ?? "", 80);
+  const hasImage = parseFlag(params.get("hasImage"));
+  const hasDescription = parseFlag(params.get("hasDescription"));
+  const hasSpecs = parseFlag(params.get("hasSpecs"));
 
-  const sort: SearchSort =
-    sortParam === "price_asc" ||
-    sortParam === "price_desc" ||
-    sortParam === "newest"
-      ? sortParam
-      : "relevance";
-  const minPrice =
-    minPriceRaw && Number.isFinite(Number(minPriceRaw)) ? Number(minPriceRaw) : null;
-  const maxPrice =
-    maxPriceRaw && Number.isFinite(Number(maxPriceRaw)) ? Number(maxPriceRaw) : null;
-  const page =
-    pageRaw && Number.isFinite(Number(pageRaw)) ? Math.max(1, Math.floor(Number(pageRaw))) : 1;
-  const pageSize =
-    pageSizeRaw && Number.isFinite(Number(pageSizeRaw))
-      ? Math.min(60, Math.max(1, Math.floor(Number(pageSizeRaw))))
-      : 15;
   const supplierFilters: Record<string, string> = {};
   for (const key of SUPPLIER_FILTER_KEYS) {
-    const value = request.nextUrl.searchParams.get(key)?.trim();
+    const value = sanitizeSupplierFilterValue(key, params.get(key)?.trim() ?? "");
     if (value) {
       supplierFilters[key] = value;
     }
   }
 
+  return {
+    query,
+    sort,
+    page,
+    pageSize,
+    minPrice,
+    maxPrice,
+    game,
+    category,
+    hasImage,
+    hasDescription,
+    hasSpecs,
+    supplierFilters
+  };
+}
+
+function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
+  const payload =
+    rawBody && typeof rawBody === "object"
+      ? (rawBody as Record<string, unknown>)
+      : {};
+  const query = clampText(String(payload.q ?? "").trim(), 180);
+  const sort = normalizeSort(String(payload.sort ?? "").trim());
+  const page = normalizePage(payload.page);
+  const pageSize = normalizePageSize(payload.pageSize);
+  const minPrice = normalizePrice(payload.minPrice);
+  const maxPrice = normalizePrice(payload.maxPrice);
+  const game = clampText(String(payload.game ?? "").trim(), 80);
+  const category = clampText(String(payload.category ?? "").trim(), 80);
+  const hasImage = parseFlag(String(payload.hasImage ?? ""));
+  const hasDescription = parseFlag(String(payload.hasDescription ?? ""));
+  const hasSpecs = parseFlag(String(payload.hasSpecs ?? ""));
+
+  const supplierFilters: Record<string, string> = {};
+  const rawSupplierFilters =
+    payload.supplierFilters && typeof payload.supplierFilters === "object"
+      ? (payload.supplierFilters as Record<string, unknown>)
+      : {};
+  for (const key of SUPPLIER_FILTER_KEYS) {
+    const value = sanitizeSupplierFilterValue(key, String(rawSupplierFilters[key] ?? ""));
+    if (value) {
+      supplierFilters[key] = value;
+    }
+  }
+
+  return {
+    query,
+    sort,
+    page,
+    pageSize,
+    minPrice,
+    maxPrice,
+    game,
+    category,
+    hasImage,
+    hasDescription,
+    hasSpecs,
+    supplierFilters
+  };
+}
+
+async function runSearchRequest(parsed: ParsedSearchRequest) {
   try {
-    const result = await searchListings(query, {
-      sort,
-      minPrice,
-      maxPrice,
-      page,
-      pageSize,
-      game: game || null,
-      category: category || null,
-      hasImage,
-      hasDescription,
-      hasSpecs,
-      supplierFilters
+    const result = await searchListings(parsed.query, {
+      sort: parsed.sort,
+      minPrice: parsed.minPrice,
+      maxPrice: parsed.maxPrice,
+      page: parsed.page,
+      pageSize: parsed.pageSize,
+      game: parsed.game || null,
+      category: parsed.category || null,
+      hasImage: parsed.hasImage,
+      hasDescription: parsed.hasDescription,
+      hasSpecs: parsed.hasSpecs,
+      supplierFilters: parsed.supplierFilters
     });
-    if (query) {
-      void trackSearchTerm(query, page);
+    if (parsed.query) {
+      void trackSearchTerm(parsed.query, parsed.page);
     }
     return ok({
       listings: result.listings,
@@ -470,5 +598,40 @@ export async function GET(request: NextRequest) {
       return fail("Search provider authorization failed", 401);
     }
     return fail("Search unavailable", 502);
+  }
+}
+
+function checkSearchRateLimit(request: NextRequest) {
+  const limiter = checkRateLimit({
+    key: createRateKey(request, "search"),
+    maxRequests: 90,
+    windowMs: 60_000
+  });
+  if (!limiter.allowed) {
+    return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
+  }
+  return null;
+}
+
+export async function GET(request: NextRequest) {
+  const rateLimitResponse = checkSearchRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+  const parsed = parseSearchRequestFromParams(request.nextUrl.searchParams);
+  return runSearchRequest(parsed);
+}
+
+export async function POST(request: NextRequest) {
+  const rateLimitResponse = checkSearchRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+  try {
+    const body = (await request.json()) as unknown;
+    const parsed = parseSearchRequestFromBody(body);
+    return runSearchRequest(parsed);
+  } catch {
+    return fail("Invalid search request", 400);
   }
 }

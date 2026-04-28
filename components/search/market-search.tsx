@@ -1385,40 +1385,46 @@ export function MarketSearch({
       setError(null);
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (normalized) {
-          params.set("q", normalized);
-        }
-        params.set("page", String(currentPage));
-        params.set("pageSize", String(PAGE_SIZE));
-        params.set("sort", sort);
+        const payload: Record<string, unknown> = {
+          q: normalized,
+          page: currentPage,
+          pageSize: PAGE_SIZE,
+          sort
+        };
         const searchTarget = GAME_SEARCH_PARAMS[selectedGame];
         if (searchTarget.game) {
-          params.set("game", searchTarget.game);
+          payload.game = searchTarget.game;
         }
         if (searchTarget.category) {
-          params.set("category", searchTarget.category);
+          payload.category = searchTarget.category;
         }
         if (selectedGame === "media") {
           const mediaPlatform = (gameFilters.media_platform ?? "").trim();
           if (mediaPlatform) {
-            params.set("category", mediaPlatform);
+            payload.category = mediaPlatform;
           }
         }
         if (minPrice.trim()) {
-          params.set("minPrice", minPrice.trim());
+          payload.minPrice = minPrice.trim();
         }
         if (maxPrice.trim()) {
-          params.set("maxPrice", maxPrice.trim());
+          payload.maxPrice = maxPrice.trim();
         }
+        const supplierFilters: Record<string, string> = {};
         for (const [key, value] of Object.entries(gameFilters)) {
           const normalizedValue = value.trim();
           if (normalizedValue) {
-            params.set(key, normalizedValue);
+            supplierFilters[key] = normalizedValue;
           }
         }
+        payload.supplierFilters = supplierFilters;
 
-        const response = await fetch(`/api/search?${params.toString()}`, {
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload),
           cache: "no-store",
           signal: controller.signal
         });
