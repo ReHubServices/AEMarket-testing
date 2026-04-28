@@ -2726,6 +2726,11 @@ function applyLocalFilters(
   const fortnitePickaxes = parseMultiSelect(options.supplierFilters?.fortnite_pickaxes);
   const fortniteEmotes = parseMultiSelect(options.supplierFilters?.fortnite_emotes);
   const fortniteGliders = parseMultiSelect(options.supplierFilters?.fortnite_gliders);
+  const hasFortniteSelectorFilters =
+    fortniteOutfits.length > 0 ||
+    fortnitePickaxes.length > 0 ||
+    fortniteEmotes.length > 0 ||
+    fortniteGliders.length > 0;
   const socialKeywords = [
     "instagram",
     "insta",
@@ -2872,7 +2877,9 @@ function applyLocalFilters(
     const requiredMatches =
       queryTokens.length <= 1
         ? 1
-        : Math.max(1, Math.ceil(queryTokens.length * 0.5));
+        : queryTokens.length <= 2
+          ? 2
+          : Math.max(2, Math.ceil(queryTokens.length * 0.67));
     return matches >= requiredMatches;
   };
   const scoreKeywordMatch = (item: MarketListing) => {
@@ -4004,13 +4011,14 @@ function applyLocalFilters(
       .map((entry) => entry.item);
     const strictKeywordFilter =
       phase === "final" &&
-      (queryTokens.length >= 2 ||
-        effectiveGameFilter === "fortnite" ||
-        categoryFilter === "fortnite");
+      queryTokens.length >= 2 &&
+      !hasFortniteSelectorFilters;
     if (strictKeywordFilter) {
       const strictMatched = output.filter((item) => matchesStrictPhrase(item, queryTerm));
       if (strictMatched.length > 0) {
         output = strictMatched;
+      } else if (matched.length > 0) {
+        output = matched;
       } else {
         output = [];
       }
@@ -4488,14 +4496,21 @@ function applyLocalFilters(
     if (terms.length === 0 || phase === "pre") {
       return;
     }
-    const matches = output.map((item) =>
+    const strictMatches = output.map((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
-    if (!matches.some(Boolean)) {
-      output = [];
+    const strictCount = strictMatches.filter(Boolean).length;
+    if (strictCount >= 3) {
+      output = output.filter((_, index) => strictMatches[index]);
       return;
     }
-    output = output.filter((_, index) => matches[index]);
+    const softMatches = output.map((item) =>
+      terms.every((term) => matchesSelectedTerm(item, term))
+    );
+    const softCount = softMatches.filter(Boolean).length;
+    if (softCount > 0) {
+      output = output.filter((_, index) => softMatches[index]);
+    }
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
