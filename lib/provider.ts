@@ -5362,6 +5362,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
     }
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
+    const requiresDeepCandidateScan = hasActiveSupplierFilters;
+    const requiredAggregatedSize = requiresDeepCandidateScan
+      ? Math.min(1800, Math.max(targetEnd + pageSize * 32, 420))
+      : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
     const preloadedByLogicalPage = new Map<number, MarketListing[]>([[page, filteredCurrentPage]]);
@@ -5380,12 +5384,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
     };
 
     let logicalCursor = 1;
-    const maxLogicalPages = hasActiveSupplierFilters
-      ? Math.max(page + 2, 6)
+    const maxLogicalPages = requiresDeepCandidateScan
+      ? Math.max(page + 12, 18)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
-    while (logicalCursor <= maxLogicalPages && aggregated.length < targetEnd + 1) {
+    while (logicalCursor <= maxLogicalPages && aggregated.length < requiredAggregatedSize) {
       let chunk = preloadedByLogicalPage.get(logicalCursor);
       if (!chunk) {
         chunk = await loadFilteredPage(
