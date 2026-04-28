@@ -524,13 +524,88 @@ function extractNumber(value: unknown, depth = 0, seen = new Set<unknown>()): nu
 }
 
 function resolveListingBasePrice(source: Record<string, unknown>) {
+  const hasNonSalePriceHint = (value: unknown) => {
+    const text = extractText(value, "").toLowerCase();
+    if (!text) {
+      return false;
+    }
+    return (
+      text.includes("v-buck") ||
+      text.includes("vbucks") ||
+      text.includes(" v-b ") ||
+      text.includes("vp") ||
+      text.includes("riot points") ||
+      text.includes("blue essence") ||
+      text.includes("orange essence") ||
+      text.includes("mythic essence") ||
+      text.includes("inventory value") ||
+      text.includes("locker value") ||
+      text.includes("skins value")
+    );
+  };
+  const parsePriceCandidate = (value: unknown, depth = 0): number => {
+    if (value == null || depth > 2) {
+      return 0;
+    }
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+    if (typeof value === "string") {
+      if (hasNonSalePriceHint(value)) {
+        return 0;
+      }
+      const parsed = extractNumber(value);
+      return parsed > 0 ? parsed : 0;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const parsed = parsePriceCandidate(entry, depth + 1);
+        if (parsed > 0) {
+          return parsed;
+        }
+      }
+      return 0;
+    }
+    if (typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      const keys = [
+        "final_price",
+        "sale_price",
+        "current_price",
+        "currency_price",
+        "price",
+        "amount",
+        "value"
+      ];
+      for (const key of keys) {
+        if (!(key in record)) {
+          continue;
+        }
+        const parsed = parsePriceCandidate(record[key], depth + 1);
+        if (parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+    return 0;
+  };
+
+  const parsedPrice = parsePriceCandidate(source.price);
+  const parsedCurrencyPrice = parsePriceCandidate(source.currency_price);
+  if (parsedPrice > 0 && parsedCurrencyPrice > 0) {
+    const ratio = parsedPrice / parsedCurrencyPrice;
+    if (ratio >= 90 && ratio <= 110) {
+      return Math.round(parsedCurrencyPrice * 100) / 100;
+    }
+  }
+
   const directCandidates = [
     source.final_price,
     source.sale_price,
     source.current_price,
+    source.currency_price,
     source.price,
     source.amount,
-    source.currency_price,
     source.cost,
     source.price_rub,
     source.sum,
@@ -538,7 +613,7 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
   ];
 
   for (const candidate of directCandidates) {
-    const parsed = extractNumber(candidate);
+    const parsed = parsePriceCandidate(candidate);
     if (parsed > 0) {
       return Math.round(parsed * 100) / 100;
     }
@@ -3323,6 +3398,9 @@ function applyLocalFilters(
     max: number,
     mode: "core" | "paid"
   ) => {
+    if (phase === "pre") {
+      return;
+    }
     const hasMin = Number.isFinite(min) && min > 0;
     const hasMax = Number.isFinite(max) && max > 0;
     if (!hasMin && !hasMax) {
@@ -3331,13 +3409,12 @@ function applyLocalFilters(
     const values = output.map((item) => extractFortniteCountStrict(item, metric, mode));
     const parsableCount = values.filter((value) => value > 0).length;
     if (phase === "final" && parsableCount === 0) {
-      output = [];
       return;
     }
-    output = output.filter((item, index) => {
+    const filtered = output.filter((item, index) => {
       const value = values[index] ?? 0;
       if (value <= 0) {
-        return phase === "pre";
+        return false;
       }
       if (hasMin && value < min) {
         return false;
@@ -3347,6 +3424,17 @@ function applyLocalFilters(
       }
       return true;
     });
+    if (phase === "final" && filtered.length === 0 && parsableCount > 0) {
+      const parseCoverage = output.length > 0 ? parsableCount / output.length : 0;
+      if (parseCoverage < 0.2) {
+        return;
+      }
+    }
+    if (phase === "final" && filtered.length === 0 && parsableCount > 0) {
+      output = [];
+      return;
+    }
+    output = filtered;
   };
   const extractFollowers = (item: MarketListing) => {
     const sources = [
