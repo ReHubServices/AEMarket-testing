@@ -4398,6 +4398,9 @@ function applyLocalFilters(
     const matches = output.map((item) =>
       terms.every((term) => matchesSelectedTerm(item, term))
     );
+    if (!matches.some(Boolean)) {
+      return;
+    }
     output = output.filter((_, index) => matches[index]);
   };
   applyFortniteSelectedTerms(fortniteOutfits);
