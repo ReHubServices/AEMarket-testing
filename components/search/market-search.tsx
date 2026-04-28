@@ -95,6 +95,16 @@ type SearchResponse = {
   };
 };
 
+type PopularTerm = {
+  term: string;
+  count: number;
+};
+
+type PopularSearchResponse = {
+  terms?: PopularTerm[];
+  listings?: MarketListing[];
+};
+
 type MarketSearchProps = {
   viewer: PublicViewer | null;
   homeTitle?: string;
@@ -1079,6 +1089,14 @@ function normalizeSuggestionValue(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function formatPopularTerm(term: string) {
+  return term
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`)
+    .join(" ");
+}
+
 function isSubsequenceMatch(haystack: string, needle: string) {
   if (!needle) {
     return true;
@@ -1171,6 +1189,7 @@ export function MarketSearch({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [activeListingId, setActiveListingId] = useState<string | null>(null);
   const [listings, setListings] = useState<MarketListing[]>([]);
+  const [popularTerms, setPopularTerms] = useState<PopularTerm[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1315,17 +1334,54 @@ export function MarketSearch({
     const hasSearchContext = Boolean(normalized) || selectedGame !== "all";
 
     if (!hasSearchContext) {
-      setListings([]);
-      setHasMore(false);
-      setLoading(false);
-      setReady(true);
-      setError(null);
+      const runPopularListings = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await fetch("/api/search/popular", {
+            cache: "no-store",
+            signal: controller.signal
+          });
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => ({}))) as {
+              error?: string;
+            };
+            throw new Error(payload.error || "Unable to load popular listings");
+          }
+          const data = (await response.json()) as PopularSearchResponse;
+          if (!cancelled) {
+            setListings(Array.isArray(data.listings) ? data.listings : []);
+            setPopularTerms(
+              Array.isArray(data.terms)
+                ? data.terms.filter((entry) => entry.term.trim()).slice(0, 10)
+                : []
+            );
+            setHasMore(false);
+          }
+        } catch (searchError) {
+          if (!cancelled && !(searchError instanceof DOMException && searchError.name === "AbortError")) {
+            setListings([]);
+            setPopularTerms([]);
+            const message =
+              searchError instanceof Error ? searchError.message : "Unable to load popular listings";
+            setError(message);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+            setReady(true);
+          }
+        }
+      };
+      runPopularListings();
       return () => {
         cancelled = true;
+        controller.abort();
       };
     }
 
     async function runSearch() {
+      setPopularTerms([]);
       setError(null);
       setLoading(true);
       try {
@@ -2972,6 +3028,29 @@ export function MarketSearch({
           })}
       </section>
 
+      {ready && !loading && !hasSearchContext && popularTerms.length > 0 && (
+        <section className="glass-panel rounded-2xl p-5 md:p-6">
+          <p className="font-[var(--font-space-grotesk)] text-lg font-semibold text-white">
+            Most Searched
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {popularTerms.map((entry) => (
+              <button
+                key={entry.term}
+                type="button"
+                onClick={() => {
+                  setQuery(formatPopularTerm(entry.term));
+                  setCurrentPage(1);
+                }}
+                className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-sm text-zinc-200 transition hover:border-white/35 hover:text-white"
+              >
+                {formatPopularTerm(entry.term)}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {ready && !loading && (listings.length > 0 || currentPage > 1 || hasMore) && (
         <div className="flex items-center justify-start gap-2 overflow-x-auto px-1 sm:justify-center">
           <Button
@@ -3006,14 +3085,13 @@ export function MarketSearch({
         </div>
       )}
 
-      {ready && !loading && !hasSearchContext && (
+      {ready && !loading && !hasSearchContext && listings.length === 0 && (
         <div className="glass-panel rounded-2xl p-10 text-center">
           <p className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
             Most Popular Listings
           </p>
           <p className="mt-2 text-sm text-zinc-300">
-            No featured data yet. Search any keyword to find matching accounts across all
-            categories.
+            No featured data yet. Start searching to see listings.
           </p>
         </div>
       )}

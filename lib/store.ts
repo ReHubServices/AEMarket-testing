@@ -40,6 +40,7 @@ const defaultStore: StoreData = {
   users: [],
   orders: [],
   transactions: [],
+  searchStats: [],
   settings: {
     markupPercent: DEFAULT_MARKUP_PERCENT,
     homeTitle: "Welcome to AE EMPIRE",
@@ -114,6 +115,7 @@ function normalizeStore(raw: unknown): StoreData {
     users: Array.isArray(data.users) ? data.users : [],
     orders: Array.isArray(data.orders) ? data.orders : [],
     transactions: Array.isArray(data.transactions) ? data.transactions : [],
+    searchStats: Array.isArray(data.searchStats) ? data.searchStats : [],
     settings: {
       markupPercent: markup,
       homeTitle,

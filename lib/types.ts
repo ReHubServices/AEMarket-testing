@@ -89,11 +89,18 @@ export type AppSettings = {
   announcementEnabled: boolean;
 };
 
+export type SearchStatRecord = {
+  term: string;
+  count: number;
+  lastSearchedAt: string;
+};
+
 export type StoreData = {
   users: UserRecord[];
   orders: OrderRecord[];
   transactions: TransactionRecord[];
   settings: AppSettings;
+  searchStats: SearchStatRecord[];
 };
 
 export type MarketListingSpec = {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/http";
 import { SearchSort, searchListings } from "@/lib/provider";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import { updateStore } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,49 @@ function parseFlag(value: string | null) {
   }
   const normalized = value.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+function normalizeSearchTerm(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+async function trackSearchTerm(rawQuery: string, page: number) {
+  if (page !== 1) {
+    return;
+  }
+  const term = normalizeSearchTerm(rawQuery);
+  if (term.length < 2 || term.length > 80) {
+    return;
+  }
+  await updateStore((store) => {
+    const nowIso = new Date().toISOString();
+    const existing = store.searchStats.find((entry) => entry.term === term);
+    if (!existing) {
+      store.searchStats.push({
+        term,
+        count: 1,
+        lastSearchedAt: nowIso
+      });
+    } else {
+      const lastAt = Date.parse(existing.lastSearchedAt);
+      const canIncrement = Number.isNaN(lastAt) || Date.now() - lastAt >= 15_000;
+      if (!canIncrement) {
+        return;
+      }
+      existing.count += 1;
+      existing.lastSearchedAt = nowIso;
+    }
+
+    store.searchStats.sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return Date.parse(right.lastSearchedAt) - Date.parse(left.lastSearchedAt);
+    });
+    if (store.searchStats.length > 2000) {
+      store.searchStats = store.searchStats.slice(0, 2000);
+    }
+  });
 }
 
 const SUPPLIER_FILTER_KEYS = [
@@ -406,6 +450,9 @@ export async function GET(request: NextRequest) {
       hasSpecs,
       supplierFilters
     });
+    if (query) {
+      void trackSearchTerm(query, page);
+    }
     return ok({
       listings: result.listings,
       pagination: {
