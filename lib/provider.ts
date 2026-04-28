@@ -572,10 +572,13 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
         "final_price",
         "sale_price",
         "current_price",
-        "currency_price",
         "price",
         "amount",
-        "value"
+        "cost",
+        "price_rub",
+        "sum",
+        "display_price",
+        "currency_price"
       ];
       for (const key of keys) {
         if (!(key in record)) {
@@ -590,12 +593,22 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
     return 0;
   };
 
+  const normalizeParsedPrice = (raw: number) => {
+    if (!(raw > 0)) {
+      return 0;
+    }
+    return Math.round(raw * 100) / 100;
+  };
+
   const parsedPrice = parsePriceCandidate(source.price);
   const parsedCurrencyPrice = parsePriceCandidate(source.currency_price);
   if (parsedPrice > 0 && parsedCurrencyPrice > 0) {
     const ratio = parsedPrice / parsedCurrencyPrice;
-    if (ratio >= 90 && ratio <= 110) {
-      return Math.round(parsedCurrencyPrice * 100) / 100;
+    if (ratio >= 95 && ratio <= 105) {
+      return normalizeParsedPrice(parsedCurrencyPrice);
+    }
+    if (ratio >= 9500 && ratio <= 10500) {
+      return normalizeParsedPrice(parsedPrice / 100);
     }
   }
 
@@ -603,19 +616,19 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
     source.final_price,
     source.sale_price,
     source.current_price,
-    source.currency_price,
     source.price,
     source.amount,
     source.cost,
     source.price_rub,
     source.sum,
-    source.display_price
+    source.display_price,
+    source.currency_price
   ];
 
   for (const candidate of directCandidates) {
     const parsed = parsePriceCandidate(candidate);
     if (parsed > 0) {
-      return Math.round(parsed * 100) / 100;
+      return normalizeParsedPrice(parsed);
     }
   }
 
@@ -2990,8 +3003,7 @@ function applyLocalFilters(
       candidates.push(match[1] ?? "");
     }
     if (candidates.length === 0) {
-      candidates.push(item.title);
-      candidates.push(item.description);
+      return false;
     }
 
     for (const source of candidates) {
@@ -3003,8 +3015,7 @@ function applyLocalFilters(
         return true;
       }
     }
-
-    return matchesSelectedTerm(item, term);
+    return false;
   };
 
   const hasFortniteSignal = (item: MarketListing) => {
@@ -4451,6 +4462,7 @@ function applyLocalFilters(
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
     if (!matches.some(Boolean)) {
+      output = [];
       return;
     }
     output = output.filter((_, index) => matches[index]);
@@ -5108,6 +5120,7 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
 
 export async function searchListings(query: string, options: SearchOptions = {}): Promise<SearchResult> {
   const store = await readStore();
+  const markupMultiplier = 1 + store.settings.markupPercent / 100;
   const endpoint = getSearchEndpoint();
   const trimmedQuery = query.trim();
   const explicitScope = Boolean(options.game?.trim() || options.category?.trim());
@@ -5122,6 +5135,14 @@ export async function searchListings(query: string, options: SearchOptions = {})
   const hasActiveSupplierFilters = Object.values(effectiveOptions.supplierFilters ?? {}).some(
     (value) => String(value ?? "").trim().length > 0
   );
+  const minPriceBase =
+    Number.isFinite(options.minPrice ?? NaN) && markupMultiplier > 0
+      ? Number(options.minPrice) / markupMultiplier
+      : null;
+  const maxPriceBase =
+    Number.isFinite(options.maxPrice ?? NaN) && markupMultiplier > 0
+      ? Number(options.maxPrice) / markupMultiplier
+      : null;
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
   const pageSize = Number.isFinite(options.pageSize ?? NaN)
     ? Math.min(60, Math.max(1, Number(options.pageSize)))
@@ -5129,6 +5150,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
   const fetchPageSize = Math.min(80, pageSize + 12);
   const normalizedOptions: SearchOptions = {
     ...effectiveOptions,
+    minPrice: minPriceBase,
+    maxPrice: maxPriceBase,
     page,
     pageSize: fetchPageSize
   };
