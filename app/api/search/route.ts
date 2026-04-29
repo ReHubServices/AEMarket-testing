@@ -482,70 +482,6 @@ type ParsedSearchRequest = {
   supplierFilters: Record<string, string>;
 };
 
-function sortListingsByMode(listings: MarketListing[], sort: SearchSort) {
-  const output = listings.slice();
-  if (sort === "price_asc") {
-    output.sort((left, right) => left.basePrice - right.basePrice);
-    return output;
-  }
-  if (sort === "price_desc") {
-    output.sort((left, right) => right.basePrice - left.basePrice);
-    return output;
-  }
-  if (sort === "newest") {
-    output.sort((left, right) => right.id.localeCompare(left.id));
-    return output;
-  }
-  return output;
-}
-
-function mergeUniqueListings(listings: MarketListing[]) {
-  const byId = new Map<string, MarketListing>();
-  for (const listing of listings) {
-    const id = listing.id.trim().toLowerCase();
-    if (!id || byId.has(id)) {
-      continue;
-    }
-    byId.set(id, listing);
-  }
-  return Array.from(byId.values());
-}
-
-function isFortniteStrictRequest(parsed: ParsedSearchRequest) {
-  const scope = `${parsed.game} ${parsed.category}`.toLowerCase();
-  const hasFortniteScope = scope.includes("fortnite");
-  if (!hasFortniteScope) {
-    return false;
-  }
-  const minSkins = Number(parsed.supplierFilters.fortnite_skin_count_min ?? NaN);
-  const maxSkins = Number(parsed.supplierFilters.fortnite_skin_count_max ?? NaN);
-  const hasRangeFilter =
-    (Number.isFinite(minSkins) && minSkins > 0) || (Number.isFinite(maxSkins) && maxSkins > 0);
-  const hasOutfitFilter = Boolean(parsed.supplierFilters.fortnite_outfits?.trim());
-  return hasRangeFilter || hasOutfitFilter;
-}
-
-function buildFortniteFallbackQueries(parsed: ParsedSearchRequest) {
-  const queries = new Set<string>();
-  const add = (value: string) => {
-    const normalized = clampText(value.trim(), 180);
-    if (normalized) {
-      queries.add(normalized);
-    }
-  };
-  add(parsed.query);
-  const firstOutfit = (parsed.supplierFilters.fortnite_outfits ?? "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)[0];
-  if (firstOutfit) {
-    add(firstOutfit);
-    add(`${firstOutfit} fortnite`);
-  }
-  add("fortnite");
-  return Array.from(queries).slice(0, 4);
-}
-
 function normalizeText(value: string) {
   return value
     .toLowerCase()
@@ -723,53 +659,7 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
     if (parsed.query) {
       void trackSearchTerm(parsed.query, parsed.page);
     }
-    let listings = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
-    if (listings.length === 0 && isFortniteStrictRequest(parsed)) {
-      const targetStart = (parsed.page - 1) * parsed.pageSize;
-      const targetEnd = targetStart + parsed.pageSize;
-      const fallbackQueries = buildFortniteFallbackQueries(parsed);
-      const collected: MarketListing[] = [];
-      for (const query of fallbackQueries) {
-        for (let scanPage = 1; scanPage <= 4; scanPage += 1) {
-          const sweep = await searchListings(query, {
-            sort: "relevance",
-            minPrice: parsed.minPrice,
-            maxPrice: parsed.maxPrice,
-            page: scanPage,
-            pageSize: 40,
-            game: parsed.game || null,
-            category: parsed.category || null,
-            hasImage: parsed.hasImage,
-            hasDescription: parsed.hasDescription,
-            hasSpecs: parsed.hasSpecs,
-            supplierFilters: parsed.supplierFilters
-          });
-          const filteredSweep = applyHardFortniteFilters(sweep.listings, parsed.supplierFilters);
-          if (filteredSweep.length > 0) {
-            collected.push(...filteredSweep);
-          }
-          if (collected.length >= targetEnd + parsed.pageSize) {
-            break;
-          }
-        }
-        if (collected.length >= targetEnd + parsed.pageSize) {
-          break;
-        }
-      }
-      const uniqueCollected = sortListingsByMode(
-        mergeUniqueListings(collected),
-        parsed.sort
-      );
-      listings = uniqueCollected.slice(targetStart, targetEnd);
-      return ok({
-        listings,
-        pagination: {
-          page: parsed.page,
-          pageSize: parsed.pageSize,
-          hasMore: uniqueCollected.length > targetEnd
-        }
-      });
-    }
+    const listings = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
     return ok({
       listings,
       pagination: {
