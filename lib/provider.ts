@@ -1858,6 +1858,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "media_platform"
   ]);
   if (normalizedQuery) {
+    url.searchParams.set("title", normalizedQuery);
     url.searchParams.set("q", normalizedQuery);
     url.searchParams.set("query", normalizedQuery);
     url.searchParams.set("search", normalizedQuery);
