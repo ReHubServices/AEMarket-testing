@@ -1855,11 +1855,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "first_owner",
     "media_followers_min",
     "media_verified",
-    "media_platform",
-    "fortnite_outfits",
-    "fortnite_pickaxes",
-    "fortnite_emotes",
-    "fortnite_gliders"
+    "media_platform"
   ]);
   if (normalizedQuery) {
     url.searchParams.set("q", normalizedQuery);

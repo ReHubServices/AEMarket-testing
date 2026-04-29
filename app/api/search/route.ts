@@ -604,7 +604,7 @@ function applyHardFortniteFilters(
   }
 
   if (outfitTerms.length > 0) {
-    const strict = filtered.filter((listing) => {
+    filtered = filtered.filter((listing) => {
       const haystack = normalizeText(
         `${listing.title} ${listing.description} ${listing.specs
           .map((spec) => `${spec.label} ${spec.value}`)
@@ -612,9 +612,6 @@ function applyHardFortniteFilters(
       );
       return outfitTerms.every((term) => haystack.includes(term));
     });
-    if (strict.length > 0) {
-      filtered = strict;
-    }
   }
 
   return filtered;
