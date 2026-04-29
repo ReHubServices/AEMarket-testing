@@ -1855,7 +1855,11 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "first_owner",
     "media_followers_min",
     "media_verified",
-    "media_platform"
+    "media_platform",
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders"
   ]);
   if (normalizedQuery) {
     url.searchParams.set("q", normalizedQuery);
@@ -4488,6 +4492,9 @@ function applyLocalFilters(
       return;
     }
     const hasSupplierSideTermFiltering = Boolean(options.supplierFilters?.[selectorKey]?.trim());
+    if (hasSupplierSideTermFiltering) {
+      return;
+    }
     const strictMatched = output.filter((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
