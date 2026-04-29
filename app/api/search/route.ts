@@ -3,6 +3,7 @@ import { fail, ok } from "@/lib/http";
 import { SearchSort, searchListings } from "@/lib/provider";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
 import { updateStore } from "@/lib/store";
+import type { MarketListing } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -481,8 +482,82 @@ type ParsedSearchRequest = {
   supplierFilters: Record<string, string>;
 };
 
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseFortniteSkinCount(listing: MarketListing) {
+  for (const spec of listing.specs) {
+    const label = normalizeText(spec.label);
+    if (label.includes("fortnite skin count") || label === "skin count") {
+      const value = Number(String(spec.value).replace(/[^\d]/g, ""));
+      if (Number.isFinite(value)) {
+        return value;
+      }
+    }
+  }
+  const descriptionMatch = listing.description.match(/\bskins?\s*[:=-]?\s*(\d+)/i);
+  if (descriptionMatch) {
+    const value = Number(descriptionMatch[1]);
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return 0;
+}
+
+function applyHardFortniteFilters(
+  listings: MarketListing[],
+  supplierFilters: Record<string, string>
+) {
+  const minSkins = Number(supplierFilters.fortnite_skin_count_min ?? NaN);
+  const maxSkins = Number(supplierFilters.fortnite_skin_count_max ?? NaN);
+  const hasMin = Number.isFinite(minSkins) && minSkins > 0;
+  const hasMax = Number.isFinite(maxSkins) && maxSkins > 0;
+  const outfitRaw = supplierFilters.fortnite_outfits ?? "";
+  const outfitTerms = outfitRaw
+    .split(",")
+    .map((entry) => normalizeText(entry))
+    .filter((entry) => entry.length >= 2)
+    .slice(0, 12);
+
+  let filtered = listings.slice();
+  if (hasMin || hasMax) {
+    filtered = filtered.filter((listing) => {
+      const count = parseFortniteSkinCount(listing);
+      if (hasMin && count < minSkins) {
+        return false;
+      }
+      if (hasMax && count > maxSkins) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  if (outfitTerms.length > 0) {
+    const strict = filtered.filter((listing) => {
+      const haystack = normalizeText(
+        `${listing.title} ${listing.description} ${listing.specs
+          .map((spec) => `${spec.label} ${spec.value}`)
+          .join(" ")}`
+      );
+      return outfitTerms.every((term) => haystack.includes(term));
+    });
+    if (strict.length > 0) {
+      filtered = strict;
+    }
+  }
+
+  return filtered;
+}
+
 function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequest {
-  const query = clampText(params.get("q")?.trim() ?? "", 180);
+  let query = clampText(params.get("q")?.trim() ?? "", 180);
   const sort = normalizeSort((params.get("sort") ?? "").trim());
   const page = normalizePage(params.get("page"));
   const pageSize = normalizePageSize(params.get("pageSize"));
@@ -500,6 +575,9 @@ function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequ
     if (value) {
       supplierFilters[key] = value;
     }
+  }
+  if (!query && supplierFilters.fortnite_outfits) {
+    query = clampText(supplierFilters.fortnite_outfits.split(",")[0]?.trim() ?? "", 180);
   }
 
   return {
@@ -523,7 +601,7 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
     rawBody && typeof rawBody === "object"
       ? (rawBody as Record<string, unknown>)
       : {};
-  const query = clampText(String(payload.q ?? "").trim(), 180);
+  let query = clampText(String(payload.q ?? "").trim(), 180);
   const sort = normalizeSort(String(payload.sort ?? "").trim());
   const page = normalizePage(payload.page);
   const pageSize = normalizePageSize(payload.pageSize);
@@ -545,6 +623,9 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
     if (value) {
       supplierFilters[key] = value;
     }
+  }
+  if (!query && supplierFilters.fortnite_outfits) {
+    query = clampText(supplierFilters.fortnite_outfits.split(",")[0]?.trim() ?? "", 180);
   }
 
   return {
@@ -581,12 +662,13 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
     if (parsed.query) {
       void trackSearchTerm(parsed.query, parsed.page);
     }
+    const listings = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
     return ok({
-      listings: result.listings,
+      listings,
       pagination: {
         page: result.page,
         pageSize: result.pageSize,
-        hasMore: result.hasMore
+        hasMore: result.hasMore || listings.length === result.pageSize
       }
     });
   } catch (error) {
