@@ -3164,8 +3164,6 @@ function applyLocalFilters(
     for (const match of item.description.matchAll(descriptionPatterns[selectorKey])) {
       candidates.push(match[1] ?? "");
     }
-    candidates.push(item.title);
-    candidates.push(item.description);
     if (candidates.length === 0) {
       return false;
     }
@@ -3179,7 +3177,7 @@ function applyLocalFilters(
         return true;
       }
     }
-    return matchesStrictPhrase(item, term);
+    return false;
   };
 
   const hasFortniteSignal = (item: MarketListing) => {
