@@ -1965,6 +1965,36 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
   if (/^(rub|usd|eur|uah|kzt|byn|gbp|cny|try|jpy|brl)$/.test(SUPPLIER_CURRENCY)) {
     url.searchParams.set("currency", SUPPLIER_CURRENCY);
   }
+  const toSupplierCurrencyPrice = (usdPrice: number) => {
+    if (!(usdPrice > 0)) {
+      return 0;
+    }
+    const currency = SUPPLIER_CURRENCY.toUpperCase();
+    if (currency === "RUB" || currency === "RUR") {
+      const rate = Number.isFinite(RUB_TO_USD_RATE) && RUB_TO_USD_RATE > 0 ? RUB_TO_USD_RATE : 0.013;
+      return Math.round((usdPrice / rate) * 100) / 100;
+    }
+    if (currency === "EUR") {
+      const rate = Number.isFinite(EUR_TO_USD_RATE) && EUR_TO_USD_RATE > 0 ? EUR_TO_USD_RATE : 1.08;
+      return Math.round((usdPrice / rate) * 100) / 100;
+    }
+    return Math.round(usdPrice * 100) / 100;
+  };
+
+  if (Number.isFinite(options.minPrice ?? NaN)) {
+    const min = toSupplierCurrencyPrice(Number(options.minPrice));
+    if (min > 0) {
+      url.searchParams.set("price_from", String(min));
+      url.searchParams.set("pmin", String(min));
+    }
+  }
+  if (Number.isFinite(options.maxPrice ?? NaN)) {
+    const max = toSupplierCurrencyPrice(Number(options.maxPrice));
+    if (max > 0) {
+      url.searchParams.set("price_to", String(max));
+      url.searchParams.set("pmax", String(max));
+    }
+  }
 
   if (options.supplierFilters) {
     for (const [key, value] of Object.entries(options.supplierFilters)) {
