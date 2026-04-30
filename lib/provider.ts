@@ -46,6 +46,7 @@ const HEAVY_FILTER_MAX_QUERY_VARIANTS = 2;
 const HEAVY_FILTER_MAX_PAGE_SPAN = 1;
 const HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS = 1;
 const HEAVY_FILTER_MAX_LOGICAL_PAGES = 10;
+const PRICE_FILTER_MAX_LOGICAL_PAGES = 60;
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
@@ -5434,7 +5435,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const pageSpanLimit = hasActiveSupplierFilters
         ? HEAVY_FILTER_MAX_PAGE_SPAN
         : scopedPriceMode
-          ? 1
+          ? 2
           : SUPPLIER_MAX_PAGE_SPAN;
       const supplierPageSpan = Math.min(
         pageSpanLimit,
@@ -5568,7 +5569,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
       ? hasLocalPriceFilter
-        ? Math.max(page + 3, 5)
+        ? Math.max(page + 20, PRICE_FILTER_MAX_LOGICAL_PAGES)
         : Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
