@@ -4634,29 +4634,10 @@ function applyLocalFilters(
     if (terms.length === 0 || phase === "pre") {
       return;
     }
-    const hasSupplierSideTermFiltering = Boolean(options.supplierFilters?.[selectorKey]?.trim());
-    if (hasSupplierSideTermFiltering) {
-      return;
-    }
     const strictMatched = output.filter((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
-    if (strictMatched.length > 0) {
-      output = strictMatched;
-      return;
-    }
-
-    const looseMatched = output.filter((item) =>
-      terms.every((term) => matchesSelectedTerm(item, term))
-    );
-    if (looseMatched.length > 0) {
-      output = looseMatched;
-      return;
-    }
-    if (hasSupplierSideTermFiltering) {
-      return;
-    }
-    output = [];
+    output = strictMatched;
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
