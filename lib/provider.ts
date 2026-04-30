@@ -51,6 +51,9 @@ const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
 const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
   /(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)\/(?:market\/)?\d+\/image(?:\?[^ \]\n\r<>"']*)?/gi;
+const SUPPLIER_CURRENCY = (
+  process.env.LZT_SEARCH_CURRENCY?.trim().toLowerCase() || "rub"
+).replace(/[^a-z]/g, "");
 
 function normalizeSupplierBaseUrl(value: string) {
   const raw = value.trim();
@@ -1944,17 +1947,8 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
   url.searchParams.set("per_page", String(pageSize));
   url.searchParams.set("limit", String(pageSize));
   url.searchParams.set("count", String(pageSize));
-  url.searchParams.set("currency", "usd");
-
-  if (Number.isFinite(options.minPrice ?? NaN)) {
-    const min = String(Number(options.minPrice));
-    url.searchParams.set("price_from", min);
-    url.searchParams.set("pmin", min);
-  }
-  if (Number.isFinite(options.maxPrice ?? NaN)) {
-    const max = String(Number(options.maxPrice));
-    url.searchParams.set("price_to", max);
-    url.searchParams.set("pmax", max);
+  if (/^(rub|usd|eur|uah|kzt|byn|gbp|cny|try|jpy|brl)$/.test(SUPPLIER_CURRENCY)) {
+    url.searchParams.set("currency", SUPPLIER_CURRENCY);
   }
 
   if (options.supplierFilters) {
