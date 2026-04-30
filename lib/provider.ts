@@ -1892,6 +1892,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
   url.searchParams.set("per_page", String(pageSize));
   url.searchParams.set("limit", String(pageSize));
   url.searchParams.set("count", String(pageSize));
+  url.searchParams.set("currency", "usd");
 
   if (Number.isFinite(options.minPrice ?? NaN)) {
     const min = String(Number(options.minPrice));
@@ -5413,12 +5414,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const targetEnd = targetStart + pageSize;
     const requiresDeepCandidateScan = hasActiveSupplierFilters || hasLocalPriceFilter;
     const requiredAggregatedSize = requiresDeepCandidateScan
-      ? Math.min(
-          1400,
-          hasLocalPriceFilter
-            ? Math.max(targetEnd + pageSize * 34, 420)
-            : Math.max(targetEnd + pageSize * 16, 260)
-        )
+      ? Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
       : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
@@ -5439,10 +5435,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
-      ? Math.max(
-          page + (hasLocalPriceFilter ? 20 : 6),
-          hasLocalPriceFilter ? 36 : HEAVY_FILTER_MAX_LOGICAL_PAGES
-        )
+      ? Math.max(page + (hasLocalPriceFilter ? 8 : 6), HEAVY_FILTER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
@@ -5479,7 +5472,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
-      const probeLimit = hasActiveSupplierFilters ? 1 : hasLocalPriceFilter ? 3 : 2;
+      const probeLimit = hasActiveSupplierFilters ? 1 : 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
         const probeChunk = await loadFilteredPage(
