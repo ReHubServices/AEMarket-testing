@@ -3974,12 +3974,15 @@ function applyLocalFilters(
       if (fallbackFortnite.length > 0) {
         output = fallbackFortnite;
       }
-    } else if (hasExplicitScope || Boolean(inferredQueryGameFilter)) {
+    } else if ((hasExplicitScope || Boolean(inferredQueryGameFilter)) && phase === "final") {
       output = [];
     }
   }
   if (effectiveGameFilter === "fortnite") {
-    output = output.filter((item) => hasFortniteSignal(item));
+    const fortniteScoped = output.filter((item) => hasFortniteSignal(item));
+    if (phase === "final" || fortniteScoped.length > 0) {
+      output = fortniteScoped;
+    }
   }
   if (
     categoryFilter &&
@@ -3988,7 +3991,7 @@ function applyLocalFilters(
     const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
     if (scopedByCategory.length > 0) {
       output = scopedByCategory;
-    } else if (selectedCategoryFilter) {
+    } else if (selectedCategoryFilter && phase === "final") {
       output = [];
     }
   }
