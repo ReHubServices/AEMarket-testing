@@ -886,9 +886,13 @@ function resolveListingId(source: Record<string, unknown>, fallbackIdSource: str
   return `gen_${Buffer.from(fallbackIdSource).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 52)}`;
 }
 
-function mapRawListing(item: Record<string, unknown>, endpointGameHint = ""): MarketListing {
+function mapRawListing(
+  item: Record<string, unknown>,
+  endpointGameHint = "",
+  endpointCurrencyHint = ""
+): MarketListing {
   const source = buildListingSource(item);
-  const sourceCurrency = extractCurrency(source);
+  const sourceCurrency = extractCurrency(source, endpointCurrencyHint);
   const rawBasePrice = resolveListingBasePrice(source);
   const basePrice = normalizePriceToUsd(rawBasePrice, sourceCurrency);
   const title = extractText(
@@ -1464,7 +1468,11 @@ function hasBlockedMarketplaceLink(item: Record<string, unknown>) {
   });
 }
 
-function extractCurrency(item: Record<string, unknown>) {
+function extractCurrency(item: Record<string, unknown>, supplierCurrencyHint = "") {
+  const forced = supplierCurrencyHint.trim().toUpperCase();
+  if (/^(RUB|RUR|USD|EUR|UAH|KZT|BYN|GBP|CNY|TRY|JPY|BRL)$/.test(forced)) {
+    return forced === "RUR" ? "RUB" : forced;
+  }
   const deepCurrencyRaw = findTextDeep(item, [
     "currency",
     "currency_code",
@@ -2041,7 +2049,9 @@ async function fetchListingsFromEndpoint(input: {
   const data = (await response.json()) as unknown;
   return extractItems(data)
     .filter((entry) => !hasBlockedMarketplaceLink(buildListingSource(entry)))
-    .map((entry) => mapRawListing(entry, endpointGameHint))
+    .map((entry) =>
+      mapRawListing(entry, endpointGameHint, SUPPLIER_CURRENCY.toUpperCase())
+    )
     .filter(
       (listing) =>
         Boolean(listing.id) &&
