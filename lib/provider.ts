@@ -5488,7 +5488,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         .map((entry) => entry.value);
 
       const combined = mergeUnique([primary, ...categoryResults].flat());
-      return applyLocalFilters(combined, effectiveOptions, trimmedQuery, "pre");
+      return applyLocalFilters(combined, normalizedOptions, trimmedQuery, "pre");
     };
 
     let activeSupplierQueries = buildSupplierQueryVariants(trimmedQuery, effectiveOptions);
@@ -5670,7 +5670,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       token,
       needsDeepFilterFinalPass ? Math.min(finalPassPool.length, 140) : 24
     );
-    const finalFiltered = applyLocalFilters(enriched, effectiveOptions, trimmedQuery, "final");
+    const finalFiltered = applyLocalFilters(enriched, normalizedOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);
     if (options.sort === "price_asc") {
       uniqueFinal.sort((a, b) => a.basePrice - b.basePrice);
