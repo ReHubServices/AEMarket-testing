@@ -34,8 +34,8 @@ const SEARCH_RESULT_CACHE_TTL_MS = Number(process.env.SEARCH_RESULT_CACHE_TTL_MS
 const SEARCH_RESULT_STALE_TTL_MS = Number(
   process.env.SEARCH_RESULT_STALE_TTL_MS ?? 180_000
 );
-const RUB_TO_USD_RATE = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
-const EUR_TO_USD_RATE = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
+const RUB_TO_USD_RATE_RAW = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
+const EUR_TO_USD_RATE_RAW = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
 const SUPPLIER_FETCH_TIMEOUT_MS = 7000;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
@@ -52,6 +52,19 @@ const BLOCKED_MARKET_LINK_PATTERN =
 const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
   /(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)\/(?:market\/)?\d+\/image(?:\?[^ \]\n\r<>"']*)?/gi;
 const SUPPLIER_CURRENCY = "rub";
+
+function resolveRate(value: number, fallback: number, min: number, max: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  if (value < min || value > max) {
+    return fallback;
+  }
+  return value;
+}
+
+const RUB_TO_USD_RATE = resolveRate(RUB_TO_USD_RATE_RAW, 0.013, 0.005, 0.05);
+const EUR_TO_USD_RATE = resolveRate(EUR_TO_USD_RATE_RAW, 1.08, 0.5, 2.5);
 
 function normalizeSupplierBaseUrl(value: string) {
   const raw = value.trim();
