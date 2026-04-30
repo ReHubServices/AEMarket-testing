@@ -3164,6 +3164,8 @@ function applyLocalFilters(
     for (const match of item.description.matchAll(descriptionPatterns[selectorKey])) {
       candidates.push(match[1] ?? "");
     }
+    candidates.push(item.title);
+    candidates.push(item.description);
     if (candidates.length === 0) {
       return false;
     }
@@ -3177,7 +3179,7 @@ function applyLocalFilters(
         return true;
       }
     }
-    return false;
+    return matchesStrictPhrase(item, term);
   };
 
   const hasFortniteSignal = (item: MarketListing) => {
@@ -4632,10 +4634,18 @@ function applyLocalFilters(
     if (terms.length === 0 || phase === "pre") {
       return;
     }
+    const hasSupplierSideTermFiltering = Boolean(options.supplierFilters?.[selectorKey]?.trim());
     const strictMatched = output.filter((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
-    output = strictMatched;
+    if (strictMatched.length > 0) {
+      output = strictMatched;
+      return;
+    }
+    if (hasSupplierSideTermFiltering) {
+      return;
+    }
+    output = [];
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
