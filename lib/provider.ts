@@ -926,9 +926,37 @@ function buildListingSource(item: Record<string, unknown>) {
   ];
   for (const candidate of nestedCandidates) {
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      const nested = candidate as Record<string, unknown>;
+      const inheritedKeys = [
+        "id",
+        "item_id",
+        "listing_id",
+        "post_id",
+        "thread_id",
+        "offer_id",
+        "url",
+        "link",
+        "href",
+        "permalink",
+        "item_url",
+        "listing_url",
+        "market_url",
+        "slug",
+        "uuid",
+        "code"
+      ];
+      const inherited: Record<string, unknown> = {};
+      for (const key of inheritedKeys) {
+        if (nested[key] != null) {
+          continue;
+        }
+        if (item[key] != null) {
+          inherited[key] = item[key];
+        }
+      }
       return {
-        ...item,
-        ...(candidate as Record<string, unknown>)
+        ...inherited,
+        ...nested
       };
     }
   }
@@ -1419,7 +1447,17 @@ function hasBlockedMarketplaceLink(item: Record<string, unknown>) {
 }
 
 function extractCurrency(item: Record<string, unknown>) {
-  const currencyRaw = extractText(item.currency ?? item.currency_code ?? item.curr, "USD");
+  const deepCurrencyRaw = findTextDeep(item, [
+    "currency",
+    "currency_code",
+    "curr",
+    "price_currency",
+    "priceCurrency"
+  ]);
+  const currencyRaw = extractText(
+    item.currency ?? item.currency_code ?? item.curr ?? deepCurrencyRaw,
+    ""
+  );
   const direct = currencyRaw.toLowerCase();
   if (direct.includes("₽") || direct === "rub" || direct.includes("rur")) {
     return "RUB";
@@ -1430,8 +1468,16 @@ function extractCurrency(item: Record<string, unknown>) {
   if (direct.includes("€") || direct === "eur") {
     return "EUR";
   }
-  if (currencyRaw) {
+  if (direct === "cny" || direct === "uah" || direct === "kzt" || direct === "byn" || direct === "gbp") {
     return currencyRaw.toUpperCase();
+  }
+  if (
+    item.price_rub != null ||
+    item.currency_rub != null ||
+    item.priceRub != null ||
+    item.rub_price != null
+  ) {
+    return "RUB";
   }
 
   const priceTextCandidates = [
@@ -1439,6 +1485,7 @@ function extractCurrency(item: Record<string, unknown>) {
     extractText(item.amount, ""),
     extractText(item.currency_price, ""),
     extractText(item.price_rub, ""),
+    extractText(item.currency_rub, ""),
     extractText(item.cost, "")
   ]
     .join(" ")
@@ -1456,6 +1503,11 @@ function extractCurrency(item: Record<string, unknown>) {
   }
   if (priceTextCandidates.includes("€") || priceTextCandidates.includes(" eur")) {
     return "EUR";
+  }
+
+  const resolvedBasePrice = resolveListingBasePrice(item);
+  if (resolvedBasePrice >= 800) {
+    return "RUB";
   }
 
   return "USD";
