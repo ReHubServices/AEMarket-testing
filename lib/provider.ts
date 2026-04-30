@@ -5075,6 +5075,7 @@ function withMarkup(listings: MarketListing[], markupPercent: number) {
 function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) {
   const normalized = query.trim();
   const variants = new Set<string>();
+  const hasScope = Boolean(options.game?.trim() || options.category?.trim());
   const hasActiveSupplierFilters = Object.values(options.supplierFilters ?? {}).some(
     (value) => String(value ?? "").trim().length > 0
   );
@@ -5184,6 +5185,9 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
   }
 
   const finalized = Array.from(variants).filter(Boolean);
+  if (hasScope && normalized) {
+    return finalized.slice(0, 2);
+  }
   return finalized.slice(0, maxVariants);
 }
 
@@ -5300,15 +5304,20 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ...normalizedOptions,
         page: targetPage
       };
+      const scopedPriceMode = hasBrowseScope && hasLocalPriceFilter;
       const queryLimit = hasActiveSupplierFilters
         ? HEAVY_FILTER_MAX_QUERY_VARIANTS
-        : SUPPLIER_MAX_QUERY_VARIANTS;
+        : scopedPriceMode
+          ? 2
+          : SUPPLIER_MAX_QUERY_VARIANTS;
       const pageSpanLimit = hasActiveSupplierFilters
         ? HEAVY_FILTER_MAX_PAGE_SPAN
-        : SUPPLIER_MAX_PAGE_SPAN;
+        : scopedPriceMode
+          ? 1
+          : SUPPLIER_MAX_PAGE_SPAN;
       const supplierPageSpan = Math.min(
         pageSpanLimit,
-        hasBrowseScope ? (trimmedQuery ? 2 : 1) : 1
+        hasBrowseScope ? (trimmedQuery ? (scopedPriceMode ? 1 : 2) : 1) : 1
       );
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
@@ -5333,7 +5342,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : effectiveOptions;
       const categoryEndpointLimit = hasActiveSupplierFilters
         ? HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS
-        : SUPPLIER_MAX_CATEGORY_ENDPOINTS;
+        : scopedPriceMode
+          ? 1
+          : SUPPLIER_MAX_CATEGORY_ENDPOINTS;
       const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope).slice(0, categoryEndpointLimit);
       const categoryResultsSettled = await Promise.allSettled(
         categoryEndpoints.map((categoryEndpoint) =>
@@ -5435,7 +5446,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
-      ? Math.max(page + (hasLocalPriceFilter ? 8 : 6), HEAVY_FILTER_MAX_LOGICAL_PAGES)
+      ? hasLocalPriceFilter
+        ? Math.max(page + 3, 5)
+        : Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 

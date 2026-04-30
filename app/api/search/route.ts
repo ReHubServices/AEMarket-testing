@@ -778,7 +778,9 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
     if (
       payload.listings.length === 0 &&
       parsed.usedScopeFallbackQuery &&
-      !parsed.inputQuery.trim()
+      !parsed.inputQuery.trim() &&
+      !Number.isFinite(parsed.minPrice ?? NaN) &&
+      !Number.isFinite(parsed.maxPrice ?? NaN)
     ) {
       const scopeOnlyResult = await searchListings("", {
         sort: parsed.sort,
