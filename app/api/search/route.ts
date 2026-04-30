@@ -553,6 +553,45 @@ function applyHardFortniteFilters(
   return filtered;
 }
 
+function applyHardPriceFilters(
+  listings: MarketListing[],
+  minPrice: number | null,
+  maxPrice: number | null
+) {
+  const hasMin = Number.isFinite(minPrice ?? NaN);
+  const hasMax = Number.isFinite(maxPrice ?? NaN);
+  if (!hasMin && !hasMax) {
+    return listings;
+  }
+  let effectiveMin = hasMin ? Number(minPrice) : null;
+  let effectiveMax = hasMax ? Number(maxPrice) : null;
+  if (
+    effectiveMin != null &&
+    effectiveMax != null &&
+    Number.isFinite(effectiveMin) &&
+    Number.isFinite(effectiveMax) &&
+    effectiveMin > effectiveMax
+  ) {
+    const swap = effectiveMin;
+    effectiveMin = effectiveMax;
+    effectiveMax = swap;
+  }
+
+  return listings.filter((listing) => {
+    const price = Number(listing.price);
+    if (!Number.isFinite(price)) {
+      return false;
+    }
+    if (effectiveMin != null && price < effectiveMin) {
+      return false;
+    }
+    if (effectiveMax != null && price > effectiveMax) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequest {
   let query = clampText(params.get("q")?.trim() ?? "", 180);
   const sort = normalizeSort((params.get("sort") ?? "").trim());
@@ -659,13 +698,18 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
     if (parsed.query) {
       void trackSearchTerm(parsed.query, parsed.page);
     }
-    const listings = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
+    const fortniteScoped = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
+    const listings = applyHardPriceFilters(
+      fortniteScoped,
+      parsed.minPrice,
+      parsed.maxPrice
+    );
     return ok({
       listings,
       pagination: {
         page: result.page,
         pageSize: result.pageSize,
-        hasMore: result.hasMore || listings.length === result.pageSize
+        hasMore: listings.length > 0 && result.hasMore
       }
     });
   } catch (error) {
