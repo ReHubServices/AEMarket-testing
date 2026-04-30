@@ -683,6 +683,11 @@ function normalizePriceToUsd(amount: number, currency: string) {
     const rate = Number.isFinite(EUR_TO_USD_RATE) && EUR_TO_USD_RATE > 0 ? EUR_TO_USD_RATE : 1.08;
     return Math.round(amount * rate * 100) / 100;
   }
+  if (normalizedCurrency === "USD") {
+    const looksLikeMinorUnits = Number.isInteger(amount) && amount >= 100;
+    const normalized = looksLikeMinorUnits ? amount / 100 : amount;
+    return Math.round(normalized * 100) / 100;
+  }
   return Math.round(amount * 100) / 100;
 }
 
