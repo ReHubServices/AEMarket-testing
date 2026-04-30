@@ -2095,7 +2095,11 @@ async function fetchListingDetailFromApi(listingId: string, token: string) {
       if (hasBlockedMarketplaceLink(buildListingSource(source))) {
         throw new Error("BLOCKED_LISTING");
       }
-      const mapped = mapRawListing(source);
+      const mapped = mapRawListing(
+        source,
+        inferEndpointGameHint(url),
+        SUPPLIER_CURRENCY.toUpperCase()
+      );
       if (!mapped.id) {
         mapped.id = listingId;
       }
