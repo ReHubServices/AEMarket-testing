@@ -1560,6 +1560,15 @@ export function MarketSearch({
       setPendingPurchaseListingId(null);
       return;
     }
+    const targetListing =
+      (modalListing && modalListing.id === pendingPurchaseListingId ? modalListing : null) ??
+      listings.find((listing) => listing.id === pendingPurchaseListingId) ??
+      null;
+    if (targetListing && viewer.balance < targetListing.price) {
+      setError("Insufficient balance. Add funds to continue.");
+      setPendingPurchaseListingId(null);
+      return;
+    }
 
     setBuying(true);
     setError(null);
@@ -3223,6 +3232,7 @@ export function MarketSearch({
         onClose={() => setActiveListingId(null)}
         onBuy={requestBuy}
         buying={buying}
+        purchaseError={error}
         descriptionLoading={detailLoading}
         descriptionError={detailError}
         imageTheme={selectedGame === "fortnite" ? "fortnite" : null}

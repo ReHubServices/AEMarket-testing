@@ -24,6 +24,7 @@ type ProductDetailModalProps = {
   onClose: () => void;
   onBuy: (listingId: string) => void;
   buying: boolean;
+  purchaseError?: string | null;
   descriptionLoading?: boolean;
   descriptionError?: string | null;
   imageTheme?: "fortnite" | null;
@@ -35,6 +36,7 @@ export function ProductDetailModal({
   onClose,
   onBuy,
   buying,
+  purchaseError = null,
   descriptionLoading = false,
   descriptionError = null,
   imageTheme = null
@@ -277,6 +279,11 @@ export function ProductDetailModal({
 
             <div className="sticky bottom-0 -mx-4 border-t border-white/15 bg-black/65 p-4 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-0">
               <div className="flex flex-col gap-2">
+                {purchaseError && (
+                  <p className="rounded-xl border border-red-300/25 bg-red-950/25 px-3 py-2 text-xs text-red-100">
+                    {purchaseError}
+                  </p>
+                )}
                 <Button onClick={() => onBuy(listing.id)} disabled={buying}>
                   {buying ? "Processing..." : viewer ? "Buy Now" : "Login To Buy"}
                 </Button>
