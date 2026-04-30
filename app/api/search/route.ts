@@ -468,7 +468,9 @@ const SUPPLIER_FILTER_KEYS = [
 ] as const;
 
 type ParsedSearchRequest = {
+  inputQuery: string;
   query: string;
+  usedScopeFallbackQuery: boolean;
   sort: SearchSort;
   page: number;
   pageSize: number;
@@ -481,6 +483,41 @@ type ParsedSearchRequest = {
   hasSpecs: boolean;
   supplierFilters: Record<string, string>;
 };
+
+function resolveScopeFallbackQuery(game: string, category: string) {
+  const normalized = `${game} ${category}`.toLowerCase();
+  if (normalized.includes("fortnite")) {
+    return "fortnite";
+  }
+  if (normalized.includes("valorant") || normalized.includes("riot")) {
+    return "valorant";
+  }
+  if (normalized.includes("siege") || normalized.includes("rainbow")) {
+    return "siege";
+  }
+  if (normalized.includes("supercell")) {
+    return "supercell";
+  }
+  if (normalized.includes("steam")) {
+    return "steam";
+  }
+  if (normalized.includes("cs2") || normalized.includes("counter")) {
+    return "cs2";
+  }
+  if (normalized.includes("battlenet") || normalized.includes("battle.net")) {
+    return "battlenet";
+  }
+  if (normalized.includes("telegram")) {
+    return "telegram";
+  }
+  if (normalized.includes("discord")) {
+    return "discord";
+  }
+  if (normalized.includes("media") || normalized.includes("social")) {
+    return "social";
+  }
+  return "";
+}
 
 function normalizeText(value: string) {
   return value
@@ -593,7 +630,8 @@ function applyHardPriceFilters(
 }
 
 function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequest {
-  let query = clampText(params.get("q")?.trim() ?? "", 180);
+  const inputQuery = clampText(params.get("q")?.trim() ?? "", 180);
+  let query = inputQuery;
   const sort = normalizeSort((params.get("sort") ?? "").trim());
   const page = normalizePage(params.get("page"));
   const pageSize = normalizePageSize(params.get("pageSize"));
@@ -612,12 +650,22 @@ function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequ
       supplierFilters[key] = value;
     }
   }
+  let usedScopeFallbackQuery = false;
   if (!query && supplierFilters.fortnite_outfits) {
     query = clampText(supplierFilters.fortnite_outfits.split(",")[0]?.trim() ?? "", 180);
   }
+  if (!query) {
+    const fallbackQuery = clampText(resolveScopeFallbackQuery(game, category), 180);
+    if (fallbackQuery) {
+      query = fallbackQuery;
+      usedScopeFallbackQuery = true;
+    }
+  }
 
   return {
+    inputQuery,
     query,
+    usedScopeFallbackQuery,
     sort,
     page,
     pageSize,
@@ -637,7 +685,8 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
     rawBody && typeof rawBody === "object"
       ? (rawBody as Record<string, unknown>)
       : {};
-  let query = clampText(String(payload.q ?? "").trim(), 180);
+  const inputQuery = clampText(String(payload.q ?? "").trim(), 180);
+  let query = inputQuery;
   const sort = normalizeSort(String(payload.sort ?? "").trim());
   const page = normalizePage(payload.page);
   const pageSize = normalizePageSize(payload.pageSize);
@@ -660,12 +709,22 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
       supplierFilters[key] = value;
     }
   }
+  let usedScopeFallbackQuery = false;
   if (!query && supplierFilters.fortnite_outfits) {
     query = clampText(supplierFilters.fortnite_outfits.split(",")[0]?.trim() ?? "", 180);
   }
+  if (!query) {
+    const fallbackQuery = clampText(resolveScopeFallbackQuery(game, category), 180);
+    if (fallbackQuery) {
+      query = fallbackQuery;
+      usedScopeFallbackQuery = true;
+    }
+  }
 
   return {
+    inputQuery,
     query,
+    usedScopeFallbackQuery,
     sort,
     page,
     pageSize,
@@ -682,6 +741,23 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
 
 async function runSearchRequest(parsed: ParsedSearchRequest) {
   try {
+    const buildPayload = (result: Awaited<ReturnType<typeof searchListings>>) => {
+      const fortniteScoped = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
+      const listings = applyHardPriceFilters(
+        fortniteScoped,
+        parsed.minPrice,
+        parsed.maxPrice
+      );
+      return {
+        listings,
+        pagination: {
+          page: result.page,
+          pageSize: result.pageSize,
+          hasMore: listings.length > 0 && result.hasMore
+        }
+      };
+    };
+
     const result = await searchListings(parsed.query, {
       sort: parsed.sort,
       minPrice: parsed.minPrice,
@@ -698,20 +774,31 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
     if (parsed.query) {
       void trackSearchTerm(parsed.query, parsed.page);
     }
-    const fortniteScoped = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
-    const listings = applyHardPriceFilters(
-      fortniteScoped,
-      parsed.minPrice,
-      parsed.maxPrice
-    );
-    return ok({
-      listings,
-      pagination: {
-        page: result.page,
-        pageSize: result.pageSize,
-        hasMore: listings.length > 0 && result.hasMore
+    let payload = buildPayload(result);
+    if (
+      payload.listings.length === 0 &&
+      parsed.usedScopeFallbackQuery &&
+      !parsed.inputQuery.trim()
+    ) {
+      const scopeOnlyResult = await searchListings("", {
+        sort: parsed.sort,
+        minPrice: parsed.minPrice,
+        maxPrice: parsed.maxPrice,
+        page: parsed.page,
+        pageSize: parsed.pageSize,
+        game: parsed.game || null,
+        category: parsed.category || null,
+        hasImage: parsed.hasImage,
+        hasDescription: parsed.hasDescription,
+        hasSpecs: parsed.hasSpecs,
+        supplierFilters: parsed.supplierFilters
+      });
+      const scopeOnlyPayload = buildPayload(scopeOnlyResult);
+      if (scopeOnlyPayload.listings.length > 0) {
+        payload = scopeOnlyPayload;
       }
-    });
+    }
+    return ok(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "SEARCH_FAILED";
     if (message === "LZT_AUTH_MISSING") {
