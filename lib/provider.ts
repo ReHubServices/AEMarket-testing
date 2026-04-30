@@ -5223,6 +5223,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
     page,
     pageSize: fetchPageSize
   };
+  const hasLocalPriceFilter =
+    Number.isFinite(normalizedOptions.minPrice ?? NaN) ||
+    Number.isFinite(normalizedOptions.maxPrice ?? NaN);
   const cacheKey = buildSearchResultCacheKey(trimmedQuery, normalizedOptions, store.settings.markupPercent);
   const cachedResult = readSearchResultCache(cacheKey);
   if (cachedResult) {
@@ -5408,9 +5411,14 @@ export async function searchListings(query: string, options: SearchOptions = {})
     }
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
-    const requiresDeepCandidateScan = hasActiveSupplierFilters;
+    const requiresDeepCandidateScan = hasActiveSupplierFilters || hasLocalPriceFilter;
     const requiredAggregatedSize = requiresDeepCandidateScan
-      ? Math.min(900, Math.max(targetEnd + pageSize * 16, 260))
+      ? Math.min(
+          1400,
+          hasLocalPriceFilter
+            ? Math.max(targetEnd + pageSize * 34, 420)
+            : Math.max(targetEnd + pageSize * 16, 260)
+        )
       : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
@@ -5431,7 +5439,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
-      ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
+      ? Math.max(
+          page + (hasLocalPriceFilter ? 20 : 6),
+          hasLocalPriceFilter ? 36 : HEAVY_FILTER_MAX_LOGICAL_PAGES
+        )
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
@@ -5468,7 +5479,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
-      const probeLimit = hasActiveSupplierFilters ? 1 : 2;
+      const probeLimit = hasActiveSupplierFilters ? 1 : hasLocalPriceFilter ? 3 : 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
         const probeChunk = await loadFilteredPage(
@@ -5520,7 +5531,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       Boolean(effectiveOptions.supplierFilters?.[key]?.trim())
     );
     const needsDeepFilterFinalPass =
-      hasActiveSupplierFilters || needsStrictFortniteCountFinalPass;
+      hasActiveSupplierFilters || needsStrictFortniteCountFinalPass || hasLocalPriceFilter;
     const finalPassPoolSize = needsDeepFilterFinalPass
       ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
       : Math.max(targetEnd + 1, pageSize + 1);
