@@ -34,6 +34,8 @@ const SEARCH_RESULT_CACHE_TTL_MS = Number(process.env.SEARCH_RESULT_CACHE_TTL_MS
 const SEARCH_RESULT_STALE_TTL_MS = Number(
   process.env.SEARCH_RESULT_STALE_TTL_MS ?? 180_000
 );
+const RUB_TO_USD_RATE = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
+const EUR_TO_USD_RATE = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
 const SUPPLIER_FETCH_TIMEOUT_MS = 7000;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
@@ -639,6 +641,22 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
   return 0;
 }
 
+function normalizePriceToUsd(amount: number, currency: string) {
+  if (!(amount > 0)) {
+    return 0;
+  }
+  const normalizedCurrency = currency.trim().toUpperCase();
+  if (normalizedCurrency === "RUB" || normalizedCurrency === "RUR") {
+    const rate = Number.isFinite(RUB_TO_USD_RATE) && RUB_TO_USD_RATE > 0 ? RUB_TO_USD_RATE : 0.013;
+    return Math.round(amount * rate * 100) / 100;
+  }
+  if (normalizedCurrency === "EUR") {
+    const rate = Number.isFinite(EUR_TO_USD_RATE) && EUR_TO_USD_RATE > 0 ? EUR_TO_USD_RATE : 1.08;
+    return Math.round(amount * rate * 100) / 100;
+  }
+  return Math.round(amount * 100) / 100;
+}
+
 function extractItems(data: unknown): Record<string, unknown>[] {
   if (Array.isArray(data)) {
     return data as Record<string, unknown>[];
@@ -852,7 +870,9 @@ function resolveListingId(source: Record<string, unknown>, fallbackIdSource: str
 
 function mapRawListing(item: Record<string, unknown>, endpointGameHint = ""): MarketListing {
   const source = buildListingSource(item);
-  const basePrice = resolveListingBasePrice(source);
+  const sourceCurrency = extractCurrency(source);
+  const rawBasePrice = resolveListingBasePrice(source);
+  const basePrice = normalizePriceToUsd(rawBasePrice, sourceCurrency);
   const title = extractText(
     source.title_en ?? source.title ?? source.item_title ?? source.name ?? source.heading,
     "Untitled listing"
@@ -888,7 +908,7 @@ function mapRawListing(item: Record<string, unknown>, endpointGameHint = ""): Ma
     imageUrl,
     price: basePrice,
     basePrice,
-    currency: extractCurrency(source),
+    currency: "USD",
     game,
     category,
     description,
