@@ -1606,6 +1606,81 @@ function pushSpec(target: MarketListingSpec[], spec: MarketListingSpec | null) {
   }
 }
 
+const FORTNITE_SELECTOR_HINTS = [
+  "outfit",
+  "skin",
+  "pickaxe",
+  "harvest",
+  "axe",
+  "emote",
+  "dance",
+  "glider",
+  "cosmetic",
+  "locker",
+  "скин",
+  "облик",
+  "кирк",
+  "эмоц",
+  "танц",
+  "глайдер",
+  "дельтаплан"
+];
+
+function collectNestedSelectorSpecs(
+  source: unknown,
+  output: MarketListingSpec[],
+  path: string[] = [],
+  depth = 0
+) {
+  if (source == null || depth > 5 || output.length >= 120) {
+    return;
+  }
+
+  if (Array.isArray(source)) {
+    for (const entry of source.slice(0, 60)) {
+      collectNestedSelectorSpecs(entry, output, path, depth + 1);
+      if (output.length >= 120) {
+        break;
+      }
+    }
+    return;
+  }
+
+  if (typeof source === "object") {
+    const record = source as Record<string, unknown>;
+    for (const [key, value] of Object.entries(record)) {
+      if (value == null) {
+        continue;
+      }
+      collectNestedSelectorSpecs(
+        value,
+        output,
+        [...path, key.replace(/_/g, " ").trim()],
+        depth + 1
+      );
+      if (output.length >= 120) {
+        break;
+      }
+    }
+    return;
+  }
+
+  const text = extractText(source, "");
+  if (!text) {
+    return;
+  }
+  const normalizedPath = path.join(" ").toLowerCase();
+  if (!normalizedPath) {
+    return;
+  }
+  const hasSelectorHint = FORTNITE_SELECTOR_HINTS.some((hint) => normalizedPath.includes(hint));
+  if (!hasSelectorHint) {
+    return;
+  }
+  const label = path[path.length - 1] || "detail";
+  pushSpec(output, buildSpec(label, text));
+}
+
 function extractSpecsFromObject(source: Record<string, unknown>, output: MarketListingSpec[]) {
   const label = extractText(
     source.title ?? source.name ?? source.label ?? source.key ?? source.param,
@@ -1630,6 +1705,8 @@ function extractSpecsFromObject(source: Record<string, unknown>, output: MarketL
     }
     return;
   }
+
+  collectNestedSelectorSpecs(source, output);
 
   for (const [key, raw] of Object.entries(source)) {
     if (raw == null || typeof raw === "object") {
@@ -4634,18 +4711,10 @@ function applyLocalFilters(
     if (terms.length === 0 || phase === "pre") {
       return;
     }
-    const hasSupplierSideTermFiltering = Boolean(options.supplierFilters?.[selectorKey]?.trim());
     const strictMatched = output.filter((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
-    if (strictMatched.length > 0) {
-      output = strictMatched;
-      return;
-    }
-    if (hasSupplierSideTermFiltering) {
-      return;
-    }
-    output = [];
+    output = strictMatched;
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");

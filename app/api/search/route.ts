@@ -64,6 +64,13 @@ const MULTI_VALUE_FILTER_KEYS = new Set([
   "fortnite_gliders"
 ]);
 
+const FORTNITE_SELECTOR_FILTER_KEYS = [
+  "fortnite_outfits",
+  "fortnite_pickaxes",
+  "fortnite_emotes",
+  "fortnite_gliders"
+] as const;
+
 function sanitizeSupplierFilterValue(key: string, value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -555,12 +562,16 @@ function applyHardFortniteFilters(
   const maxSkins = Number(supplierFilters.fortnite_skin_count_max ?? NaN);
   const hasMin = Number.isFinite(minSkins) && minSkins > 0;
   const hasMax = Number.isFinite(maxSkins) && maxSkins > 0;
-  const outfitRaw = supplierFilters.fortnite_outfits ?? "";
-  const outfitTerms = outfitRaw
-    .split(",")
-    .map((entry) => normalizeText(entry))
-    .filter((entry) => entry.length >= 2)
-    .slice(0, 12);
+  const selectorTermsByKey = Object.fromEntries(
+    FORTNITE_SELECTOR_FILTER_KEYS.map((key) => [
+      key,
+      (supplierFilters[key] ?? "")
+        .split(",")
+        .map((entry) => normalizeText(entry))
+        .filter((entry) => entry.length >= 2)
+        .slice(0, 12)
+    ])
+  ) as Record<(typeof FORTNITE_SELECTOR_FILTER_KEYS)[number], string[]>;
 
   let filtered = listings.slice();
   if (hasMin || hasMax) {
@@ -576,18 +587,32 @@ function applyHardFortniteFilters(
     });
   }
 
-  if (outfitTerms.length > 0) {
+  for (const key of FORTNITE_SELECTOR_FILTER_KEYS) {
+    const terms = selectorTermsByKey[key];
+    if (terms.length === 0) {
+      continue;
+    }
     filtered = filtered.filter((listing) => {
       const haystack = normalizeText(
         `${listing.title} ${listing.description} ${listing.specs
           .map((spec) => `${spec.label} ${spec.value}`)
           .join(" ")}`
       );
-      return outfitTerms.every((term) => haystack.includes(term));
+      return terms.every((term) => haystack.includes(term));
     });
   }
 
   return filtered;
+}
+
+function getFirstFortniteSelectorTerm(supplierFilters: Record<string, string>) {
+  for (const key of FORTNITE_SELECTOR_FILTER_KEYS) {
+    const firstTerm = supplierFilters[key]?.split(",")[0]?.trim() ?? "";
+    if (firstTerm) {
+      return firstTerm;
+    }
+  }
+  return "";
 }
 
 function applyHardPriceFilters(
@@ -651,8 +676,9 @@ function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequ
     }
   }
   let usedScopeFallbackQuery = false;
-  if (!query && supplierFilters.fortnite_outfits) {
-    query = clampText(supplierFilters.fortnite_outfits.split(",")[0]?.trim() ?? "", 180);
+  const firstFortniteSelectorTerm = getFirstFortniteSelectorTerm(supplierFilters);
+  if (!query && firstFortniteSelectorTerm) {
+    query = clampText(firstFortniteSelectorTerm, 180);
   }
   if (!query) {
     const fallbackQuery = clampText(resolveScopeFallbackQuery(game, category), 180);
@@ -710,8 +736,9 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
     }
   }
   let usedScopeFallbackQuery = false;
-  if (!query && supplierFilters.fortnite_outfits) {
-    query = clampText(supplierFilters.fortnite_outfits.split(",")[0]?.trim() ?? "", 180);
+  const firstFortniteSelectorTerm = getFirstFortniteSelectorTerm(supplierFilters);
+  if (!query && firstFortniteSelectorTerm) {
+    query = clampText(firstFortniteSelectorTerm, 180);
   }
   if (!query) {
     const fallbackQuery = clampText(resolveScopeFallbackQuery(game, category), 180);
