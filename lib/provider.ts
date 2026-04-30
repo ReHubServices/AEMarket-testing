@@ -5586,7 +5586,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
       if (chunk.length === 0) {
         consecutiveEmpty += 1;
-        if (consecutiveEmpty >= 3 && logicalCursor > page) {
+        const allowEarlyStop = !hasLocalPriceFilter;
+        if (allowEarlyStop && consecutiveEmpty >= 3 && logicalCursor > page) {
           break;
         }
       } else {
