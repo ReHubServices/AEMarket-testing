@@ -611,6 +611,15 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
 
   const parsedPrice = parsePriceCandidate(source.price);
   const parsedCurrencyPrice = parsePriceCandidate(source.currency_price);
+  const parsedPriceRub = parsePriceCandidate(
+    source.price_rub ?? source.currency_rub ?? source.rub_price ?? source.priceRub
+  );
+  if (parsedPriceRub > 0) {
+    return normalizeParsedPrice(parsedPriceRub);
+  }
+  if (parsedCurrencyPrice > 0 && parsedPrice > 0 && parsedPrice < 1 && parsedCurrencyPrice >= 10) {
+    return normalizeParsedPrice(parsedCurrencyPrice);
+  }
   if (parsedPrice > 0 && parsedCurrencyPrice > 0) {
     const ratio = parsedPrice / parsedCurrencyPrice;
     if (ratio >= 95 && ratio <= 105) {
@@ -620,18 +629,24 @@ function resolveListingBasePrice(source: Record<string, unknown>) {
       return normalizeParsedPrice(parsedPrice / 100);
     }
   }
+  if (parsedCurrencyPrice > 0 && parsedPrice > 0 && parsedCurrencyPrice >= parsedPrice * 10) {
+    return normalizeParsedPrice(parsedCurrencyPrice);
+  }
 
   const directCandidates = [
+    source.price_rub,
+    source.currency_rub,
+    source.rub_price,
+    source.priceRub,
+    source.currency_price,
     source.final_price,
     source.sale_price,
     source.current_price,
     source.price,
     source.amount,
     source.cost,
-    source.price_rub,
     source.sum,
-    source.display_price,
-    source.currency_price
+    source.display_price
   ];
 
   for (const candidate of directCandidates) {
