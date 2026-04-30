@@ -250,13 +250,13 @@ function mapFulfillmentFailure(error: unknown) {
   if (isSupplierFundingFailure(internalMessage)) {
     return {
       code: "B00",
-      publicMessage: "Something Failed, Contact Support and Give them this error code: B00",
+      publicMessage: "Unexpected error. Contact support.",
       internalMessage
     };
   }
   return {
     code: "B99",
-    publicMessage: "Something Failed, Contact Support and Give them this error code: B99",
+    publicMessage: "Unexpected error. Contact support.",
     internalMessage
   };
 }

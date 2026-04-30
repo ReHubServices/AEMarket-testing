@@ -64,8 +64,14 @@ export async function POST(request: NextRequest) {
       if (code === "B04") {
         return fail("Supplier verification is temporarily blocking purchases. Please try again shortly.", 503);
       }
-      if (code === "B00" || code === "B99") {
-        return fail(`Something Failed, Contact Support and Give them this error code: ${code}`, 502);
+      if (code === "B00") {
+        return fail(
+          "Unexpected error. Contact support.",
+          503
+        );
+      }
+      if (code === "B99") {
+        return fail("Unexpected error. Contact support.", 502);
       }
       return fail("Unable to complete purchase", 502);
     }

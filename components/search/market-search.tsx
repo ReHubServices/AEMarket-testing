@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Search, Wallet, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import type { MarketListing, PublicViewer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProductDetailModal } from "@/components/search/product-detail-modal";
@@ -1195,6 +1196,7 @@ export function MarketSearch({
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [pendingPurchaseListingId, setPendingPurchaseListingId] = useState<string | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailListing, setDetailListing] = useState<MarketListing | null>(null);
@@ -1542,9 +1544,20 @@ export function MarketSearch({
     };
   }, [activeListing, activeListingId]);
 
-  async function handleBuy(listingId: string) {
+  function requestBuy(listingId: string) {
     if (!viewer) {
       router.push(`/login?next=${encodeURIComponent(`/?item=${listingId}`)}`);
+      return;
+    }
+    if (buying) {
+      return;
+    }
+    setPendingPurchaseListingId(listingId);
+  }
+
+  async function confirmBuy() {
+    if (!viewer || !pendingPurchaseListingId) {
+      setPendingPurchaseListingId(null);
       return;
     }
 
@@ -1557,7 +1570,7 @@ export function MarketSearch({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          listingId
+          listingId: pendingPurchaseListingId
         })
       });
 
@@ -1577,6 +1590,7 @@ export function MarketSearch({
       setError(message);
     } finally {
       setBuying(false);
+      setPendingPurchaseListingId(null);
     }
   }
 
@@ -3207,11 +3221,26 @@ export function MarketSearch({
         listing={modalListing}
         viewer={viewer}
         onClose={() => setActiveListingId(null)}
-        onBuy={handleBuy}
+        onBuy={requestBuy}
         buying={buying}
         descriptionLoading={detailLoading}
         descriptionError={detailError}
         imageTheme={selectedGame === "fortnite" ? "fortnite" : null}
+      />
+
+      <ConfirmModal
+        open={Boolean(pendingPurchaseListingId)}
+        title="Confirm Purchase"
+        description="Are you sure you want to buy this account? Funds will be deducted immediately."
+        confirmLabel="Confirm Purchase"
+        cancelLabel="Cancel"
+        loading={buying}
+        onConfirm={confirmBuy}
+        onCancel={() => {
+          if (!buying) {
+            setPendingPurchaseListingId(null);
+          }
+        }}
       />
     </main>
   );

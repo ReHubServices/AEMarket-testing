@@ -88,12 +88,11 @@ function normalizeStore(raw: unknown): StoreData {
     data.settings && typeof data.settings === "object"
       ? (data.settings as Record<string, unknown>)
       : null;
-  const hasLegacyDefaultMarkup = Number((rawSettings as Record<string, unknown> | null)?.markupPercent) === 50;
   const parsedMarkup =
     typeof data.settings?.markupPercent === "number" && Number.isFinite(data.settings.markupPercent)
       ? data.settings.markupPercent
       : defaultStore.settings.markupPercent;
-  const markup = hasLegacyDefaultMarkup ? DEFAULT_MARKUP_PERCENT : parsedMarkup;
+  const markup = Math.min(500, Math.max(0, parsedMarkup));
   const homeTitle =
     typeof data.settings?.homeTitle === "string" && data.settings.homeTitle.trim()
       ? data.settings.homeTitle.trim().slice(0, 120)
