@@ -51,9 +51,7 @@ const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
 const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
   /(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)\/(?:market\/)?\d+\/image(?:\?[^ \]\n\r<>"']*)?/gi;
-const SUPPLIER_CURRENCY = (
-  process.env.LZT_SEARCH_CURRENCY?.trim().toLowerCase() || "rub"
-).replace(/[^a-z]/g, "");
+const SUPPLIER_CURRENCY = "rub";
 
 function normalizeSupplierBaseUrl(value: string) {
   const raw = value.trim();
