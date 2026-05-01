@@ -53,7 +53,7 @@ export async function SiteHeader() {
             )}
             {viewer?.isAdmin && (
               <Link href="/admin" className="transition hover:text-white">
-                Admin
+                Admin Panel
               </Link>
             )}
           </nav>
@@ -79,6 +79,18 @@ export async function SiteHeader() {
                   ${viewer.balance.toFixed(2)}
                 </p>
               </div>
+              <Link href="/dashboard" className="hidden md:block">
+                <Button variant="ghost" className="h-10 px-3 text-sm">
+                  Orders
+                </Button>
+              </Link>
+              {viewer.isAdmin && (
+                <Link href="/admin" className="hidden md:block">
+                  <Button variant="ghost" className="h-10 px-3 text-sm">
+                    Admin Panel
+                  </Button>
+                </Link>
+              )}
               <a href="/wallet/add-funds" className="hidden sm:block">
                 <Button className="h-10 px-3 text-sm">Add Funds</Button>
               </a>
@@ -110,7 +122,7 @@ export async function SiteHeader() {
             href="/dashboard"
             className="whitespace-nowrap rounded-lg border border-white/15 bg-black/35 px-3 py-1.5"
           >
-            Dashboard
+            Orders
           </Link>
         )}
         {viewer && (
@@ -131,7 +143,7 @@ export async function SiteHeader() {
             href="/admin"
             className="whitespace-nowrap rounded-lg border border-white/15 bg-black/35 px-3 py-1.5"
           >
-            Admin
+            Admin Panel
           </Link>
         )}
       </nav>

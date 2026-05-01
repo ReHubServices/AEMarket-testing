@@ -65,6 +65,8 @@ export function AdminDashboard({
   const [fundingKey, setFundingKey] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [userQuery, setUserQuery] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState<"all" | "admin" | "user">("all");
 
   async function onSaveMarkup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -241,6 +243,26 @@ export function AdminDashboard({
         ? `Add ${formatPrice(confirmAction.amount, "USD")} to ${confirmAction.username}?`
         : "";
   const confirmLabel = confirmAction?.kind === "delete" ? "Delete" : "Confirm";
+  const normalizedUserQuery = userQuery.trim().toLowerCase();
+  const filteredUsers = users.filter((user) => {
+    if (userRoleFilter === "admin" && !user.isAdmin) {
+      return false;
+    }
+    if (userRoleFilter === "user" && user.isAdmin) {
+      return false;
+    }
+    if (!normalizedUserQuery) {
+      return true;
+    }
+    return [
+      user.username,
+      user.id,
+      user.email ?? ""
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedUserQuery);
+  });
 
   return (
     <main className="space-y-6">
@@ -357,8 +379,28 @@ export function AdminDashboard({
           <h3 className="font-[var(--font-space-grotesk)] text-lg font-semibold text-white">
             Users
           </h3>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              value={userQuery}
+              onChange={(event) => setUserQuery(event.target.value)}
+              placeholder="Search by username, user id, or email"
+              className="h-9 w-full"
+            />
+            <select
+              value={userRoleFilter}
+              onChange={(event) => setUserRoleFilter(event.target.value as "all" | "admin" | "user")}
+              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white outline-none transition focus:border-white/30 sm:w-[140px]"
+            >
+              <option value="all">All Roles</option>
+              <option value="admin">Admins</option>
+              <option value="user">Users</option>
+            </select>
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">
+            Showing {filteredUsers.length} of {users.length} users
+          </p>
           <div className="mt-4 max-h-[420px] space-y-3 overflow-auto pr-1">
-            {users.map((user) => {
+            {filteredUsers.map((user) => {
               const key = `user:${user.id}`;
               return (
                 <div
@@ -407,6 +449,11 @@ export function AdminDashboard({
                 </div>
               );
             })}
+            {filteredUsers.length === 0 && (
+              <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-4 text-sm text-zinc-300">
+                No users match your search.
+              </div>
+            )}
           </div>
         </div>
 
