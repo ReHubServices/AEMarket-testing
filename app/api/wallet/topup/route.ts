@@ -125,6 +125,9 @@ export async function POST(request: NextRequest) {
       }
       if (message.includes("VENPAYR_API_ERROR:")) {
         const code = extractApiStatusCode(message);
+        if (code === "422") {
+          return fail("Payment gateway rejected the request (P422). Please contact support.", 502);
+        }
         return fail(`Payment API error (P${code})`, 502);
       }
       if (message.toLowerCase().includes("payment") || message.toLowerCase().includes("checkout")) {

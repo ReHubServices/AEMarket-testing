@@ -250,7 +250,7 @@ function hasCheckoutPayload(raw: Record<string, unknown>) {
     toStringValue(raw.checkoutUrl) ??
     toStringValue(raw.url) ??
     null;
-  return Boolean((payRef || invoiceId) && checkoutUrl);
+  return Boolean(payRef || invoiceId || checkoutUrl);
 }
 
 function buildCheckoutAttempts(payload: CheckoutRequest) {
