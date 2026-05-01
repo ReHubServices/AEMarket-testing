@@ -205,6 +205,68 @@ function parsePayRefFromCheckoutUrl(value: string | null) {
   return fromQuery ? decodeURIComponent(fromQuery) : null;
 }
 
+function parseMessageAsObject(rawMessage: string | null) {
+  if (!rawMessage) {
+    return null;
+  }
+  const trimmed = rawMessage.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function extractCheckoutUrlFromText(text: string | null) {
+  if (!text) {
+    return null;
+  }
+  const normalized = text.trim();
+  if (!normalized) {
+    return null;
+  }
+  const directUrl =
+    normalized.match(/https?:\/\/[^\s"'<>]+/i)?.[0] ??
+    normalized.match(/buyerstore\.venpayr\.com\/invoice\/[A-Za-z0-9_-]+/i)?.[0] ??
+    null;
+  if (directUrl) {
+    return directUrl.startsWith("http") ? directUrl : `https://${directUrl}`;
+  }
+  return null;
+}
+
+function extractProviderRefFromText(text: string | null) {
+  if (!text) {
+    return null;
+  }
+  const normalized = text.trim();
+  if (!normalized) {
+    return null;
+  }
+  const explicitRef =
+    normalized.match(
+      /(?:pay[_-]?ref|invoice[_-]?id|payment[_-]?id|reference)\s*[:=]\s*["']?([A-Za-z0-9._-]{5,})/i
+    )?.[1] ?? null;
+  if (explicitRef) {
+    return explicitRef;
+  }
+  const fromInvoicePath = normalized.match(/\/invoice\/([A-Za-z0-9_-]{5,})/i)?.[1] ?? null;
+  if (fromInvoicePath) {
+    return fromInvoicePath;
+  }
+  return null;
+}
+
 function findStringDeep(
   value: unknown,
   predicate: (candidate: string, keyPath: string[]) => boolean,
@@ -313,6 +375,11 @@ function normalizeTransactionReference(value: string | null) {
 }
 
 function hasCheckoutPayload(raw: Record<string, unknown>) {
+  const rawMessage = toStringValue(raw.message);
+  const parsedMessageObject = parseMessageAsObject(rawMessage);
+  if (parsedMessageObject && hasCheckoutPayload(parsedMessageObject)) {
+    return true;
+  }
   const root = toRecord(raw.data) ?? raw;
   const providerRef =
     toStringValue(root.pay_ref) ??
@@ -331,6 +398,7 @@ function hasCheckoutPayload(raw: Record<string, unknown>) {
     toStringFromPath(root, ["checkout", "id"]) ??
     toStringValue(raw.pay_ref) ??
     toStringValue(raw.payRef) ??
+    extractProviderRefFromText(rawMessage) ??
     null;
   const invoiceId =
     toStringValue(root.invoice_id) ??
@@ -371,6 +439,7 @@ function hasCheckoutPayload(raw: Record<string, unknown>) {
     toStringValue(raw.invoiceUrl) ??
     toStringValue(raw.link) ??
     toStringValue(raw.url) ??
+    extractCheckoutUrlFromText(rawMessage) ??
     null;
   return Boolean(providerRef || invoiceId || checkoutUrl);
 }
@@ -651,6 +720,9 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment session creation failed (${response.status})`}`);
   }
   const root = toRecord(raw.data) ?? raw;
+  const rawMessage = toStringValue(raw.message);
+  const parsedMessageObject = parseMessageAsObject(rawMessage);
+  const messageRoot = parsedMessageObject ? toRecord(parsedMessageObject.data) ?? parsedMessageObject : null;
   if (raw.success === false || root.success === false) {
     const message =
       getBodyErrorMessage(raw) ?? "Payment session creation failed";
@@ -691,8 +763,20 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     toStringFromPath(root, ["payment", "id"]) ??
     toStringFromPath(root, ["payment", "payment_ref"]) ??
     toStringFromPath(root, ["payment", "paymentRef"]) ??
+    (messageRoot
+      ? toStringValue(messageRoot.pay_ref) ??
+        toStringValue(messageRoot.payRef) ??
+        toStringValue(messageRoot.payment_ref) ??
+        toStringValue(messageRoot.paymentRef) ??
+        toStringValue(messageRoot.invoice_id) ??
+        toStringValue(messageRoot.invoiceId) ??
+        toStringValue(messageRoot.payment_id) ??
+        toStringValue(messageRoot.paymentId) ??
+        toStringValue(messageRoot.id)
+      : null) ??
     toStringValue(raw.paymentId) ??
     toStringValue(raw.id) ??
+    extractProviderRefFromText(rawMessage) ??
     findProviderRefDeep(raw) ??
     "";
 
@@ -731,6 +815,20 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     toStringFromPath(raw, ["payment", "paymentUrl"]) ??
     toStringFromPath(raw, ["payment", "redirect_url"]) ??
     toStringFromPath(raw, ["payment", "redirectUrl"]) ??
+    (messageRoot
+      ? toStringValue(messageRoot.checkout_url) ??
+        toStringValue(messageRoot.checkoutUrl) ??
+        toStringValue(messageRoot.payment_url) ??
+        toStringValue(messageRoot.paymentUrl) ??
+        toStringValue(messageRoot.redirect_url) ??
+        toStringValue(messageRoot.redirectUrl) ??
+        toStringValue(messageRoot.invoice_url) ??
+        toStringValue(messageRoot.invoiceUrl) ??
+        toStringValue(messageRoot.hosted_url) ??
+        toStringValue(messageRoot.hostedUrl) ??
+        toStringValue(messageRoot.url) ??
+        toStringValue(messageRoot.link)
+      : null) ??
     toStringValue(root.url) ??
     toStringValue(raw.checkout_url) ??
     toStringValue(raw.checkoutUrl) ??
@@ -742,6 +840,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     toStringValue(raw.invoiceUrl) ??
     toStringValue(raw.link) ??
     toStringValue(raw.url) ??
+    extractCheckoutUrlFromText(rawMessage) ??
     findCheckoutUrlDeep(raw) ??
     (payRef ? `https://buyerstore.venpayr.com/invoice/${encodeURIComponent(payRef)}` : null) ??
     "";
