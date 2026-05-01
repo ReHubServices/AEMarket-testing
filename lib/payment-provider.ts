@@ -205,6 +205,97 @@ function parsePayRefFromCheckoutUrl(value: string | null) {
   return fromQuery ? decodeURIComponent(fromQuery) : null;
 }
 
+function findStringDeep(
+  value: unknown,
+  predicate: (candidate: string, keyPath: string[]) => boolean,
+  keyPath: string[] = [],
+  depth = 0,
+  seen = new Set<unknown>()
+): string | null {
+  if (value == null || depth > 6) {
+    return null;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const normalized = toStringValue(value);
+    if (!normalized) {
+      return null;
+    }
+    return predicate(normalized, keyPath) ? normalized : null;
+  }
+  if (typeof value !== "object") {
+    return null;
+  }
+  if (seen.has(value)) {
+    return null;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const hit = findStringDeep(value[index], predicate, [...keyPath, String(index)], depth + 1, seen);
+      if (hit) {
+        return hit;
+      }
+    }
+    return null;
+  }
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const hit = findStringDeep(entry, predicate, [...keyPath, key], depth + 1, seen);
+    if (hit) {
+      return hit;
+    }
+  }
+  return null;
+}
+
+function findCheckoutUrlDeep(value: unknown) {
+  return findStringDeep(value, (candidate, keyPath) => {
+    const lower = candidate.toLowerCase();
+    const key = keyPath.join(".").toLowerCase();
+    if (!/^https?:\/\//.test(lower)) {
+      return false;
+    }
+    if (
+      key.includes("checkout") ||
+      key.includes("redirect") ||
+      key.includes("invoice") ||
+      key.includes("payment") ||
+      key.includes("url") ||
+      key.includes("link")
+    ) {
+      return true;
+    }
+    return (
+      lower.includes("/checkout") ||
+      lower.includes("/invoice") ||
+      lower.includes("buyerstore.") ||
+      lower.includes("card-setup.")
+    );
+  });
+}
+
+function findProviderRefDeep(value: unknown) {
+  return findStringDeep(value, (candidate, keyPath) => {
+    const lowerValue = candidate.toLowerCase();
+    const key = keyPath.join(".").toLowerCase();
+    const keyLooksLikeRef =
+      key.includes("pay_ref") ||
+      key.includes("payref") ||
+      key.includes("payment_ref") ||
+      key.includes("paymentref") ||
+      key.includes("invoice_id") ||
+      key.includes("invoiceid") ||
+      key.includes("payment_id") ||
+      key.includes("paymentid") ||
+      key.endsWith(".id") ||
+      key.endsWith(".reference") ||
+      key.includes("reference");
+    if (!keyLooksLikeRef) {
+      return false;
+    }
+    return /^[a-z0-9][a-z0-9._-]{5,}$/i.test(lowerValue);
+  });
+}
+
 function normalizeTransactionReference(value: string | null) {
   const normalized = toStringValue(value);
   if (!normalized) {
@@ -559,10 +650,6 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     }
     throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment session creation failed (${response.status})`}`);
   }
-  if (!receivedUsableResponse) {
-    throw new Error(`VENPAYR_API_ERROR: ${lastApiError || "422: Invalid payment provider response"}`);
-  }
-
   const root = toRecord(raw.data) ?? raw;
   if (raw.success === false || root.success === false) {
     const message =
@@ -600,13 +687,13 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     toStringValue(root.reference) ??
     toStringValue(root.payment_id) ??
     toStringValue(root.paymentId) ??
-    toStringValue(root.paymentId) ??
     toStringValue(root.id) ??
     toStringFromPath(root, ["payment", "id"]) ??
     toStringFromPath(root, ["payment", "payment_ref"]) ??
     toStringFromPath(root, ["payment", "paymentRef"]) ??
     toStringValue(raw.paymentId) ??
     toStringValue(raw.id) ??
+    findProviderRefDeep(raw) ??
     "";
 
   const providerAltPaymentId =
@@ -655,6 +742,7 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     toStringValue(raw.invoiceUrl) ??
     toStringValue(raw.link) ??
     toStringValue(raw.url) ??
+    findCheckoutUrlDeep(raw) ??
     (payRef ? `https://buyerstore.venpayr.com/invoice/${encodeURIComponent(payRef)}` : null) ??
     "";
 
@@ -665,7 +753,10 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
     (payRefFromUrl && payRefFromUrl !== resolvedProviderPaymentId ? payRefFromUrl : null);
 
   if (!resolvedProviderPaymentId || !checkoutUrl) {
-    throw new Error("VENPAYR_API_ERROR: 422 Invalid payment provider response");
+    const summary = JSON.stringify(Object.keys(raw).slice(0, 20));
+    throw new Error(
+      `VENPAYR_API_ERROR: 422 Invalid payment provider response; top-level keys=${summary}`
+    );
   }
 
   return {
