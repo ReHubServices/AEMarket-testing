@@ -223,11 +223,21 @@ function normalizeTransactionReference(value: string | null) {
 
 function hasCheckoutPayload(raw: Record<string, unknown>) {
   const root = toRecord(raw.data) ?? raw;
-  const payRef =
+  const providerRef =
     toStringValue(root.pay_ref) ??
     toStringValue(root.payRef) ??
+    toStringValue(root.payment_ref) ??
+    toStringValue(root.paymentRef) ??
+    toStringValue(root.reference) ??
+    toStringValue(root.payment_id) ??
+    toStringValue(root.paymentId) ??
+    toStringValue(root.id) ??
     toStringFromPath(root, ["payment", "pay_ref"]) ??
     toStringFromPath(root, ["payment", "payRef"]) ??
+    toStringFromPath(root, ["payment", "payment_ref"]) ??
+    toStringFromPath(root, ["payment", "paymentRef"]) ??
+    toStringFromPath(root, ["payment", "id"]) ??
+    toStringFromPath(root, ["checkout", "id"]) ??
     toStringValue(raw.pay_ref) ??
     toStringValue(raw.payRef) ??
     null;
@@ -242,15 +252,36 @@ function hasCheckoutPayload(raw: Record<string, unknown>) {
   const checkoutUrl =
     toStringValue(root.checkout_url) ??
     toStringValue(root.checkoutUrl) ??
+    toStringValue(root.payment_url) ??
+    toStringValue(root.paymentUrl) ??
+    toStringValue(root.redirect_url) ??
+    toStringValue(root.redirectUrl) ??
+    toStringValue(root.invoice_url) ??
+    toStringValue(root.invoiceUrl) ??
+    toStringValue(root.hosted_url) ??
+    toStringValue(root.hostedUrl) ??
+    toStringValue(root.link) ??
     toStringFromPath(root, ["checkout", "url"]) ??
+    toStringFromPath(root, ["checkout", "link"]) ??
     toStringFromPath(root, ["payment", "checkout_url"]) ??
     toStringFromPath(root, ["payment", "checkoutUrl"]) ??
+    toStringFromPath(root, ["payment", "payment_url"]) ??
+    toStringFromPath(root, ["payment", "paymentUrl"]) ??
+    toStringFromPath(root, ["payment", "redirect_url"]) ??
+    toStringFromPath(root, ["payment", "redirectUrl"]) ??
     toStringValue(root.url) ??
     toStringValue(raw.checkout_url) ??
     toStringValue(raw.checkoutUrl) ??
+    toStringValue(raw.payment_url) ??
+    toStringValue(raw.paymentUrl) ??
+    toStringValue(raw.redirect_url) ??
+    toStringValue(raw.redirectUrl) ??
+    toStringValue(raw.invoice_url) ??
+    toStringValue(raw.invoiceUrl) ??
+    toStringValue(raw.link) ??
     toStringValue(raw.url) ??
     null;
-  return Boolean(payRef || invoiceId || checkoutUrl);
+  return Boolean(providerRef || invoiceId || checkoutUrl);
 }
 
 function buildCheckoutAttempts(payload: CheckoutRequest) {
@@ -564,8 +595,16 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const providerPaymentId =
     payRef ??
     invoiceId ??
+    toStringValue(root.payment_ref) ??
+    toStringValue(root.paymentRef) ??
+    toStringValue(root.reference) ??
+    toStringValue(root.payment_id) ??
+    toStringValue(root.paymentId) ??
     toStringValue(root.paymentId) ??
     toStringValue(root.id) ??
+    toStringFromPath(root, ["payment", "id"]) ??
+    toStringFromPath(root, ["payment", "payment_ref"]) ??
+    toStringFromPath(root, ["payment", "paymentRef"]) ??
     toStringValue(raw.paymentId) ??
     toStringValue(raw.id) ??
     "";
@@ -580,15 +619,41 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
   const checkoutUrl =
     toStringValue(root.checkout_url) ??
     toStringValue(root.checkoutUrl) ??
+    toStringValue(root.payment_url) ??
+    toStringValue(root.paymentUrl) ??
+    toStringValue(root.redirect_url) ??
+    toStringValue(root.redirectUrl) ??
+    toStringValue(root.invoice_url) ??
+    toStringValue(root.invoiceUrl) ??
+    toStringValue(root.hosted_url) ??
+    toStringValue(root.hostedUrl) ??
+    toStringValue(root.link) ??
     toStringFromPath(root, ["checkout", "url"]) ??
+    toStringFromPath(root, ["checkout", "link"]) ??
     toStringFromPath(raw, ["checkout", "url"]) ??
+    toStringFromPath(raw, ["checkout", "link"]) ??
     toStringFromPath(root, ["payment", "checkout_url"]) ??
     toStringFromPath(root, ["payment", "checkoutUrl"]) ??
+    toStringFromPath(root, ["payment", "payment_url"]) ??
+    toStringFromPath(root, ["payment", "paymentUrl"]) ??
+    toStringFromPath(root, ["payment", "redirect_url"]) ??
+    toStringFromPath(root, ["payment", "redirectUrl"]) ??
     toStringFromPath(raw, ["payment", "checkout_url"]) ??
     toStringFromPath(raw, ["payment", "checkoutUrl"]) ??
+    toStringFromPath(raw, ["payment", "payment_url"]) ??
+    toStringFromPath(raw, ["payment", "paymentUrl"]) ??
+    toStringFromPath(raw, ["payment", "redirect_url"]) ??
+    toStringFromPath(raw, ["payment", "redirectUrl"]) ??
     toStringValue(root.url) ??
     toStringValue(raw.checkout_url) ??
     toStringValue(raw.checkoutUrl) ??
+    toStringValue(raw.payment_url) ??
+    toStringValue(raw.paymentUrl) ??
+    toStringValue(raw.redirect_url) ??
+    toStringValue(raw.redirectUrl) ??
+    toStringValue(raw.invoice_url) ??
+    toStringValue(raw.invoiceUrl) ??
+    toStringValue(raw.link) ??
     toStringValue(raw.url) ??
     (payRef ? `https://buyerstore.venpayr.com/invoice/${encodeURIComponent(payRef)}` : null) ??
     "";
