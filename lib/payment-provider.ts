@@ -97,40 +97,29 @@ function getWebhookSecret() {
 }
 
 function getBaseUrl() {
-  const base =
-    firstNonEmpty([
-      readEnvCaseInsensitive("VENPAYR_BASE_URL"),
-      readEnvCaseInsensitive("CARD_SETUP_BASE_URL")
-    ]) || "https://dash.venpayr.com";
+  const base = firstNonEmpty([readEnvCaseInsensitive("VENPAYR_BASE_URL")]) || "https://api.venpayr.com";
   return base.replace(/\/+$/, "");
 }
 
 function getBaseUrlCandidates() {
-  const configured = getBaseUrl();
-  const seeds = [
-    configured,
-    "https://dash.venpayr.com",
-    "https://api.venpayr.com",
-    "https://dashboard.card-setup.com"
-  ];
-  const expanded: string[] = [];
-  for (const seed of seeds) {
-    const value = seed.trim().replace(/\/+$/, "");
-    if (!value) {
-      continue;
-    }
-    expanded.push(value);
-    expanded.push(value.replace(/\/api\/v1$/i, ""));
-    expanded.push(value.replace(/\/api$/i, ""));
-    expanded.push(value.replace(/\/v1$/i, ""));
+  const configured = getBaseUrl().trim().replace(/\/+$/, "");
+  if (!configured) {
+    return ["https://api.venpayr.com"];
   }
-  return Array.from(
-    new Set(
-      expanded
-        .map((value) => value.trim().replace(/\/+$/, ""))
-        .filter(Boolean)
-    )
-  );
+
+  let configuredOrigin = configured;
+  try {
+    configuredOrigin = new URL(configured).origin;
+  } catch {
+    configuredOrigin = configured;
+  }
+
+  const seeds = [configuredOrigin];
+  if (/venpayr\.com$/i.test(configuredOrigin)) {
+    seeds.push("https://api.venpayr.com", "https://dash.venpayr.com");
+  }
+
+  return Array.from(new Set(seeds.map((value) => value.trim().replace(/\/+$/, "")).filter(Boolean)));
 }
 
 function toRecord(value: unknown) {
@@ -163,18 +152,6 @@ function buildAuthHeaderVariants(apiKey: string): Array<Record<string, string>> 
   return [
     {
       Authorization: `Bearer ${apiKey}`,
-      "X-API-Key": apiKey,
-      "x-api-key": apiKey,
-      "Api-Key": apiKey
-    },
-    {
-      Authorization: apiKey,
-      "X-API-Key": apiKey,
-      "x-api-key": apiKey,
-      "Api-Key": apiKey
-    },
-    {
-      Authorization: `Token ${apiKey}`,
       "X-API-Key": apiKey,
       "x-api-key": apiKey,
       "Api-Key": apiKey
@@ -446,10 +423,11 @@ function hasCheckoutPayload(raw: Record<string, unknown>) {
 
 function buildCheckoutAttempts(payload: CheckoutRequest) {
   const email = resolveCustomerEmail(payload);
+  const providerUsername = normalizeProviderUsername(payload.username);
   const itemName = payload.itemName?.trim() || `Order ${payload.orderId}`;
   const amount = Number(payload.amount.toFixed(2));
   const country = resolveCustomerCountry();
-  const normalizedFirstName = payload.username.replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 32);
+  const normalizedFirstName = providerUsername;
   const customers: Array<Record<string, unknown>> = [
     { email },
     { email, country },
@@ -461,15 +439,10 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
     orderId: String(payload.orderId),
     order_id: String(payload.orderId),
     external_order_id: String(payload.orderId),
-    username: String(payload.username)
+    username: providerUsername
   };
   const amountString = amount.toFixed(2);
-  const endpoints = [
-    "/api/v1/checkout/init",
-    "/api/checkout/init",
-    "/v1/checkout/init",
-    "/checkout/init"
-  ];
+  const endpoints = ["/api/v1/checkout/init"];
   const attempts: Array<{
     endpointSuffixes: string[];
     body: Record<string, unknown>;
@@ -572,6 +545,8 @@ async function parseProviderResponseBody(response: Response) {
     return {};
   }
   return {
+    __non_json: true,
+    __content_type: contentType || "unknown",
     message: normalized.slice(0, 500)
   };
 }
@@ -608,13 +583,21 @@ function toMetadata(value: unknown) {
   return null;
 }
 
+function normalizeProviderUsername(value: string) {
+  const cleaned = value.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+  return cleaned || "user";
+}
+
+function isLikelyEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function resolveCustomerEmail(payload: CheckoutRequest) {
   const fromInput = toStringValue(payload.customerEmail);
-  if (fromInput) {
+  if (fromInput && isLikelyEmail(fromInput)) {
     return fromInput;
   }
-  const fallbackLocal =
-    payload.username.replace(/[^a-zA-Z0-9._-]/g, "").toLowerCase() || "buyer";
+  const fallbackLocal = normalizeProviderUsername(payload.username).toLowerCase() || "buyer";
   return `${fallbackLocal}@example.com`;
 }
 
@@ -670,6 +653,10 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
 
           raw = await parseProviderResponseBody(response);
           if (response.ok) {
+            if (raw.__non_json === true) {
+              lastApiError = `422: Non-JSON response from ${endpoint}`;
+              continue;
+            }
             if (hasCheckoutPayload(raw)) {
               receivedUsableResponse = true;
               break;
@@ -718,6 +705,11 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
       );
     }
     throw new Error(`VENPAYR_API_ERROR: ${lastApiError || `Payment session creation failed (${response.status})`}`);
+  }
+  if (!receivedUsableResponse) {
+    throw new Error(
+      `VENPAYR_API_ERROR: ${lastApiError || "422 Invalid payment provider response from checkout init endpoint"}`
+    );
   }
   const root = toRecord(raw.data) ?? raw;
   const rawMessage = toStringValue(raw.message);
@@ -951,13 +943,7 @@ export async function verifyCheckoutPayment(payRef: string): Promise<CheckoutVer
   const refEncoded = encodeURIComponent(normalizedRef);
   const endpointSuffixes = [
     `/api/v1/checkout/verify/${refEncoded}`,
-    `/api/checkout/verify/${refEncoded}`,
-    `/v1/checkout/verify/${refEncoded}`,
-    `/checkout/verify/${refEncoded}`,
-    `/api/v1/checkout/status/${refEncoded}`,
-    `/api/checkout/status/${refEncoded}`,
-    `/v1/checkout/status/${refEncoded}`,
-    `/checkout/status/${refEncoded}`
+    `/api/v1/checkout/status/${refEncoded}`
   ];
 
   let response: Response | null = null;
@@ -987,6 +973,10 @@ export async function verifyCheckoutPayment(payRef: string): Promise<CheckoutVer
 
         raw = await parseProviderResponseBody(response);
         if (response.ok) {
+          if (raw.__non_json === true) {
+            lastApiError = `422: Non-JSON response from ${endpoint}`;
+            continue;
+          }
           const providerPaymentId = parseProviderPaymentIdFromVerifyPayload(raw, normalizedRef);
           const { status, confirmed } = parseVerificationStatus(raw);
           const { amount, currency } = parseVerificationAmountCurrency(raw);
