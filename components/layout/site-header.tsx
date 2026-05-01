@@ -51,11 +51,6 @@ export async function SiteHeader() {
                 Add Funds
               </a>
             )}
-            {viewer?.isAdmin && (
-              <Link href="/admin" className="transition hover:text-white">
-                Admin Panel
-              </Link>
-            )}
           </nav>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -132,14 +127,6 @@ export async function SiteHeader() {
           >
             Add Funds
           </a>
-        )}
-        {viewer?.isAdmin && (
-          <Link
-            href="/admin"
-            className="whitespace-nowrap rounded-lg border border-white/15 bg-black/35 px-3 py-1.5"
-          >
-            Admin Panel
-          </Link>
         )}
       </nav>
     </header>
