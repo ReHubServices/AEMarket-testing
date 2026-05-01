@@ -853,8 +853,14 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
 
   if (!resolvedProviderPaymentId || !checkoutUrl) {
     const summary = JSON.stringify(Object.keys(raw).slice(0, 20));
+    const rawMessage = toStringValue(raw.message);
+    const messageSnippet = rawMessage
+      ? rawMessage.replace(/\s+/g, " ").trim().slice(0, 320)
+      : "";
     throw new Error(
-      `VENPAYR_API_ERROR: 422 Invalid payment provider response; top-level keys=${summary}`
+      `VENPAYR_API_ERROR: 422 Invalid payment provider response; top-level keys=${summary}${
+        messageSnippet ? `; message=${messageSnippet}` : ""
+      }`
     );
   }
 
