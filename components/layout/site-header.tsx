@@ -43,7 +43,7 @@ export async function SiteHeader() {
             )}
             {viewer && (
               <Link href="/dashboard" className="transition hover:text-white">
-                Dashboard
+                Orders
               </Link>
             )}
             {viewer && (
@@ -79,11 +79,6 @@ export async function SiteHeader() {
                   ${viewer.balance.toFixed(2)}
                 </p>
               </div>
-              <Link href="/dashboard" className="hidden md:block">
-                <Button variant="ghost" className="h-10 px-3 text-sm">
-                  Orders
-                </Button>
-              </Link>
               {viewer.isAdmin && (
                 <Link href="/admin" className="hidden md:block">
                   <Button variant="ghost" className="h-10 px-3 text-sm">

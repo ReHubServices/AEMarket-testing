@@ -66,7 +66,6 @@ export function AdminDashboard({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [userQuery, setUserQuery] = useState("");
-  const [userRoleFilter, setUserRoleFilter] = useState<"all" | "admin" | "user">("all");
 
   async function onSaveMarkup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -244,25 +243,9 @@ export function AdminDashboard({
         : "";
   const confirmLabel = confirmAction?.kind === "delete" ? "Delete" : "Confirm";
   const normalizedUserQuery = userQuery.trim().toLowerCase();
-  const filteredUsers = users.filter((user) => {
-    if (userRoleFilter === "admin" && !user.isAdmin) {
-      return false;
-    }
-    if (userRoleFilter === "user" && user.isAdmin) {
-      return false;
-    }
-    if (!normalizedUserQuery) {
-      return true;
-    }
-    return [
-      user.username,
-      user.id,
-      user.email ?? ""
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalizedUserQuery);
-  });
+  const filteredUsers = users.filter((user) =>
+    !normalizedUserQuery || user.username.toLowerCase().includes(normalizedUserQuery)
+  );
 
   return (
     <main className="space-y-6">
@@ -383,18 +366,9 @@ export function AdminDashboard({
             <Input
               value={userQuery}
               onChange={(event) => setUserQuery(event.target.value)}
-              placeholder="Search by username, user id, or email"
+              placeholder="Search by username"
               className="h-9 w-full"
             />
-            <select
-              value={userRoleFilter}
-              onChange={(event) => setUserRoleFilter(event.target.value as "all" | "admin" | "user")}
-              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white outline-none transition focus:border-white/30 sm:w-[140px]"
-            >
-              <option value="all">All Roles</option>
-              <option value="admin">Admins</option>
-              <option value="user">Users</option>
-            </select>
           </div>
           <p className="mt-2 text-xs text-zinc-400">
             Showing {filteredUsers.length} of {users.length} users
