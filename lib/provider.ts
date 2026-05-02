@@ -5392,8 +5392,13 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
 
   if (!normalized) {
     const finalizedEmpty = Array.from(variants).filter(Boolean);
-    if (finalizedEmpty.length > 0 && fortniteSelectedTermCount > 0) {
-      return finalizedEmpty.slice(0, Math.min(6, SUPPLIER_MAX_QUERY_VARIANTS));
+    if (fortniteSelectedTermCount > 0) {
+      // Selector-only browsing must not be constrained to title query terms.
+      // We fetch broad scope and apply selector matching locally on enriched details.
+      return [""];
+    }
+    if (finalizedEmpty.length > 0) {
+      return finalizedEmpty.slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
     }
     return [""];
   }
@@ -5685,7 +5690,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
           : hasFortniteSelectorOnlyFilters
-            ? Math.max(page + 18, 28)
+            ? Math.max(page + 50, 90)
             : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
@@ -5778,13 +5783,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const needsDeepFilterFinalPass =
       hasActiveSupplierFilters || needsStrictFortniteCountFinalPass || hasLocalPriceFilter;
     const finalPassPoolSize = hasFortniteSelectorFilters
-      ? Math.min(1200, Math.max(targetEnd + pageSize * 64, 700))
+      ? Math.min(2500, Math.max(targetEnd + pageSize * 160, 1500))
       : needsDeepFilterFinalPass
         ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const detailEnrichmentLimit = hasFortniteSelectorFilters
-      ? finalPassPool.length
+      ? Math.min(finalPassPool.length, 900)
       : needsDeepFilterFinalPass
         ? Math.min(finalPassPool.length, 140)
         : 24;
