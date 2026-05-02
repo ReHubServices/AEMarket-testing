@@ -2045,6 +2045,10 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "online",
     "vac",
     "first_owner",
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders",
     "media_followers_min",
     "media_verified",
     "media_platform"
@@ -3230,6 +3234,21 @@ function applyLocalFilters(
     };
 
     const candidates: string[] = [];
+    const termTokens = normalizedTerm.split(" ").filter((token) => token.length >= 2);
+    const compactTerm = normalizedTerm.replace(/\s+/g, "");
+    const matchesWordTokenLoosely = (word: string, token: string) => {
+      if (word === token || word.startsWith(token) || token.startsWith(word)) {
+        return true;
+      }
+      if (token.length >= 6) {
+        const prefixLength = token.length >= 8 ? 5 : 4;
+        const prefix = token.slice(0, prefixLength);
+        if (word.startsWith(prefix)) {
+          return true;
+        }
+      }
+      return false;
+    };
     for (const spec of item.specs) {
       const label = normalizeText(spec.label);
       if (!selectorHints[selectorKey].some((hint) => label.includes(normalizeText(hint)))) {
@@ -3254,6 +3273,19 @@ function applyLocalFilters(
       }
       if (normalizedSource.includes(normalizedTerm)) {
         return true;
+      }
+      const compactSource = normalizedSource.replace(/\s+/g, "");
+      if (compactTerm.length >= 5 && compactSource.includes(compactTerm)) {
+        return true;
+      }
+      if (termTokens.length > 0) {
+        const sourceWords = normalizedSource.split(" ").filter(Boolean);
+        const tokenMatched = termTokens.every((token) =>
+          sourceWords.some((word) => matchesWordTokenLoosely(word, token))
+        );
+        if (tokenMatched) {
+          return true;
+        }
       }
     }
     return matchesStrictPhrase(item, term);
@@ -5385,9 +5417,21 @@ export async function searchListings(query: string, options: SearchOptions = {})
       }
     : options;
   const hasBrowseScope = Boolean(effectiveOptions.game?.trim() || effectiveOptions.category?.trim());
-  const hasActiveSupplierFilters = Object.values(effectiveOptions.supplierFilters ?? {}).some(
-    (value) => String(value ?? "").trim().length > 0
+  const fortniteSelectorFilterKeys = new Set([
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders"
+  ]);
+  const activeSupplierFilterEntries = Object.entries(effectiveOptions.supplierFilters ?? {}).filter(
+    ([, value]) => String(value ?? "").trim().length > 0
   );
+  const hasActiveSupplierFilters = activeSupplierFilterEntries.length > 0;
+  const hasNonSelectorSupplierFilters = activeSupplierFilterEntries.some(
+    ([key]) => !fortniteSelectorFilterKeys.has(key)
+  );
+  const hasFortniteSelectorOnlyFilters =
+    hasActiveSupplierFilters && !hasNonSelectorSupplierFilters;
   const minPriceBase =
     Number.isFinite(options.minPrice ?? NaN) && markupMultiplier > 0
       ? Number(options.minPrice) / markupMultiplier
@@ -5485,12 +5529,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
         page: targetPage
       };
       const scopedPriceMode = hasBrowseScope && hasLocalPriceFilter;
-      const queryLimit = hasActiveSupplierFilters
+      const useHeavySupplierCaps = hasNonSelectorSupplierFilters;
+      const queryLimit = useHeavySupplierCaps
         ? HEAVY_FILTER_MAX_QUERY_VARIANTS
         : scopedPriceMode
           ? 2
           : SUPPLIER_MAX_QUERY_VARIANTS;
-      const pageSpanLimit = hasActiveSupplierFilters
+      const pageSpanLimit = useHeavySupplierCaps
         ? HEAVY_FILTER_MAX_PAGE_SPAN
         : scopedPriceMode
           ? 2
@@ -5520,7 +5565,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
             category: null
           }
         : effectiveOptions;
-      const categoryEndpointLimit = hasActiveSupplierFilters
+      const categoryEndpointLimit = useHeavySupplierCaps
         ? HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS
         : scopedPriceMode
           ? 1
@@ -5628,7 +5673,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const maxLogicalPages = requiresDeepCandidateScan
       ? hasLocalPriceFilter
         ? Math.max(page + 20, PRICE_FILTER_MAX_LOGICAL_PAGES)
-        : Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
+        : hasNonSelectorSupplierFilters
+          ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
+          : hasFortniteSelectorOnlyFilters
+            ? Math.max(page + 18, 28)
+            : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
@@ -5666,7 +5715,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
-      const probeLimit = hasActiveSupplierFilters ? 1 : 2;
+      const probeLimit = hasNonSelectorSupplierFilters ? 1 : 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
         const probeChunk = await loadFilteredPage(
