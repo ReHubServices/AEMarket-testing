@@ -3240,6 +3240,9 @@ function applyLocalFilters(
       if (word === token || word.startsWith(token) || token.startsWith(word)) {
         return true;
       }
+      if (token.length >= 3 && token.length <= 4 && word.endsWith(token)) {
+        return true;
+      }
       if (token.length >= 6) {
         const prefixLength = token.length >= 8 ? 5 : 4;
         const prefix = token.slice(0, prefixLength);
