@@ -563,17 +563,6 @@ function applyHardFortniteFilters(
   const maxSkins = Number(supplierFilters.fortnite_skin_count_max ?? NaN);
   const hasMin = Number.isFinite(minSkins) && minSkins > 0;
   const hasMax = Number.isFinite(maxSkins) && maxSkins > 0;
-  const selectorTermsByKey = Object.fromEntries(
-    FORTNITE_SELECTOR_FILTER_KEYS.map((key) => [
-      key,
-      (supplierFilters[key] ?? "")
-        .split(",")
-        .map((entry) => normalizeText(entry))
-        .filter((entry) => entry.length >= 2)
-        .slice(0, 12)
-    ])
-  ) as Record<(typeof FORTNITE_SELECTOR_FILTER_KEYS)[number], string[]>;
-
   let filtered = listings.slice();
   if (hasMin || hasMax) {
     filtered = filtered.filter((listing) => {
@@ -585,21 +574,6 @@ function applyHardFortniteFilters(
         return false;
       }
       return true;
-    });
-  }
-
-  for (const key of FORTNITE_SELECTOR_FILTER_KEYS) {
-    const terms = selectorTermsByKey[key];
-    if (terms.length === 0) {
-      continue;
-    }
-    filtered = filtered.filter((listing) => {
-      const haystack = normalizeText(
-        `${listing.title} ${listing.description} ${listing.specs
-          .map((spec) => `${spec.label} ${spec.value}`)
-          .join(" ")}`
-      );
-      return terms.every((term) => haystack.includes(term));
     });
   }
 
