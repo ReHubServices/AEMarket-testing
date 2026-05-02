@@ -70,6 +70,7 @@ const FORTNITE_SELECTOR_FILTER_KEYS = [
   "fortnite_emotes",
   "fortnite_gliders"
 ] as const;
+const FILTER_BACKFILL_MAX_PAGES = 8;
 
 function sanitizeSupplierFilterValue(key: string, value: string) {
   const trimmed = value.trim();
@@ -635,6 +636,28 @@ function getFortniteSelectorMeta(supplierFilters: Record<string, string>) {
   };
 }
 
+function hasActiveFortniteSelectorFilters(supplierFilters: Record<string, string>) {
+  return FORTNITE_SELECTOR_FILTER_KEYS.some((key) => {
+    const value = supplierFilters[key]?.trim() ?? "";
+    return value.length > 0;
+  });
+}
+
+function mergeUniqueListings(target: MarketListing[], incoming: MarketListing[], limit: number) {
+  const seen = new Set(target.map((entry) => entry.id.trim().toLowerCase()));
+  for (const listing of incoming) {
+    const signature = listing.id.trim().toLowerCase();
+    if (!signature || seen.has(signature)) {
+      continue;
+    }
+    seen.add(signature);
+    target.push(listing);
+    if (target.length >= limit) {
+      break;
+    }
+  }
+}
+
 function applyImplicitQueryFallbacks(input: {
   query: string;
   game: string;
@@ -870,6 +893,53 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
         payload = scopeOnlyPayload;
       }
     }
+
+    const shouldBackfillFilteredPages =
+      hasActiveFortniteSelectorFilters(parsed.supplierFilters) &&
+      payload.listings.length < parsed.pageSize &&
+      result.hasMore;
+
+    if (shouldBackfillFilteredPages) {
+      const mergedListings = payload.listings.slice();
+      let currentPage = result.page;
+      let hasMore = result.hasMore;
+      let inspectedPages = 0;
+
+      while (
+        mergedListings.length < parsed.pageSize &&
+        hasMore &&
+        inspectedPages < FILTER_BACKFILL_MAX_PAGES
+      ) {
+        inspectedPages += 1;
+        currentPage += 1;
+        const nextResult = await searchListings(parsed.query, {
+          sort: parsed.sort,
+          minPrice: parsed.minPrice,
+          maxPrice: parsed.maxPrice,
+          page: currentPage,
+          pageSize: parsed.pageSize,
+          game: parsed.game || null,
+          category: parsed.category || null,
+          hasImage: parsed.hasImage,
+          hasDescription: parsed.hasDescription,
+          hasSpecs: parsed.hasSpecs,
+          supplierFilters: parsed.supplierFilters
+        });
+        const nextPayload = buildPayload(nextResult);
+        mergeUniqueListings(mergedListings, nextPayload.listings, parsed.pageSize);
+        hasMore = nextResult.hasMore;
+      }
+
+      payload = {
+        listings: mergedListings,
+        pagination: {
+          page: parsed.page,
+          pageSize: parsed.pageSize,
+          hasMore
+        }
+      };
+    }
+
     return ok(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "SEARCH_FAILED";
