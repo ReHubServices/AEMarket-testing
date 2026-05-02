@@ -2735,15 +2735,18 @@ function withFortniteImageDiversity(listings: MarketListing[]) {
 async function enrichListingsWithDetails(
   listings: MarketListing[],
   token: string,
-  maxEnrichment = 24
+  maxEnrichment = 24,
+  forceEnrichAll = false
 ) {
   const output = listings.slice();
-  const candidates = output
-    .slice(0, maxEnrichment)
-    .filter(
-      (listing) =>
-        !hasRealDescription(listing.description) || !hasRealImage(listing.imageUrl)
-    );
+  const candidates = forceEnrichAll
+    ? output.slice(0, maxEnrichment)
+    : output
+        .slice(0, maxEnrichment)
+        .filter(
+          (listing) =>
+            !hasRealDescription(listing.description) || !hasRealImage(listing.imageUrl)
+        );
 
   if (candidates.length === 0) {
     return output;
@@ -5433,6 +5436,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
   const hasNonSelectorSupplierFilters = activeSupplierFilterEntries.some(
     ([key]) => !fortniteSelectorFilterKeys.has(key)
   );
+  const hasFortniteSelectorFilters = activeSupplierFilterEntries.some(([key]) =>
+    fortniteSelectorFilterKeys.has(key)
+  );
   const hasFortniteSelectorOnlyFilters =
     hasActiveSupplierFilters && !hasNonSelectorSupplierFilters;
   const minPriceBase =
@@ -5771,14 +5777,22 @@ export async function searchListings(query: string, options: SearchOptions = {})
     );
     const needsDeepFilterFinalPass =
       hasActiveSupplierFilters || needsStrictFortniteCountFinalPass || hasLocalPriceFilter;
-    const finalPassPoolSize = needsDeepFilterFinalPass
-      ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
-      : Math.max(targetEnd + 1, pageSize + 1);
+    const finalPassPoolSize = hasFortniteSelectorFilters
+      ? Math.min(1200, Math.max(targetEnd + pageSize * 64, 700))
+      : needsDeepFilterFinalPass
+        ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
+        : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
+    const detailEnrichmentLimit = hasFortniteSelectorFilters
+      ? finalPassPool.length
+      : needsDeepFilterFinalPass
+        ? Math.min(finalPassPool.length, 140)
+        : 24;
     const enriched = await enrichListingsWithDetails(
       finalPassPool,
       token,
-      needsDeepFilterFinalPass ? Math.min(finalPassPool.length, 140) : 24
+      detailEnrichmentLimit,
+      hasFortniteSelectorFilters
     );
     const finalFiltered = applyLocalFilters(enriched, normalizedOptions, trimmedQuery, "final");
     const uniqueFinal = mergeUnique(finalFiltered);
