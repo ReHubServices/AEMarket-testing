@@ -615,6 +615,57 @@ function getFirstFortniteSelectorTerm(supplierFilters: Record<string, string>) {
   return "";
 }
 
+function getFortniteSelectorMeta(supplierFilters: Record<string, string>) {
+  let activeKeys = 0;
+  let totalTerms = 0;
+  for (const key of FORTNITE_SELECTOR_FILTER_KEYS) {
+    const terms = (supplierFilters[key] ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (terms.length > 0) {
+      activeKeys += 1;
+      totalTerms += terms.length;
+    }
+  }
+  return {
+    activeKeys,
+    totalTerms,
+    firstTerm: getFirstFortniteSelectorTerm(supplierFilters)
+  };
+}
+
+function applyImplicitQueryFallbacks(input: {
+  query: string;
+  game: string;
+  category: string;
+  supplierFilters: Record<string, string>;
+}) {
+  let query = input.query;
+  let usedScopeFallbackQuery = false;
+
+  const selectorMeta = getFortniteSelectorMeta(input.supplierFilters);
+  const shouldUseSingleSelectorTermFallback =
+    selectorMeta.activeKeys === 1 && selectorMeta.totalTerms === 1;
+
+  if (!query && shouldUseSingleSelectorTermFallback && selectorMeta.firstTerm) {
+    query = clampText(selectorMeta.firstTerm, 180);
+  }
+
+  if (!query) {
+    const fallbackQuery = clampText(resolveScopeFallbackQuery(input.game, input.category), 180);
+    if (fallbackQuery) {
+      query = fallbackQuery;
+      usedScopeFallbackQuery = true;
+    }
+  }
+
+  return {
+    query,
+    usedScopeFallbackQuery
+  };
+}
+
 function applyHardPriceFilters(
   listings: MarketListing[],
   minPrice: number | null,
@@ -675,18 +726,14 @@ function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequ
       supplierFilters[key] = value;
     }
   }
-  let usedScopeFallbackQuery = false;
-  const firstFortniteSelectorTerm = getFirstFortniteSelectorTerm(supplierFilters);
-  if (!query && firstFortniteSelectorTerm) {
-    query = clampText(firstFortniteSelectorTerm, 180);
-  }
-  if (!query) {
-    const fallbackQuery = clampText(resolveScopeFallbackQuery(game, category), 180);
-    if (fallbackQuery) {
-      query = fallbackQuery;
-      usedScopeFallbackQuery = true;
-    }
-  }
+  const implicitFallback = applyImplicitQueryFallbacks({
+    query,
+    game,
+    category,
+    supplierFilters
+  });
+  query = implicitFallback.query;
+  const usedScopeFallbackQuery = implicitFallback.usedScopeFallbackQuery;
 
   return {
     inputQuery,
@@ -735,18 +782,14 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
       supplierFilters[key] = value;
     }
   }
-  let usedScopeFallbackQuery = false;
-  const firstFortniteSelectorTerm = getFirstFortniteSelectorTerm(supplierFilters);
-  if (!query && firstFortniteSelectorTerm) {
-    query = clampText(firstFortniteSelectorTerm, 180);
-  }
-  if (!query) {
-    const fallbackQuery = clampText(resolveScopeFallbackQuery(game, category), 180);
-    if (fallbackQuery) {
-      query = fallbackQuery;
-      usedScopeFallbackQuery = true;
-    }
-  }
+  const implicitFallback = applyImplicitQueryFallbacks({
+    query,
+    game,
+    category,
+    supplierFilters
+  });
+  query = implicitFallback.query;
+  const usedScopeFallbackQuery = implicitFallback.usedScopeFallbackQuery;
 
   return {
     inputQuery,
