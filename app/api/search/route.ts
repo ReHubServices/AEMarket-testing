@@ -70,7 +70,7 @@ const FORTNITE_SELECTOR_FILTER_KEYS = [
   "fortnite_emotes",
   "fortnite_gliders"
 ] as const;
-const FILTER_BACKFILL_MAX_PAGES = 8;
+const FILTER_BACKFILL_MAX_PAGES = 4;
 
 function sanitizeSupplierFilterValue(key: string, value: string) {
   const trimmed = value.trim();
@@ -868,8 +868,10 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
       }
     }
 
+    const selectorMeta = getFortniteSelectorMeta(parsed.supplierFilters);
     const shouldBackfillFilteredPages =
-      hasActiveFortniteSelectorFilters(parsed.supplierFilters) &&
+      parsed.page === 1 &&
+      selectorMeta.totalTerms >= 2 &&
       payload.listings.length < parsed.pageSize &&
       result.hasMore;
 
