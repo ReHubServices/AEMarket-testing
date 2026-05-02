@@ -5365,6 +5365,7 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
   );
   const scopeText = `${options.game ?? ""} ${options.category ?? ""}`.toLowerCase();
   const isFortniteScope = hasFortniteFilterKeys || scopeText.includes("fortnite");
+  let fortniteSelectedTerms: string[] = [];
   let fortniteSelectedTermCount = 0;
 
   if (isFortniteScope) {
@@ -5377,6 +5378,7 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
       .map((term) => term.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, 26);
+    fortniteSelectedTerms = selectedTerms;
     fortniteSelectedTermCount = selectedTerms.length;
 
     for (const term of selectedTerms) {
@@ -5390,13 +5392,31 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
     }
   }
 
+  if (isFortniteScope && fortniteSelectedTermCount > 0) {
+    const prioritized = new Set<string>();
+    const push = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return;
+      }
+      prioritized.add(trimmed);
+    };
+
+    for (const term of fortniteSelectedTerms) {
+      push(term);
+      push(`fortnite ${term}`);
+      push(`${term} fortnite`);
+    }
+    push("fortnite");
+    if (normalized && normalized.toLowerCase() !== "fortnite") {
+      push(normalized);
+    }
+
+    return Array.from(prioritized).slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
+  }
+
   if (!normalized) {
     const finalizedEmpty = Array.from(variants).filter(Boolean);
-    if (fortniteSelectedTermCount > 0) {
-      // Selector-only browsing must not be constrained to title query terms.
-      // We fetch broad scope and apply selector matching locally on enriched details.
-      return [""];
-    }
     if (finalizedEmpty.length > 0) {
       return finalizedEmpty.slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
     }
