@@ -640,6 +640,14 @@ function applyImplicitQueryFallbacks(input: {
 }) {
   let query = input.query;
   let usedScopeFallbackQuery = false;
+  const selectorMeta = getFortniteSelectorMeta(input.supplierFilters);
+
+  const shouldUseSingleSelectorTermFallback =
+    selectorMeta.activeKeys === 1 && selectorMeta.totalTerms === 1;
+
+  if (!query && shouldUseSingleSelectorTermFallback && selectorMeta.firstTerm) {
+    query = clampText(selectorMeta.firstTerm, 180);
+  }
 
   if (!query) {
     const fallbackQuery = clampText(resolveScopeFallbackQuery(input.game, input.category), 180);
