@@ -1084,6 +1084,66 @@ function normalizeSuggestionValue(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function levenshteinDistanceWithinLimit(left: string, right: string, limit = 2) {
+  if (left === right) {
+    return 0;
+  }
+  if (!left || !right) {
+    return Math.max(left.length, right.length);
+  }
+  if (Math.abs(left.length - right.length) > limit) {
+    return limit + 1;
+  }
+
+  const previous = new Array(right.length + 1);
+  const current = new Array(right.length + 1);
+  for (let index = 0; index <= right.length; index += 1) {
+    previous[index] = index;
+  }
+
+  for (let i = 1; i <= left.length; i += 1) {
+    current[0] = i;
+    let rowMin = current[0];
+    for (let j = 1; j <= right.length; j += 1) {
+      const substitutionCost = left[i - 1] === right[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + substitutionCost
+      );
+      if (current[j] < rowMin) {
+        rowMin = current[j];
+      }
+    }
+    if (rowMin > limit) {
+      return limit + 1;
+    }
+    for (let j = 0; j <= right.length; j += 1) {
+      previous[j] = current[j];
+    }
+  }
+
+  return previous[right.length];
+}
+
+function hasFuzzyWordMatch(queryTokens: string[], candidateTokens: string[]) {
+  if (queryTokens.length === 0 || candidateTokens.length === 0) {
+    return false;
+  }
+  return queryTokens.every((token) =>
+    candidateTokens.some((candidateToken) => {
+      if (!token || !candidateToken) {
+        return false;
+      }
+      if (candidateToken.startsWith(token) || token.startsWith(candidateToken)) {
+        return true;
+      }
+      const maxDistance = token.length >= 7 ? 2 : 1;
+      return levenshteinDistanceWithinLimit(token, candidateToken, maxDistance) <= maxDistance;
+    })
+  );
+}
+
 function isSubsequenceMatch(haystack: string, needle: string) {
   if (!needle) {
     return true;
@@ -1195,6 +1255,7 @@ export function MarketSearch({
   const [fortniteSelectorRemoteOptions, setFortniteSelectorRemoteOptions] = useState<string[]>([]);
   const [fortniteSelectorRemoteLoading, setFortniteSelectorRemoteLoading] = useState(false);
   const [fortniteTypingSuggestions, setFortniteTypingSuggestions] = useState<string[]>([]);
+  const [remoteTitleSuggestions, setRemoteTitleSuggestions] = useState<string[]>([]);
   const debouncedQuery = useDebouncedValue(query);
   const debouncedFortniteSelectorSearch = useDebouncedValue(fortniteSelectorSearch, 220);
 
@@ -1309,6 +1370,74 @@ export function MarketSearch({
     run();
     return () => controller.abort();
   }, [selectedGame, debouncedQuery]);
+
+  useEffect(() => {
+    const queryValue = debouncedQuery.trim();
+    if (queryValue.length < 2) {
+      setRemoteTitleSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const payload: Record<string, unknown> = {
+          q: queryValue,
+          page: 1,
+          pageSize: 24,
+          sort: "relevance"
+        };
+        const searchTarget = GAME_SEARCH_PARAMS[selectedGame];
+        if (searchTarget.game) {
+          payload.game = searchTarget.game;
+        }
+        if (searchTarget.category) {
+          payload.category = searchTarget.category;
+        }
+        if (selectedGame === "media") {
+          const mediaPlatform = (gameFilters.media_platform ?? "").trim();
+          if (mediaPlatform) {
+            payload.category = mediaPlatform;
+          }
+        }
+
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          setRemoteTitleSuggestions([]);
+          return;
+        }
+
+        const data = (await response.json()) as SearchResponse;
+        const titles = new Map<string, string>();
+        for (const listing of Array.isArray(data.listings) ? data.listings : []) {
+          const title = listing.title.trim();
+          if (!title || title.length > 120) {
+            continue;
+          }
+          const signature = title.toLowerCase();
+          if (!titles.has(signature)) {
+            titles.set(signature, title);
+          }
+        }
+        setRemoteTitleSuggestions(Array.from(titles.values()).slice(0, 60));
+      } catch {
+        if (!controller.signal.aborted) {
+          setRemoteTitleSuggestions([]);
+        }
+      }
+    };
+
+    run();
+    return () => controller.abort();
+  }, [debouncedQuery, selectedGame, gameFilters.media_platform]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1715,6 +1844,9 @@ export function MarketSearch({
     for (const global of GLOBAL_SUGGESTION_POOL) {
       source.add(global);
     }
+    for (const remoteTitle of remoteTitleSuggestions) {
+      source.add(remoteTitle);
+    }
     if (selectedGame === "fortnite") {
       for (const remote of fortniteTypingSuggestions) {
         source.add(remote);
@@ -1765,12 +1897,13 @@ export function MarketSearch({
           queryWords.some((token) => token.length > 0 && word.startsWith(token))
         );
         const subsequence = isSubsequenceMatch(normalizedCandidate.replace(/\s+/g, ""), normalized.replace(/\s+/g, ""));
+        const fuzzyWordMatch = hasFuzzyWordMatch(queryWords, candidateWords);
 
-        if (!starts && !contains && !wordStarts && !subsequence) {
+        if (!starts && !contains && !wordStarts && !subsequence && !fuzzyWordMatch) {
           return null;
         }
 
-        const score = starts ? 0 : wordStarts ? 1 : contains ? 2 : 3;
+        const score = starts ? 0 : wordStarts ? 1 : contains ? 2 : fuzzyWordMatch ? 3 : 4;
         return { value, score };
       })
       .filter((entry): entry is { value: string; score: number } => Boolean(entry))
@@ -1789,7 +1922,7 @@ export function MarketSearch({
       .map((entry) => entry.value);
 
     return scored;
-  }, [query, selectedGame, listings, gameFilters, fortniteTypingSuggestions]);
+  }, [query, selectedGame, listings, gameFilters, fortniteTypingSuggestions, remoteTitleSuggestions]);
   const showSuggestions = searchFocused && suggestions.length > 0;
   const activeFortniteSelector = useMemo(
     () =>
