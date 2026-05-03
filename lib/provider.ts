@@ -1636,14 +1636,14 @@ function collectNestedSelectorSpecs(
   path: string[] = [],
   depth = 0
 ) {
-  if (source == null || depth > 5 || output.length >= 120) {
+  if (source == null || depth > 5 || output.length >= 1200) {
     return;
   }
 
   if (Array.isArray(source)) {
-    for (const entry of source.slice(0, 60)) {
+    for (const entry of source.slice(0, 1200)) {
       collectNestedSelectorSpecs(entry, output, path, depth + 1);
-      if (output.length >= 120) {
+      if (output.length >= 1200) {
         break;
       }
     }
@@ -1662,7 +1662,7 @@ function collectNestedSelectorSpecs(
         [...path, key.replace(/_/g, " ").trim()],
         depth + 1
       );
-      if (output.length >= 120) {
+      if (output.length >= 1200) {
         break;
       }
     }
@@ -1736,7 +1736,13 @@ function extractSpecs(item: Record<string, unknown>) {
     item.details,
     item.extra,
     item.fields,
-    item.features
+    item.features,
+    item.fortniteSkins,
+    item.fortniteOutfits,
+    item.fortnitePickaxes,
+    item.fortniteDances,
+    item.fortniteEmotes,
+    item.fortniteGliders
   ];
 
   for (const candidate of candidates) {
@@ -1860,7 +1866,7 @@ function extractSpecs(item: Record<string, unknown>) {
     pushSpec(specs, buildSpec(key.replace(/_/g, " "), text));
   }
 
-  return specs.slice(0, 36);
+  return specs.slice(0, 1200);
 }
 
 function toReadableDate(value: unknown) {
@@ -3326,11 +3332,19 @@ function applyLocalFilters(
     };
     for (const spec of item.specs) {
       const label = normalizeText(spec.label);
-      if (!selectorHints[selectorKey].some((hint) => label.includes(normalizeText(hint)))) {
-        continue;
-      }
+      const value = normalizeText(spec.value);
+      const hasSelectorHint = selectorHints[selectorKey].some((hint) =>
+        label.includes(normalizeText(hint)) || value.includes(normalizeText(hint))
+      );
+
+      // Real LZT detail payloads often store cosmetics as label=title (e.g. "Crystal"),
+      // so we must scan generic spec text too, not only hint-labeled rows.
       candidates.push(`${spec.label} ${spec.value}`);
+      candidates.push(spec.label);
       candidates.push(spec.value);
+      if (hasSelectorHint) {
+        candidates.push(`${spec.value} ${spec.label}`);
+      }
     }
     for (const match of item.description.matchAll(descriptionPatterns[selectorKey])) {
       candidates.push(match[1] ?? "");
