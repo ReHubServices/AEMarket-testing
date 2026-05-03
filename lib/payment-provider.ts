@@ -116,10 +116,12 @@ function getBaseUrlCandidates() {
 
   const seeds = [configuredOrigin];
   if (/venpayr\.com$/i.test(configuredOrigin)) {
-    seeds.push("https://api.venpayr.com", "https://dash.venpayr.com");
+    seeds.push("https://api.venpayr.com");
   }
 
-  return Array.from(new Set(seeds.map((value) => value.trim().replace(/\/+$/, "")).filter(Boolean)));
+  return Array.from(
+    new Set(seeds.map((value) => value.trim().replace(/\/+$/, "")).filter(Boolean))
+  ).slice(0, 1);
 }
 
 function toRecord(value: unknown) {
@@ -429,8 +431,6 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
   const country = resolveCustomerCountry();
   const normalizedFirstName = providerUsername;
   const customers: Array<Record<string, unknown>> = [
-    { email },
-    { email, country },
     { email, first_name: normalizedFirstName || "Customer", country }
   ];
   const metadata = {
@@ -441,7 +441,6 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
     external_order_id: String(payload.orderId),
     username: providerUsername
   };
-  const amountString = amount.toFixed(2);
   const endpoints = ["/api/v1/checkout/init"];
   const attempts: Array<{
     endpointSuffixes: string[];
@@ -466,44 +465,6 @@ function buildCheckoutAttempts(payload: CheckoutRequest) {
             quantity: 1
           }
         ],
-        ...sharedBase
-      }
-    });
-    attempts.push({
-      endpointSuffixes: endpoints,
-      body: {
-        items: [
-          {
-            name: itemName,
-            price: amountString,
-            quantity: 1
-          }
-        ],
-        ...sharedBase
-      }
-    });
-    attempts.push({
-      endpointSuffixes: endpoints,
-      body: {
-        items: [
-          {
-            name: itemName,
-            price: amount,
-            unit_price: amount,
-            quantity: 1
-          }
-        ],
-        ...sharedBase
-      }
-    });
-    attempts.push({
-      endpointSuffixes: endpoints,
-      body: {
-        item: {
-          name: itemName,
-          price: amount,
-          quantity: 1
-        },
         ...sharedBase
       }
     });
@@ -668,6 +629,9 @@ export async function createCheckoutSession(payload: CheckoutRequest): Promise<C
           const message = getBodyErrorMessage(raw) ?? `Payment session creation failed (${response.status})`;
           lastApiError = `${response.status}: ${message}`;
 
+          if (response.status === 401 || response.status === 429) {
+            break;
+          }
           if (response.status !== 401 && response.status !== 403 && response.status !== 404) {
             break;
           }
