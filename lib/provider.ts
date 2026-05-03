@@ -5799,7 +5799,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery;
     const requiredAggregatedSize = requiresDeepCandidateScan
       ? hasFortniteSelectorFilters
-        ? Math.min(4200, Math.max(targetEnd + pageSize * 220, 1800))
+        ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
         : hasTextQuery
           ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
           : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
@@ -5921,13 +5921,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const needsDeepFilterFinalPass =
       hasActiveSupplierFilters || needsStrictFortniteCountFinalPass || hasLocalPriceFilter;
     const finalPassPoolSize = hasFortniteSelectorFilters
-      ? Math.min(4200, Math.max(targetEnd + pageSize * 260, 2200))
+      ? Math.min(12000, Math.max(targetEnd + pageSize * 260, 5000))
       : needsDeepFilterFinalPass
         ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const detailEnrichmentLimit = hasFortniteSelectorFilters
-      ? Math.min(finalPassPool.length, 1800)
+      ? Math.min(finalPassPool.length, 6000)
       : needsDeepFilterFinalPass
         ? Math.min(finalPassPool.length, 140)
         : 24;
