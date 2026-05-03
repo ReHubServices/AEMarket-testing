@@ -3009,6 +3009,8 @@ function applyLocalFilters(
     fortnitePickaxes.length > 0 ||
     fortniteEmotes.length > 0 ||
     fortniteGliders.length > 0;
+  const useNativeFortniteSelectorParams =
+    hasFortniteSelectorFilters && !Boolean(options.disableNativeFortniteSelectorParams);
   const socialKeywords = [
     "instagram",
     "insta",
@@ -4807,7 +4809,7 @@ function applyLocalFilters(
     output = output.filter((item) => !isVerifiedMedia(item));
   }
   const applyFortniteSelectedTerms = (terms: string[], selectorKey: FortniteSelectorKey) => {
-    if (terms.length === 0 || phase === "pre") {
+    if (terms.length === 0 || phase === "pre" || useNativeFortniteSelectorParams) {
       return;
     }
     const strictMatched = output.filter((item) =>
