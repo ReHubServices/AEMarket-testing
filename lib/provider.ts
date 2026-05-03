@@ -2059,6 +2059,8 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
   ].some((key) => String(supplierFilters[key] ?? "").trim().length > 0);
   const useNativeFortniteSelectorParams =
     hasFortniteSelectorFilters && !Boolean(options.disableNativeFortniteSelectorParams);
+  const scopeText = `${options.game ?? ""} ${options.category ?? ""}`.toLowerCase();
+  const isFortniteScope = scopeText.includes("fortnite");
   const localOnlySupplierKeys = new Set([
     "ma",
     "online",
@@ -2138,18 +2140,21 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     return Math.round(usdPrice * 100) / 100;
   };
 
-  if (Number.isFinite(options.minPrice ?? NaN)) {
-    const min = toSupplierCurrencyPrice(Number(options.minPrice));
-    if (min > 0) {
-      url.searchParams.set("price_from", String(min));
-      url.searchParams.set("pmin", String(min));
+  const shouldUseSupplierPriceParams = !(normalizedQuery && isFortniteScope);
+  if (shouldUseSupplierPriceParams) {
+    if (Number.isFinite(options.minPrice ?? NaN)) {
+      const min = toSupplierCurrencyPrice(Number(options.minPrice));
+      if (min > 0) {
+        url.searchParams.set("price_from", String(min));
+        url.searchParams.set("pmin", String(min));
+      }
     }
-  }
-  if (Number.isFinite(options.maxPrice ?? NaN)) {
-    const max = toSupplierCurrencyPrice(Number(options.maxPrice));
-    if (max > 0) {
-      url.searchParams.set("price_to", String(max));
-      url.searchParams.set("pmax", String(max));
+    if (Number.isFinite(options.maxPrice ?? NaN)) {
+      const max = toSupplierCurrencyPrice(Number(options.maxPrice));
+      if (max > 0) {
+        url.searchParams.set("price_to", String(max));
+        url.searchParams.set("pmax", String(max));
+      }
     }
   }
 
