@@ -640,8 +640,9 @@ function applyImplicitQueryFallbacks(input: {
 }) {
   let query = input.query;
   let usedScopeFallbackQuery = false;
+  const hasFortniteSelectors = hasActiveFortniteSelectorFilters(input.supplierFilters);
 
-  if (!query) {
+  if (!query && !hasFortniteSelectors) {
     const fallbackQuery = clampText(resolveScopeFallbackQuery(input.game, input.category), 180);
     if (fallbackQuery) {
       query = fallbackQuery;
