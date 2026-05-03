@@ -2040,6 +2040,13 @@ function resolveSupplierSort(sort: SearchSort | undefined) {
 function buildSearchUrl(endpoint: string, query: string, options: SearchOptions) {
   const url = new URL(normalizeEndpoint(endpoint));
   const normalizedQuery = query.trim();
+  const supplierFilters = options.supplierFilters ?? {};
+  const hasFortniteSelectorFilters = [
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders"
+  ].some((key) => String(supplierFilters[key] ?? "").trim().length > 0);
   const localOnlySupplierKeys = new Set([
     "ma",
     "online",
@@ -2049,17 +2056,49 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "fortnite_pickaxes",
     "fortnite_emotes",
     "fortnite_gliders",
+    "fortnite_skin_count_min",
+    "fortnite_skin_count_max",
+    "fortnite_pickaxe_count_min",
+    "fortnite_pickaxe_count_max",
+    "fortnite_emote_count_min",
+    "fortnite_emote_count_max",
+    "fortnite_glider_count_min",
+    "fortnite_glider_count_max",
+    "fortnite_level_min",
+    "fortnite_level_max",
+    "fortnite_vbucks_min",
+    "fortnite_vbucks_max",
     "media_followers_min",
     "media_verified",
     "media_platform"
   ]);
+  const appendMultiValueParam = (rawValue: string | undefined, targetKey: string) => {
+    const values = (rawValue ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    for (const value of values) {
+      url.searchParams.append(`${targetKey}[]`, value);
+    }
+  };
+  const appendNumericParam = (rawValue: string | undefined, targetKey: string) => {
+    const value = Number(rawValue ?? NaN);
+    if (Number.isFinite(value) && value >= 0) {
+      url.searchParams.set(targetKey, String(Math.trunc(value)));
+    }
+  };
   if (normalizedQuery) {
     url.searchParams.set("title", normalizedQuery);
     url.searchParams.set("q", normalizedQuery);
     url.searchParams.set("query", normalizedQuery);
     url.searchParams.set("search", normalizedQuery);
   }
-  url.searchParams.set("order_by", resolveSupplierSort(options.sort));
+  // For selector filters, supplier-side price ordering starves the candidate pool.
+  // Pull newest candidates, then apply requested sort locally after filtering.
+  const supplierOrderBy = hasFortniteSelectorFilters
+    ? "pdate_to_down"
+    : resolveSupplierSort(options.sort);
+  url.searchParams.set("order_by", supplierOrderBy);
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
   const pageSize = Number.isFinite(options.pageSize ?? NaN)
     ? Math.min(60, Math.max(1, Number(options.pageSize)))
@@ -2101,6 +2140,24 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
       url.searchParams.set("pmax", String(max));
     }
   }
+
+  // Native LZT Fortnite filters (per docs) for accurate + faster matching.
+  appendMultiValueParam(supplierFilters.fortnite_outfits, "skin");
+  appendMultiValueParam(supplierFilters.fortnite_pickaxes, "pickaxe");
+  appendMultiValueParam(supplierFilters.fortnite_emotes, "dance");
+  appendMultiValueParam(supplierFilters.fortnite_gliders, "glider");
+  appendNumericParam(supplierFilters.fortnite_skin_count_min, "smin");
+  appendNumericParam(supplierFilters.fortnite_skin_count_max, "smax");
+  appendNumericParam(supplierFilters.fortnite_pickaxe_count_min, "pickaxe_min");
+  appendNumericParam(supplierFilters.fortnite_pickaxe_count_max, "pickaxe_max");
+  appendNumericParam(supplierFilters.fortnite_emote_count_min, "dmin");
+  appendNumericParam(supplierFilters.fortnite_emote_count_max, "dmax");
+  appendNumericParam(supplierFilters.fortnite_glider_count_min, "gmin");
+  appendNumericParam(supplierFilters.fortnite_glider_count_max, "gmax");
+  appendNumericParam(supplierFilters.fortnite_level_min, "lmin");
+  appendNumericParam(supplierFilters.fortnite_level_max, "lmax");
+  appendNumericParam(supplierFilters.fortnite_vbucks_min, "vbmin");
+  appendNumericParam(supplierFilters.fortnite_vbucks_max, "vbmax");
 
   if (options.supplierFilters) {
     for (const [key, value] of Object.entries(options.supplierFilters)) {
@@ -5411,8 +5468,10 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
     if (normalized && normalized.toLowerCase() !== "fortnite") {
       push(normalized);
     }
-
-    return Array.from(prioritized).slice(0, SUPPLIER_MAX_QUERY_VARIANTS);
+    const maxVariants = Math.max(2, SUPPLIER_MAX_QUERY_VARIANTS);
+    const prioritizedList = Array.from(prioritized).slice(0, maxVariants - 1);
+    // Always keep one broad query fallback to avoid false zero-results from strict term search.
+    return [...prioritizedList, ""];
   }
 
   if (!normalized) {
