@@ -49,6 +49,7 @@ const HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS = 1;
 const HEAVY_FILTER_MAX_LOGICAL_PAGES = 10;
 const PRICE_FILTER_MAX_LOGICAL_PAGES = 60;
 const DEFAULT_LISTING_IMAGE = "/listing-placeholder.svg";
+const ENABLE_NATIVE_FORTNITE_SELECTOR_PARAMS = false;
 const BLOCKED_MARKET_LINK_PATTERN =
   /(?:https?:\/\/|www\.)[^\s\]]*(?:lzt\.market|lolz\.guru)|\[url[^\]]*=(?:https?:\/\/)?(?:www\.)?(?:lzt\.market|lolz\.guru)[^\]]*\]|\b(?:lzt\.market|lolz\.guru)\b/i;
 const ALLOWED_MARKET_IMAGE_LINK_PATTERN =
@@ -2145,10 +2146,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     }
   }
 
-  // Temporarily disabled: native fortnite selector params are returning false empty sets
-  // for name-based inputs (e.g. "Crystal"). Keep local selector filtering as source of truth.
-  const enableNativeFortniteSelectorParams = false;
-  if (!options.disableNativeFortniteSelectorParams && enableNativeFortniteSelectorParams) {
+  if (!options.disableNativeFortniteSelectorParams && ENABLE_NATIVE_FORTNITE_SELECTOR_PARAMS) {
     // Native LZT Fortnite filters (per docs) for accurate + faster matching.
     appendMultiValueParam(supplierFilters.fortnite_outfits, "skin");
     appendMultiValueParam(supplierFilters.fortnite_pickaxes, "pickaxe");
@@ -3015,7 +3013,9 @@ function applyLocalFilters(
     fortniteEmotes.length > 0 ||
     fortniteGliders.length > 0;
   const useNativeFortniteSelectorParams =
-    hasFortniteSelectorFilters && !Boolean(options.disableNativeFortniteSelectorParams);
+    hasFortniteSelectorFilters &&
+    !Boolean(options.disableNativeFortniteSelectorParams) &&
+    ENABLE_NATIVE_FORTNITE_SELECTOR_PARAMS;
   const socialKeywords = [
     "instagram",
     "insta",
