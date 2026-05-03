@@ -5775,9 +5775,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
     }
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
-    const requiresDeepCandidateScan = hasActiveSupplierFilters || hasLocalPriceFilter;
+    const hasTextQuery = Boolean(trimmedQuery);
+    const requiresDeepCandidateScan =
+      hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery;
     const requiredAggregatedSize = requiresDeepCandidateScan
-      ? Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
+      ? hasTextQuery
+        ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
+        : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
       : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
@@ -5820,7 +5824,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
       if (chunk.length === 0) {
         consecutiveEmpty += 1;
-        const allowEarlyStop = !hasLocalPriceFilter;
+        const allowEarlyStop = !hasLocalPriceFilter && !hasTextQuery;
         if (allowEarlyStop && consecutiveEmpty >= 3 && logicalCursor > page) {
           break;
         }

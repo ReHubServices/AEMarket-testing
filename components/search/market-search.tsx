@@ -740,6 +740,23 @@ const FORTNITE_SELECTOR_BLOCKED_GENERIC_TOKENS = [
   "current"
 ];
 
+function looksLikeFortniteMachineCode(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    /^a_\d+_athena_/.test(normalized) ||
+    /^\d+_athena_/.test(normalized) ||
+    /^cid_[a-z0-9_]+$/.test(normalized) ||
+    /^character_[a-z0-9_]+$/.test(normalized) ||
+    /^pickaxe_[a-z0-9_]+$/.test(normalized) ||
+    /^glider_[a-z0-9_]+$/.test(normalized) ||
+    /^eid_[a-z0-9_]+$/.test(normalized) ||
+    /^[a-z]{2,}_[a-z0-9_]{6,}$/.test(normalized)
+  );
+}
+
 function isLikelyFortniteSelectorOption(value: string, selectorKey: FortniteSelectorKey) {
   const normalized = normalizeSuggestionValue(value);
   if (!normalized) {
@@ -758,6 +775,9 @@ function isLikelyFortniteSelectorOption(value: string, selectorKey: FortniteSele
     return false;
   }
   if (/^\d+\s*(skins?|outfits?|pickaxes?|axes?|emotes?|dances?|gliders?)\b/i.test(value)) {
+    return false;
+  }
+  if (looksLikeFortniteMachineCode(value)) {
     return false;
   }
   if (
