@@ -407,25 +407,10 @@ export async function resolveFortniteSelectorFiltersWithMeta(
         resolvedValues.push(exact);
         continue;
       }
-
-      let bestMatch = "";
-      let bestScore = Number.POSITIVE_INFINITY;
-      for (const option of selectorOptions) {
-        const score = scoreCandidate(term, option);
-        if (score < 0) {
-          continue;
-        }
-        if (score < bestScore) {
-          bestScore = score;
-          bestMatch = option;
-        }
-      }
-      if (bestMatch) {
-        resolvedValues.push(bestMatch);
-      } else {
-        fullyResolved = false;
-        resolvedValues.push(term);
-      }
+      // Avoid dangerous fuzzy remaps like "Crystal" -> "character_crystalglobe" (Samael).
+      // Keep original term when no exact native value exists so caller can safely fallback.
+      fullyResolved = false;
+      resolvedValues.push(term);
     }
 
     const deduped = Array.from(

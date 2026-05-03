@@ -23,6 +23,17 @@ function normalizeText(value: string) {
     .trim();
 }
 
+function looksLikeMachineCode(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return (
+    /^[a-z]+_[a-z0-9_]+$/i.test(trimmed) ||
+    /^[a-z]+[0-9]{2,}$/i.test(trimmed)
+  );
+}
+
 function extractText(value: unknown) {
   if (typeof value === "string") {
     return value.trim();
@@ -112,7 +123,10 @@ export async function GET(request: NextRequest) {
     : "fortnite_outfits";
 
   const lztOptions = await searchFortniteSelectorOptions(selectorKey, query, 220);
-  if (lztOptions.length > 0) {
+  const mostlyMachineCodes =
+    lztOptions.length > 0 &&
+    lztOptions.filter((option) => looksLikeMachineCode(option)).length / lztOptions.length >= 0.7;
+  if (lztOptions.length > 0 && !mostlyMachineCodes) {
     return ok({ options: lztOptions });
   }
 
