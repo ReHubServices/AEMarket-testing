@@ -2145,7 +2145,10 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     }
   }
 
-  if (!options.disableNativeFortniteSelectorParams) {
+  // Temporarily disabled: native fortnite selector params are returning false empty sets
+  // for name-based inputs (e.g. "Crystal"). Keep local selector filtering as source of truth.
+  const enableNativeFortniteSelectorParams = false;
+  if (!options.disableNativeFortniteSelectorParams && enableNativeFortniteSelectorParams) {
     // Native LZT Fortnite filters (per docs) for accurate + faster matching.
     appendMultiValueParam(supplierFilters.fortnite_outfits, "skin");
     appendMultiValueParam(supplierFilters.fortnite_pickaxes, "pickaxe");
