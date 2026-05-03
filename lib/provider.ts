@@ -24,6 +24,7 @@ export type SearchOptions = {
   hasDescription?: boolean;
   hasSpecs?: boolean;
   supplierFilters?: Record<string, string>;
+  disableNativeFortniteSelectorParams?: boolean;
 };
 
 const translationCache = new Map<string, string>();
@@ -129,6 +130,7 @@ function buildSearchResultCacheKey(
     hasDescription: Boolean(options.hasDescription),
     hasSpecs: Boolean(options.hasSpecs),
     supplierFilters: buildSupplierFilterCacheKey(options.supplierFilters),
+    disableNativeFortniteSelectorParams: Boolean(options.disableNativeFortniteSelectorParams),
     markupPercent
   });
 }
@@ -2141,23 +2143,25 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     }
   }
 
-  // Native LZT Fortnite filters (per docs) for accurate + faster matching.
-  appendMultiValueParam(supplierFilters.fortnite_outfits, "skin");
-  appendMultiValueParam(supplierFilters.fortnite_pickaxes, "pickaxe");
-  appendMultiValueParam(supplierFilters.fortnite_emotes, "dance");
-  appendMultiValueParam(supplierFilters.fortnite_gliders, "glider");
-  appendNumericParam(supplierFilters.fortnite_skin_count_min, "smin");
-  appendNumericParam(supplierFilters.fortnite_skin_count_max, "smax");
-  appendNumericParam(supplierFilters.fortnite_pickaxe_count_min, "pickaxe_min");
-  appendNumericParam(supplierFilters.fortnite_pickaxe_count_max, "pickaxe_max");
-  appendNumericParam(supplierFilters.fortnite_emote_count_min, "dmin");
-  appendNumericParam(supplierFilters.fortnite_emote_count_max, "dmax");
-  appendNumericParam(supplierFilters.fortnite_glider_count_min, "gmin");
-  appendNumericParam(supplierFilters.fortnite_glider_count_max, "gmax");
-  appendNumericParam(supplierFilters.fortnite_level_min, "lmin");
-  appendNumericParam(supplierFilters.fortnite_level_max, "lmax");
-  appendNumericParam(supplierFilters.fortnite_vbucks_min, "vbmin");
-  appendNumericParam(supplierFilters.fortnite_vbucks_max, "vbmax");
+  if (!options.disableNativeFortniteSelectorParams) {
+    // Native LZT Fortnite filters (per docs) for accurate + faster matching.
+    appendMultiValueParam(supplierFilters.fortnite_outfits, "skin");
+    appendMultiValueParam(supplierFilters.fortnite_pickaxes, "pickaxe");
+    appendMultiValueParam(supplierFilters.fortnite_emotes, "dance");
+    appendMultiValueParam(supplierFilters.fortnite_gliders, "glider");
+    appendNumericParam(supplierFilters.fortnite_skin_count_min, "smin");
+    appendNumericParam(supplierFilters.fortnite_skin_count_max, "smax");
+    appendNumericParam(supplierFilters.fortnite_pickaxe_count_min, "pickaxe_min");
+    appendNumericParam(supplierFilters.fortnite_pickaxe_count_max, "pickaxe_max");
+    appendNumericParam(supplierFilters.fortnite_emote_count_min, "dmin");
+    appendNumericParam(supplierFilters.fortnite_emote_count_max, "dmax");
+    appendNumericParam(supplierFilters.fortnite_glider_count_min, "gmin");
+    appendNumericParam(supplierFilters.fortnite_glider_count_max, "gmax");
+    appendNumericParam(supplierFilters.fortnite_level_min, "lmin");
+    appendNumericParam(supplierFilters.fortnite_level_max, "lmax");
+    appendNumericParam(supplierFilters.fortnite_vbucks_min, "vbmin");
+    appendNumericParam(supplierFilters.fortnite_vbucks_max, "vbmax");
+  }
 
   if (options.supplierFilters) {
     for (const [key, value] of Object.entries(options.supplierFilters)) {
@@ -5902,6 +5906,17 @@ export async function searchListings(query: string, options: SearchOptions = {})
       page,
       pageSize
     };
+    if (
+      result.listings.length === 0 &&
+      hasFortniteSelectorFilters &&
+      !Boolean(normalizedOptions.disableNativeFortniteSelectorParams)
+    ) {
+      // Fallback when native fortnite selector params are too strict for current terms.
+      return searchListings(query, {
+        ...options,
+        disableNativeFortniteSelectorParams: true
+      });
+    }
     writeSearchResultCache(cacheKey, result);
     return result;
     } catch (error) {
