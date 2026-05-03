@@ -5949,6 +5949,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const finalWindow = uniqueFinal.slice(targetStart, targetEnd);
     const finalHasMore =
       uniqueFinal.length > targetEnd ||
+      (hasFortniteSelectorFilters && hasMore) ||
       (!needsDeepFilterFinalPass && hasMore && finalWindow.length >= pageSize);
     const displayTranslated = await translateListingsToEnglish(finalWindow);
     const displayWithSharedImages = applySharedImageFallback(displayTranslated, trimmedQuery);
