@@ -2049,6 +2049,8 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "fortnite_emotes",
     "fortnite_gliders"
   ].some((key) => String(supplierFilters[key] ?? "").trim().length > 0);
+  const useNativeFortniteSelectorParams =
+    hasFortniteSelectorFilters && !Boolean(options.disableNativeFortniteSelectorParams);
   const localOnlySupplierKeys = new Set([
     "ma",
     "online",
@@ -2097,7 +2099,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
   }
   // For selector filters, supplier-side price ordering starves the candidate pool.
   // Pull newest candidates, then apply requested sort locally after filtering.
-  const supplierOrderBy = hasFortniteSelectorFilters
+  const supplierOrderBy = useNativeFortniteSelectorParams
     ? "pdate_to_down"
     : resolveSupplierSort(options.sort);
   url.searchParams.set("order_by", supplierOrderBy);
