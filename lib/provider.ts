@@ -5555,6 +5555,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
       disableNativeFortniteSelectorParams = true;
     }
   }
+  if (hasFortniteSelectorInput) {
+    // Native selector params are currently too restrictive/inconsistent for many cosmetics
+    // (e.g. Crystal-like cases). Force broad fetch + local detail matching.
+    disableNativeFortniteSelectorParams = true;
+  }
   const searchOptions: SearchOptions = {
     ...effectiveOptions,
     supplierFilters: resolvedSupplierFilters,
