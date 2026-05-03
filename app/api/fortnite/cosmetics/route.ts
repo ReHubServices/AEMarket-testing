@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/http";
 import { checkRateLimit, createRateKey } from "@/lib/rate-limit";
+import {
+  FortniteSelectorKey,
+  searchFortniteSelectorOptions
+} from "@/lib/lzt-fortnite-selectors";
 
 export const runtime = "nodejs";
 
@@ -96,6 +100,20 @@ export async function GET(request: NextRequest) {
   const selector = request.nextUrl.searchParams.get("selector")?.trim() ?? "";
   if (query.length < 2) {
     return ok({ options: [] as string[] });
+  }
+  const knownSelectorKeys = new Set<FortniteSelectorKey>([
+    "fortnite_outfits",
+    "fortnite_pickaxes",
+    "fortnite_emotes",
+    "fortnite_gliders"
+  ]);
+  const selectorKey = knownSelectorKeys.has(selector as FortniteSelectorKey)
+    ? (selector as FortniteSelectorKey)
+    : "fortnite_outfits";
+
+  const lztOptions = await searchFortniteSelectorOptions(selectorKey, query, 220);
+  if (lztOptions.length > 0) {
+    return ok({ options: lztOptions });
   }
 
   const baseUrl = (process.env.FORTNITE_API_BASE_URL ?? "https://fortnite-api.com")

@@ -1,5 +1,6 @@
 ﻿import { fallbackListings } from "@/lib/market";
 import { getLztAccessToken } from "@/lib/lzt-auth";
+import { resolveFortniteSelectorFiltersWithMeta } from "@/lib/lzt-fortnite-selectors";
 import { applyMarkup } from "@/lib/pricing";
 import { readStore } from "@/lib/store";
 import { MarketListing, MarketListingSpec } from "@/lib/types";
@@ -5517,14 +5518,36 @@ export async function searchListings(query: string, options: SearchOptions = {})
         game: options.game?.trim() ? options.game : inferredScope
       }
     : options;
-  const hasBrowseScope = Boolean(effectiveOptions.game?.trim() || effectiveOptions.category?.trim());
   const fortniteSelectorFilterKeys = new Set([
     "fortnite_outfits",
     "fortnite_pickaxes",
     "fortnite_emotes",
     "fortnite_gliders"
   ]);
-  const activeSupplierFilterEntries = Object.entries(effectiveOptions.supplierFilters ?? {}).filter(
+  let resolvedSupplierFilters = { ...(effectiveOptions.supplierFilters ?? {}) };
+  let disableNativeFortniteSelectorParams = Boolean(options.disableNativeFortniteSelectorParams);
+  const hasFortniteSelectorInput = Object.entries(resolvedSupplierFilters).some(
+    ([key, value]) =>
+      fortniteSelectorFilterKeys.has(key) && String(value ?? "").trim().length > 0
+  );
+  if (
+    ENABLE_NATIVE_FORTNITE_SELECTOR_PARAMS &&
+    !disableNativeFortniteSelectorParams &&
+    hasFortniteSelectorInput
+  ) {
+    const resolution = await resolveFortniteSelectorFiltersWithMeta(resolvedSupplierFilters);
+    resolvedSupplierFilters = resolution.filters;
+    if (!resolution.fullyResolved) {
+      disableNativeFortniteSelectorParams = true;
+    }
+  }
+  const searchOptions: SearchOptions = {
+    ...effectiveOptions,
+    supplierFilters: resolvedSupplierFilters,
+    disableNativeFortniteSelectorParams
+  };
+  const hasBrowseScope = Boolean(searchOptions.game?.trim() || searchOptions.category?.trim());
+  const activeSupplierFilterEntries = Object.entries(searchOptions.supplierFilters ?? {}).filter(
     ([, value]) => String(value ?? "").trim().length > 0
   );
   const hasActiveSupplierFilters = activeSupplierFilterEntries.length > 0;
@@ -5550,7 +5573,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     : 15;
   const fetchPageSize = Math.min(80, pageSize + 12);
   const normalizedOptions: SearchOptions = {
-    ...effectiveOptions,
+    ...searchOptions,
     minPrice: minPriceBase,
     maxPrice: maxPriceBase,
     page,
@@ -5664,11 +5687,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : [];
       const endpointScope = broadMode
         ? {
-            ...effectiveOptions,
+            ...searchOptions,
             game: null,
             category: null
           }
-        : effectiveOptions;
+        : searchOptions;
       const categoryEndpointLimit = useHeavySupplierCaps
         ? HEAVY_FILTER_MAX_CATEGORY_ENDPOINTS
         : scopedPriceMode
@@ -5698,7 +5721,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       return applyLocalFilters(combined, normalizedOptions, trimmedQuery, "pre");
     };
 
-    let activeSupplierQueries = buildSupplierQueryVariants(trimmedQuery, effectiveOptions);
+    let activeSupplierQueries = buildSupplierQueryVariants(trimmedQuery, searchOptions);
     let usingEmptySupplierQueryFallback = false;
     let filteredCurrentPage = await loadFilteredPage(
       page,
@@ -5868,7 +5891,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       "fortnite_paid_glider_count_max"
     ];
     const needsStrictFortniteCountFinalPass = strictFortniteCountFilterKeys.some((key) =>
-      Boolean(effectiveOptions.supplierFilters?.[key]?.trim())
+      Boolean(searchOptions.supplierFilters?.[key]?.trim())
     );
     const needsDeepFilterFinalPass =
       hasActiveSupplierFilters || needsStrictFortniteCountFinalPass || hasLocalPriceFilter;
