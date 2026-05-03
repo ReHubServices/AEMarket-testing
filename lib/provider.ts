@@ -5537,7 +5537,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
   ) {
     const resolution = await resolveFortniteSelectorFiltersWithMeta(resolvedSupplierFilters);
     resolvedSupplierFilters = resolution.filters;
-    if (!resolution.fullyResolved) {
+    if (resolution.hadLookupData && !resolution.fullyResolved) {
       disableNativeFortniteSelectorParams = true;
     }
   }
