@@ -5955,15 +5955,26 @@ export async function searchListings(query: string, options: SearchOptions = {})
       pageSize
     };
     if (
-      result.listings.length === 0 &&
       hasFortniteSelectorFilters &&
       !Boolean(normalizedOptions.disableNativeFortniteSelectorParams)
     ) {
-      // Fallback when native fortnite selector params are too strict for current terms.
-      return searchListings(query, {
-        ...options,
-        disableNativeFortniteSelectorParams: true
-      });
+      const shouldFallbackFromStrictNativeSelector =
+        result.listings.length === 0 ||
+        (page === 1 &&
+          !result.hasMore &&
+          result.listings.length < Math.min(pageSize, 8));
+
+      if (shouldFallbackFromStrictNativeSelector) {
+        // Native selector params can under-report results when seller data is incomplete.
+        // Retry with native params disabled and keep the richer result set.
+        const fallback = await searchListings(query, {
+          ...options,
+          disableNativeFortniteSelectorParams: true
+        });
+        if (fallback.listings.length > result.listings.length || fallback.hasMore) {
+          return fallback;
+        }
+      }
     }
     writeSearchResultCache(cacheKey, result);
     return result;
