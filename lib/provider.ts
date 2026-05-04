@@ -1576,6 +1576,23 @@ function buildSpec(label: string, value: string): MarketListingSpec | null {
   if (blockedLabels.has(normalizedLabel.toLowerCase())) {
     return null;
   }
+  const normalizedLabelLower = normalizedLabel.toLowerCase();
+  const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  const uuidMatches = cleanValue.match(uuidPattern) ?? [];
+  const isUuidArrayLike =
+    cleanValue.startsWith("[") &&
+    cleanValue.endsWith("]") &&
+    uuidMatches.length >= 2 &&
+    cleanValue.includes(",") &&
+    cleanValue.includes('"');
+  const likelyCosmeticIdDump =
+    normalizedLabelLower.includes("skin") ||
+    normalizedLabelLower.includes("outfit") ||
+    normalizedLabelLower.includes("operator") ||
+    normalizedLabelLower.includes("r6");
+  if (isUuidArrayLike && likelyCosmeticIdDump) {
+    return null;
+  }
 
   return {
     label: normalizedLabel.slice(0, 72),
