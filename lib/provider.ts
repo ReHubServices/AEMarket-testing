@@ -4328,7 +4328,7 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  if (effectiveGameFilter) {
+  if (effectiveGameFilter && effectiveGameFilter !== "uplay") {
     const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
     if (scoped.length > 0) {
       output = scoped;
@@ -4349,6 +4349,7 @@ function applyLocalFilters(
   }
   if (
     categoryFilter &&
+    categoryFilter !== "uplay" &&
     (!effectiveGameFilter || categoryFilter === effectiveGameFilter)
   ) {
     const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
