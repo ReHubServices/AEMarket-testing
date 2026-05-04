@@ -113,6 +113,7 @@ type GameFilterTarget =
   | "fortnite"
   | "valorant"
   | "siege"
+  | "roblox"
   | "supercell"
   | "media"
   | "telegram"
@@ -130,7 +131,8 @@ const GAME_SEARCH_PARAMS: Record<
   all: {},
   fortnite: { game: "fortnite", category: "fortnite" },
   valorant: { game: "valorant", category: "riot" },
-  siege: { game: "siege", category: "rainbow-six-siege" },
+  siege: { game: "siege" },
+  roblox: { game: "roblox", category: "roblox" },
   supercell: { game: "supercell", category: "supercell" },
   media: { game: "social", category: "media" },
   telegram: { game: "telegram", category: "telegram" },
@@ -147,6 +149,7 @@ const GAME_TOGGLE_FILTERS: Record<
   fortnite: [],
   valorant: [],
   siege: [],
+  roblox: [],
   supercell: [],
   media: [],
   telegram: [],
@@ -232,6 +235,19 @@ const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
     "Rare skins",
     "R6 credits",
     "Ubisoft connect"
+  ],
+  roblox: [
+    "Blox Fruits",
+    "Murder Mystery 2",
+    "Adopt Me",
+    "Pet Simulator",
+    "Robux",
+    "Limiteds",
+    "Headless",
+    "Korblox",
+    "Rare items",
+    "High level",
+    "Premium"
   ],
   supercell: [
     "Brawl Stars",
@@ -2211,6 +2227,7 @@ export function MarketSearch({
                 <option value="fortnite">Fortnite</option>
                 <option value="valorant">Riot Client</option>
                 <option value="siege">Siege Accounts</option>
+                <option value="roblox">Roblox</option>
                 <option value="supercell">Supercell</option>
                 <option value="media">Media Accounts</option>
                 <option value="steam">Steam</option>
