@@ -2499,7 +2499,7 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const requestedAliases: Record<string, string[]> = {
     fortnite: ["fortnite"],
     valorant: ["valorant", "riot"],
-    siege: ["siege", "rainbow-six-siege", "rainbow6", "r6"],
+    siege: ["siege", "rainbow-six-siege", "rainbow6", "r6", "uplay", "ubisoft"],
     supercell: [
       "supercell",
       "brawl-stars",
