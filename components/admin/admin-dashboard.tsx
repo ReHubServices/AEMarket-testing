@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -42,6 +42,17 @@ function formatPrice(value: number, currency: string) {
   }).format(value);
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+
 export function AdminDashboard({
   stats,
   settings,
@@ -69,6 +80,8 @@ export function AdminDashboard({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [userQuery, setUserQuery] = useState("");
+  const [orderQuery, setOrderQuery] = useState("");
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
 
   async function onSaveMarkup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -249,6 +262,30 @@ export function AdminDashboard({
   const normalizedUserQuery = userQuery.trim().toLowerCase();
   const filteredUsers = users.filter((user) =>
     !normalizedUserQuery || user.username.toLowerCase().includes(normalizedUserQuery)
+  );
+  const usersById = useMemo(() => {
+    const map = new Map<string, UserRecord>();
+    for (const user of users) {
+      map.set(user.id, user);
+    }
+    return map;
+  }, [users]);
+  const normalizedOrderQuery = orderQuery.trim().toLowerCase();
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter((order) => {
+        if (!normalizedOrderQuery) {
+          return true;
+        }
+        const username = usersById.get(order.userId)?.username?.toLowerCase() ?? "";
+        return (
+          order.id.toLowerCase().includes(normalizedOrderQuery) ||
+          order.title.toLowerCase().includes(normalizedOrderQuery) ||
+          order.userId.toLowerCase().includes(normalizedOrderQuery) ||
+          username.includes(normalizedOrderQuery)
+        );
+      }),
+    [orders, normalizedOrderQuery, usersById]
   );
 
   return (
@@ -452,9 +489,23 @@ export function AdminDashboard({
           <h3 className="font-[var(--font-space-grotesk)] text-lg font-semibold text-white">
             Orders
           </h3>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              value={orderQuery}
+              onChange={(event) => setOrderQuery(event.target.value)}
+              placeholder="Search by username, user ID, title, or order ID"
+              className="h-9 w-full"
+            />
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">
+            Showing {filteredOrders.length} of {orders.length} orders
+          </p>
           <div className="mt-4 max-h-[420px] space-y-3 overflow-auto pr-1">
-            {orders.map((order) => {
+            {filteredOrders.map((order) => {
               const key = `order:${order.id}`;
+              const owner = usersById.get(order.userId);
+              const ownerName = owner?.username ?? order.userId;
+              const expanded = activeOrderId === order.id;
               return (
                 <div
                   key={order.id}
@@ -464,24 +515,118 @@ export function AdminDashboard({
                     <div>
                       <p className="font-medium text-white">{order.title}</p>
                       <p className="text-zinc-400">
-                        {order.status} - {order.userId}
+                        {order.status} - {ownerName}
                       </p>
                       <p className="break-all text-zinc-300">
                         {formatPrice(order.finalPrice, order.currency)} - {order.id}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      className="h-9 w-full border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20 sm:w-auto"
-                      disabled={deletingKey === key}
-                      onClick={() => requestDelete("order", order.id, `order ${order.id}`)}
-                    >
-                      {deletingKey === key ? "Deleting..." : "Delete"}
-                    </Button>
+                    <div className="flex w-full gap-2 sm:w-auto">
+                      <Button
+                        variant="ghost"
+                        className="h-9 flex-1 sm:w-auto"
+                        onClick={() => setActiveOrderId(expanded ? null : order.id)}
+                      >
+                        {expanded ? "Hide" : "View"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="h-9 flex-1 border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20 sm:w-auto"
+                        disabled={deletingKey === key}
+                        onClick={() => requestDelete("order", order.id, `order ${order.id}`)}
+                      >
+                        {deletingKey === key ? "Deleting..." : "Delete"}
+                      </Button>
+                    </div>
                   </div>
+                  {expanded && (
+                    <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-black/30 p-3 text-xs">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <p className="text-zinc-400">Username</p>
+                          <p className="text-zinc-100">{ownerName}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">User Reference</p>
+                          <p className="break-all text-zinc-100">{owner?.username ? `${owner.username} (${order.userId})` : order.userId}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">Order ID</p>
+                          <p className="break-all text-zinc-100">{order.id}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">Listing ID</p>
+                          <p className="break-all text-zinc-100">{order.listingId}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">Created</p>
+                          <p className="text-zinc-100">{formatDateTime(order.createdAt)}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">Updated</p>
+                          <p className="text-zinc-100">{formatDateTime(order.updatedAt)}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">Supplier Order</p>
+                          <p className="break-all text-zinc-100">{order.supplierOrderId || "Pending"}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-400">Failure</p>
+                          <p className="text-zinc-100">{order.failureReason || "None"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-zinc-400">Delivered Data</p>
+                        {!order.delivery && (
+                          <p className="mt-1 text-zinc-200">Not delivered yet.</p>
+                        )}
+                        {order.delivery && (
+                          <div className="mt-2 space-y-2">
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <div>
+                                <p className="text-zinc-400">Account Username</p>
+                                <p className="text-zinc-100">{order.delivery.accountUsername}</p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">Account Password</p>
+                                <p className="text-zinc-100">{order.delivery.accountPassword}</p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">Account Email</p>
+                                <p className="text-zinc-100">{order.delivery.accountEmail || "Not provided"}</p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">Notes</p>
+                                <p className="text-zinc-100">{order.delivery.notes || "No notes"}</p>
+                              </div>
+                            </div>
+                            <div className="max-h-44 overflow-auto rounded-lg border border-white/10 bg-black/25 p-2">
+                              {order.delivery.deliveredItems.length === 0 && (
+                                <p className="text-zinc-300">No delivered item entries.</p>
+                              )}
+                              {order.delivery.deliveredItems.map((item, index) => (
+                                <div
+                                  key={`${item.label}-${item.value}-${index}`}
+                                  className="grid grid-cols-[1fr_1fr] gap-2 border-b border-white/10 py-1 last:border-b-0"
+                                >
+                                  <p className="text-zinc-300">{item.label}</p>
+                                  <p className="break-all text-zinc-100">{item.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
+            {filteredOrders.length === 0 && (
+              <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-4 text-sm text-zinc-300">
+                No orders match your search.
+              </div>
+            )}
           </div>
         </div>
       </section>

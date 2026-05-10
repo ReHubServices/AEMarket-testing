@@ -31,6 +31,7 @@ export function SupportCenter({ viewer, initialTickets }: SupportCenterProps) {
   const [submitting, setSubmitting] = useState(false);
   const [replying, setReplying] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [deletingTicket, setDeletingTicket] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const activeTicket =
@@ -147,6 +148,44 @@ export function SupportCenter({ viewer, initialTickets }: SupportCenterProps) {
     }
   }
 
+  async function deleteActiveTicket() {
+    if (!activeTicket || !viewer.isAdmin) {
+      return;
+    }
+    const confirmed = window.confirm(`Delete ticket ${activeTicket.id}?`);
+    if (!confirmed) {
+      return;
+    }
+    setDeletingTicket(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/support/tickets/${encodeURIComponent(activeTicket.id)}`, {
+        method: "DELETE"
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to delete ticket");
+      }
+
+      let nextActiveTicketId = "";
+      setTickets((previous) => {
+        const nextTickets = previous.filter((item) => item.id !== activeTicket.id);
+        nextActiveTicketId = nextTickets[0]?.id ?? "";
+        return nextTickets;
+      });
+      setActiveTicketId(nextActiveTicketId);
+      setReplyText("");
+      setNotice("Ticket deleted.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete ticket";
+      setNotice(message);
+    } finally {
+      setDeletingTicket(false);
+    }
+  }
+
   return (
     <main className="space-y-6">
       <section className="glass-panel rounded-3xl p-6 md:p-8">
@@ -245,6 +284,17 @@ export function SupportCenter({ viewer, initialTickets }: SupportCenterProps) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {viewer.isAdmin && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-9 border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                      disabled={deletingTicket}
+                      onClick={deleteActiveTicket}
+                    >
+                      {deletingTicket ? "Deleting..." : "Delete Ticket"}
+                    </Button>
+                  )}
                   {viewer.isAdmin && activeTicket.status === "open" && (
                     <Button
                       type="button"

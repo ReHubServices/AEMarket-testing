@@ -139,3 +139,18 @@ export async function setSupportTicketStatus(input: {
     return ticket;
   });
 }
+
+export async function deleteSupportTicket(ticketIdInput: string) {
+  const ticketId = ticketIdInput.trim();
+  if (!ticketId) {
+    throw new Error("Ticket ID is required");
+  }
+  return updateStore((store) => {
+    const index = store.supportTickets.findIndex((item) => item.id === ticketId);
+    if (index < 0) {
+      throw new Error("Ticket not found");
+    }
+    const [deleted] = store.supportTickets.splice(index, 1);
+    return deleted;
+  });
+}

@@ -137,9 +137,12 @@ export function ProductDetailModal({
   return (
     <div
       className="fixed inset-0 z-40 flex items-end bg-black/65 p-2 backdrop-blur-md md:items-center md:p-6"
-      data-tour="product-modal"
+      data-tour="product-modal-overlay"
     >
-      <div className="glass-panel mx-auto max-h-[96dvh] w-full max-w-4xl overflow-hidden rounded-2xl md:max-h-[92dvh] md:rounded-3xl">
+      <div
+        className="glass-panel mx-auto max-h-[96dvh] w-full max-w-4xl overflow-hidden rounded-2xl md:max-h-[92dvh] md:rounded-3xl"
+        data-tour="product-modal-panel"
+      >
         <div className="relative grid max-h-[96dvh] gap-0 overflow-y-auto overscroll-contain md:max-h-[92dvh] md:grid-cols-[1.15fr_1fr]">
           <button
             onClick={onClose}
@@ -287,11 +290,9 @@ export function ProductDetailModal({
                     {purchaseError}
                   </p>
                 )}
-                <div data-tour="buy-button">
-                  <Button onClick={() => onBuy(listing.id)} disabled={buying}>
-                    {buying ? "Processing..." : viewer ? "Buy Now" : "Login To Buy"}
-                  </Button>
-                </div>
+                <Button data-tour="buy-button" onClick={() => onBuy(listing.id)} disabled={buying}>
+                  {buying ? "Processing..." : viewer ? "Buy Now" : "Login To Buy"}
+                </Button>
                 <Button variant="ghost" onClick={onClose}>
                   Close
                 </Button>

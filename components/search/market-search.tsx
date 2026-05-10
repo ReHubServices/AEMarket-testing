@@ -147,7 +147,7 @@ const TOUR_STEPS: Array<{ id: TourStepId; spotlight?: TourSpotlight }> = [
   {
     id: "details",
     spotlight: {
-      selector: "[data-tour='product-modal']",
+      selector: "[data-tour='product-modal-panel']",
       title: "Review Details",
       message: "Check all account details before purchasing."
     }
@@ -1507,6 +1507,7 @@ export function MarketSearch({
     setTourStepId("welcome");
     setTourOpen(true);
     setTourBlockMessage(null);
+    setTourSpotlightRect(null);
     setTourTick((previous) => previous + 1);
   }
 
@@ -1517,7 +1518,27 @@ export function MarketSearch({
       completeTour();
       return;
     }
+    setTourSpotlightRect(null);
+    if (next.id === "details") {
+      if (!activeListingId && listings.length > 0) {
+        setActiveListingId(listings[0].id);
+      }
+      setTourStepId(next.id);
+      setTourTick((previous) => previous + 1);
+      return;
+    }
+    if (next.id === "support") {
+      if (activeListingId) {
+        setActiveListingId(null);
+        window.setTimeout(() => {
+          setTourStepId(next.id);
+          setTourTick((previous) => previous + 1);
+        }, 180);
+        return;
+      }
+    }
     setTourStepId(next.id);
+    setTourTick((previous) => previous + 1);
   }
 
   function previousTourStep() {
@@ -1526,7 +1547,9 @@ export function MarketSearch({
     if (!previous) {
       return;
     }
+    setTourSpotlightRect(null);
     setTourStepId(previous.id);
+    setTourTick((previousTick) => previousTick + 1);
   }
 
   function skipCurrentTourStep() {
@@ -1649,12 +1672,9 @@ export function MarketSearch({
         isTourEventAllowed(event.target) &&
         !(event.target instanceof Node && tourCardRef.current?.contains(event.target))
       ) {
-        event.preventDefault();
-        event.stopPropagation();
-        if ("stopImmediatePropagation" in event) {
-          event.stopImmediatePropagation();
-        }
-        nextTourStep();
+        window.setTimeout(() => {
+          nextTourStep();
+        }, 80);
         return;
       }
       if (isTourEventAllowed(event.target)) {
