@@ -12,8 +12,39 @@ function parseExpiresAt(raw: unknown) {
   if (typeof raw !== "string" || !raw.trim()) {
     return null;
   }
-  const iso = new Date(raw).toISOString();
-  return Number.isNaN(Date.parse(iso)) ? null : iso;
+  const value = raw.trim();
+  const hasZoneSuffix = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+  const dateOnlyMatch = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+  const dateTimeNoZoneMatch = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/);
+
+  const toIso = (source: string) => {
+    const parsed = Date.parse(source);
+    if (Number.isNaN(parsed)) {
+      return null;
+    }
+    return new Date(parsed).toISOString();
+  };
+
+  if (hasZoneSuffix) {
+    return toIso(value);
+  }
+
+  if (dateOnlyMatch) {
+    const now = new Date();
+    const cstClock = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    const hh = String(cstClock.getUTCHours()).padStart(2, "0");
+    const mm = String(cstClock.getUTCMinutes()).padStart(2, "0");
+    const ss = String(cstClock.getUTCSeconds()).padStart(2, "0");
+    return toIso(`${dateOnlyMatch[1]}T${hh}:${mm}:${ss}-06:00`);
+  }
+
+  if (dateTimeNoZoneMatch) {
+    const [, day, hm, sec] = dateTimeNoZoneMatch;
+    const seconds = sec ?? "00";
+    return toIso(`${day}T${hm}:${seconds}-06:00`);
+  }
+
+  return toIso(value);
 }
 
 export async function GET(request: NextRequest) {

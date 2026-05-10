@@ -26,6 +26,10 @@ type ProductDetailModalProps = {
   onBuy: (listingId: string) => void;
   couponCode?: string;
   onCouponCodeChange?: (value: string) => void;
+  onApplyCoupon?: () => void;
+  applyingCoupon?: boolean;
+  couponPreviewPrice?: number | null;
+  couponPreviewMessage?: string | null;
   buying: boolean;
   purchaseError?: string | null;
   descriptionLoading?: boolean;
@@ -40,6 +44,10 @@ export function ProductDetailModal({
   onBuy,
   couponCode = "",
   onCouponCodeChange,
+  onApplyCoupon,
+  applyingCoupon = false,
+  couponPreviewPrice = null,
+  couponPreviewMessage = null,
   buying,
   purchaseError = null,
   descriptionLoading = false,
@@ -282,21 +290,52 @@ export function ProductDetailModal({
             <div className="space-y-3 rounded-2xl border border-white/15 bg-black/30 p-4 text-sm">
               <div className="flex items-center justify-between text-zinc-300">
                 <span>Price</span>
-                <span className="font-[var(--font-space-grotesk)] text-xl font-bold text-white">
-                  {formatPrice(listing.price, listing.currency)}
-                </span>
+                <div className="text-right">
+                  {Number.isFinite(couponPreviewPrice ?? NaN) &&
+                  couponPreviewPrice !== null &&
+                  couponPreviewPrice < listing.price ? (
+                    <>
+                      <p className="text-xs text-zinc-400 line-through">
+                        {formatPrice(listing.price, listing.currency)}
+                      </p>
+                      <p className="font-[var(--font-space-grotesk)] text-xl font-bold text-emerald-300">
+                        {formatPrice(couponPreviewPrice, listing.currency)}
+                      </p>
+                    </>
+                  ) : (
+                    <span className="font-[var(--font-space-grotesk)] text-xl font-bold text-white">
+                      {formatPrice(listing.price, listing.currency)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="sticky bottom-0 -mx-4 border-t border-white/15 bg-black/65 p-4 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-0">
               <div className="flex flex-col gap-2">
-                <Input
-                  value={couponCode}
-                  onChange={(event) => onCouponCodeChange?.(event.target.value.toUpperCase())}
-                  placeholder="Coupon code (optional)"
-                  maxLength={32}
-                  className="h-10"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={couponCode}
+                    onChange={(event) => onCouponCodeChange?.(event.target.value.toUpperCase())}
+                    placeholder="Coupon code (optional)"
+                    maxLength={32}
+                    className="h-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-10 min-w-[130px]"
+                    onClick={onApplyCoupon}
+                    disabled={applyingCoupon || !couponCode.trim()}
+                  >
+                    {applyingCoupon ? "Applying..." : "Apply Coupon"}
+                  </Button>
+                </div>
+                {couponPreviewMessage && (
+                  <p className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-zinc-200">
+                    {couponPreviewMessage}
+                  </p>
+                )}
                 {purchaseError && (
                   <p className="rounded-xl border border-red-300/25 bg-red-950/25 px-3 py-2 text-xs text-red-100">
                     {purchaseError}

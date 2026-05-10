@@ -442,7 +442,7 @@ export function AdminDashboard({
             className="h-9"
           />
           <Input
-            type="datetime-local"
+            type="date"
             value={couponExpiryInput}
             onChange={(event) => setCouponExpiryInput(event.target.value)}
             className="h-9"

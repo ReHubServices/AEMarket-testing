@@ -1462,6 +1462,9 @@ export function MarketSearch({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [purchaseCouponCode, setPurchaseCouponCode] = useState("");
+  const [couponPreviewPrice, setCouponPreviewPrice] = useState<number | null>(null);
+  const [couponPreviewMessage, setCouponPreviewMessage] = useState<string | null>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [fortniteSelectorOpen, setFortniteSelectorOpen] = useState<FortniteSelectorKey | null>(
     null
   );
@@ -2088,6 +2091,13 @@ export function MarketSearch({
     };
   }, [activeListing, activeListingId]);
 
+  useEffect(() => {
+    setPurchaseCouponCode("");
+    setCouponPreviewPrice(null);
+    setCouponPreviewMessage(null);
+    setApplyingCoupon(false);
+  }, [activeListingId]);
+
   function requestBuy(listingId: string) {
     if (!viewer) {
       router.push(`/login?next=${encodeURIComponent(`/?item=${listingId}`)}`);
@@ -2098,6 +2108,53 @@ export function MarketSearch({
     }
     setError(null);
     setPendingPurchaseListingId(listingId);
+  }
+
+  async function applyCouponPreview() {
+    if (!modalListing) {
+      return;
+    }
+    const code = purchaseCouponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponPreviewPrice(null);
+      setCouponPreviewMessage("Enter a coupon code first.");
+      return;
+    }
+    setApplyingCoupon(true);
+    setCouponPreviewMessage(null);
+    try {
+      const response = await fetch("/api/coupons/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          listingId: modalListing.id,
+          couponCode: code
+        })
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        discountedPrice?: number;
+        discountAmount?: number;
+        code?: string;
+      };
+      if (!response.ok || !Number.isFinite(payload.discountedPrice ?? NaN)) {
+        throw new Error(payload.error || "Coupon not valid for this listing.");
+      }
+      const discountedPrice = Number(payload.discountedPrice);
+      setCouponPreviewPrice(discountedPrice);
+      const discountAmount = Number(payload.discountAmount ?? 0);
+      setCouponPreviewMessage(
+        `Coupon ${payload.code ?? code} applied. You save ${formatPrice(discountAmount, modalListing.currency)}.`
+      );
+    } catch (applyError) {
+      const message = applyError instanceof Error ? applyError.message : "Coupon not valid for this listing.";
+      setCouponPreviewPrice(null);
+      setCouponPreviewMessage(message);
+    } finally {
+      setApplyingCoupon(false);
+    }
   }
 
   async function confirmBuy() {
@@ -4146,7 +4203,15 @@ export function MarketSearch({
         onClose={() => setActiveListingId(null)}
         onBuy={requestBuy}
         couponCode={purchaseCouponCode}
-        onCouponCodeChange={setPurchaseCouponCode}
+        onCouponCodeChange={(value) => {
+          setPurchaseCouponCode(value);
+          setCouponPreviewPrice(null);
+          setCouponPreviewMessage(null);
+        }}
+        onApplyCoupon={applyCouponPreview}
+        applyingCoupon={applyingCoupon}
+        couponPreviewPrice={couponPreviewPrice}
+        couponPreviewMessage={couponPreviewMessage}
         buying={buying}
         purchaseError={error}
         descriptionLoading={detailLoading}
