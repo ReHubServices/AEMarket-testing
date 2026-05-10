@@ -17,18 +17,19 @@ export async function POST(
     return fail(security.message, security.status);
   }
 
-  const limiter = checkRateLimit({
-    key: createRateKey(request, "support_ticket_reply"),
-    maxRequests: 20,
-    windowMs: 60_000
-  });
-  if (!limiter.allowed) {
-    return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
-  }
-
   const viewer = await getViewerFromRequest(request);
   if (!viewer) {
     return fail("Authentication required", 401);
+  }
+  if (!viewer.isAdmin) {
+    const limiter = checkRateLimit({
+      key: createRateKey(request, "support_ticket_reply"),
+      maxRequests: 12,
+      windowMs: 60_000
+    });
+    if (!limiter.allowed) {
+      return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
+    }
   }
 
   const params = await context.params;

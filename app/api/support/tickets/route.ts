@@ -29,18 +29,19 @@ export async function POST(request: NextRequest) {
     return fail(security.message, security.status);
   }
 
-  const limiter = checkRateLimit({
-    key: createRateKey(request, "support_ticket_create"),
-    maxRequests: 10,
-    windowMs: 60_000
-  });
-  if (!limiter.allowed) {
-    return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
-  }
-
   const viewer = await getViewerFromRequest(request);
   if (!viewer) {
     return fail("Authentication required", 401);
+  }
+  if (!viewer.isAdmin) {
+    const limiter = checkRateLimit({
+      key: createRateKey(request, "support_ticket_create"),
+      maxRequests: 3,
+      windowMs: 10 * 60_000
+    });
+    if (!limiter.allowed) {
+      return fail(`Rate limit exceeded. Retry in ${limiter.retryAfterSeconds}s`, 429);
+    }
   }
 
   try {

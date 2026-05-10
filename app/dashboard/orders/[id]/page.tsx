@@ -14,6 +14,52 @@ function formatPrice(value: number, currency: string) {
   }).format(value);
 }
 
+function normalizeDeliveredLabel(label: string) {
+  return label.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function cleanDeliveredLabel(label: string) {
+  return label
+    .trim()
+    .replace(/^item\s+/i, "")
+    .replace(/^fortnite\s+/i, "")
+    .replace(/^uplay\s+r6\s+/i, "")
+    .replace(/\s+/g, " ");
+}
+
+function isBuyerUsefulDeliveryField(label: string) {
+  const normalized = normalizeDeliveredLabel(label);
+  if (!normalized) {
+    return false;
+  }
+
+  const credentialsOrTopSection = [
+    "account username",
+    "account password",
+    "account email",
+    "notes",
+    "item login data raw",
+    "item login data encoded raw",
+    "item login data login",
+    "item login data password",
+    "item login data encoded password",
+    "item login"
+  ];
+  if (credentialsOrTopSection.includes(normalized)) {
+    return false;
+  }
+
+  const noisySupplierMetadata =
+    /(feedback|encoded|raw|item id|item state|category id|published date|update stat date|refreshed date|edit date|pending deletion date|is sticky|item origin|resale|extended guarantee|guarantee|ask discount|custom title|email provider|email type|domain|title en|provider|can view|can update|can report|can manage|max discount|auto bump|transaction stats|status\b|supplier order|order id|reference)/i;
+  if (noisySupplierMetadata.test(normalized)) {
+    return false;
+  }
+
+  const usefulSignals =
+    /(skin count|pickaxe count|dance count|emote count|glider count|shop skins count|shop pickaxes count|shop dances count|shop gliders count|level|wins|rank|hours|inventory value|troph|robux|friends|followers|following|posts|engagement|operators|gems|cups|fighters|country|region|ban|vac status|prime status|faceit|premier|verified|voice chat|subscription|age)/i;
+  return usefulSignals.test(normalized);
+}
+
 export default async function OrderDetailPage({
   params
 }: {
@@ -37,6 +83,27 @@ export default async function OrderDetailPage({
   const deliveredItems = Array.isArray(order.delivery?.deliveredItems)
     ? order.delivery.deliveredItems
     : [];
+  const visibleDeliveredItems = (() => {
+    const deduped = new Set<string>();
+    const output: Array<{ label: string; value: string }> = [];
+    for (const item of deliveredItems) {
+      if (!isBuyerUsefulDeliveryField(item.label)) {
+        continue;
+      }
+      const cleanedLabel = cleanDeliveredLabel(item.label);
+      const cleanedValue = String(item.value ?? "").trim();
+      if (!cleanedLabel || !cleanedValue) {
+        continue;
+      }
+      const key = `${normalizeDeliveredLabel(cleanedLabel)}::${cleanedValue.toLowerCase()}`;
+      if (deduped.has(key)) {
+        continue;
+      }
+      deduped.add(key);
+      output.push({ label: cleanedLabel, value: cleanedValue });
+    }
+    return output;
+  })();
 
   return (
     <main className="space-y-6">
@@ -72,7 +139,7 @@ export default async function OrderDetailPage({
             Delivered Items
           </h2>
           <p className="mt-1 text-sm text-zinc-300">
-            Full delivery data from supplier response.
+            Your login details and important account stats.
           </p>
 
           <div className="mt-4 grid gap-3 rounded-2xl border border-white/15 bg-black/35 p-4 text-sm md:grid-cols-2">
@@ -103,7 +170,7 @@ export default async function OrderDetailPage({
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/15 bg-black/35">
             <div className="max-h-[65dvh] overflow-auto">
               <div className="space-y-2 p-3 sm:hidden">
-                {deliveredItems.map((item, index) => (
+                {visibleDeliveredItems.map((item, index) => (
                   <div
                     key={`${item.label}-${item.value}-${index}`}
                     className="rounded-xl border border-white/10 bg-black/30 p-3"
@@ -114,9 +181,9 @@ export default async function OrderDetailPage({
                     <LinkifiedText text={item.value} className="mt-1 text-sm text-white" />
                   </div>
                 ))}
-                {deliveredItems.length === 0 && (
+                {visibleDeliveredItems.length === 0 && (
                   <div className="px-1 py-2 text-sm text-zinc-300">
-                    No delivery items were returned for this order.
+                    No additional account stats were returned for this order.
                   </div>
                 )}
               </div>
@@ -126,7 +193,7 @@ export default async function OrderDetailPage({
                   <p>Field</p>
                   <p>Value</p>
                 </div>
-                {deliveredItems.map((item, index) => (
+                {visibleDeliveredItems.map((item, index) => (
                   <div
                     key={`${item.label}-${item.value}-${index}`}
                     className="grid grid-cols-[1.2fr_1fr] gap-4 border-b border-white/5 px-4 py-2 text-sm last:border-b-0"
@@ -135,9 +202,9 @@ export default async function OrderDetailPage({
                     <LinkifiedText text={item.value} className="text-white" />
                   </div>
                 ))}
-                {deliveredItems.length === 0 && (
+                {visibleDeliveredItems.length === 0 && (
                   <div className="px-4 py-3 text-sm text-zinc-300">
-                    No delivery items were returned for this order.
+                    No additional account stats were returned for this order.
                   </div>
                 )}
               </div>

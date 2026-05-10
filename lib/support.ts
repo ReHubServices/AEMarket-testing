@@ -4,6 +4,7 @@ import { SupportTicketMessage, SupportTicketRecord } from "@/lib/types";
 
 const FALLBACK_SUPPORT_AUTO_REPLY =
   "Thanks for contacting AE support. We received your ticket and will reply as soon as possible.";
+const MAX_TICKETS_PER_USER = 2;
 
 function normalizeTicketText(value: string, max: number) {
   return value.trim().replace(/\s+/g, " ").slice(0, max);
@@ -47,6 +48,13 @@ export async function createSupportTicket(input: {
 
   const now = new Date().toISOString();
   return updateStore((store) => {
+    const openTicketCountForUser = store.supportTickets.filter(
+      (ticket) => ticket.userId === input.userId && ticket.status === "open"
+    ).length;
+    if (openTicketCountForUser >= MAX_TICKETS_PER_USER) {
+      throw new Error("Open ticket limit reached (max 2)");
+    }
+
     const autoReply = resolveSupportAutoReplyText(store.settings.supportAutoReplyText);
     const ticketId = createId("tkt");
     const messages: SupportTicketMessage[] = [
