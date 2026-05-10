@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       homeSubtitle?: string;
       announcementText?: string;
       announcementEnabled?: boolean;
+      supportAutoReplyText?: string;
     };
 
     const homeTitle = typeof body.homeTitle === "string" ? body.homeTitle.trim() : "";
@@ -40,6 +41,8 @@ export async function POST(request: NextRequest) {
     const announcementText =
       typeof body.announcementText === "string" ? body.announcementText.trim() : "";
     const announcementEnabled = Boolean(body.announcementEnabled);
+    const supportAutoReplyText =
+      typeof body.supportAutoReplyText === "string" ? body.supportAutoReplyText.trim() : "";
 
     if (!homeTitle) {
       return fail("Title is required", 400);
@@ -56,12 +59,16 @@ export async function POST(request: NextRequest) {
     if (announcementText.length > 1200) {
       return fail("Announcement is too long", 400);
     }
+    if (supportAutoReplyText.length > 2000) {
+      return fail("Support auto reply is too long", 400);
+    }
 
     const settings = await updateStore((store) => {
       store.settings.homeTitle = homeTitle;
       store.settings.homeSubtitle = homeSubtitle;
       store.settings.announcementText = announcementText;
       store.settings.announcementEnabled = announcementEnabled;
+      store.settings.supportAutoReplyText = supportAutoReplyText;
       return store.settings;
     });
 

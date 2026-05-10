@@ -87,6 +87,30 @@ export type AppSettings = {
   homeSubtitle: string;
   announcementText: string;
   announcementEnabled: boolean;
+  supportAutoReplyText: string;
+};
+
+export type SupportTicketStatus = "open" | "closed";
+
+export type SupportTicketMessage = {
+  id: string;
+  authorType: "user" | "support";
+  authorId: string | null;
+  authorName: string;
+  text: string;
+  createdAt: string;
+  automated: boolean;
+};
+
+export type SupportTicketRecord = {
+  id: string;
+  userId: string;
+  username: string;
+  subject: string;
+  status: SupportTicketStatus;
+  messages: SupportTicketMessage[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type SearchStatRecord = {
@@ -99,6 +123,7 @@ export type StoreData = {
   users: UserRecord[];
   orders: OrderRecord[];
   transactions: TransactionRecord[];
+  supportTickets: SupportTicketRecord[];
   settings: AppSettings;
   searchStats: SearchStatRecord[];
 };

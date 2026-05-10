@@ -2101,7 +2101,15 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "fortnite_vbucks_max",
     "media_followers_min",
     "media_verified",
-    "media_platform"
+    "media_platform",
+    "roblox_level_min",
+    "roblox_level_max",
+    "roblox_robux_min",
+    "roblox_robux_max",
+    "roblox_inventory_value_min",
+    "roblox_inventory_value_max",
+    "roblox_age_days_min",
+    "roblox_age_days_max"
   ]);
   const appendMultiValueParam = (rawValue: string | undefined, targetKey: string) => {
     const values = (rawValue ?? "")
@@ -2345,6 +2353,7 @@ const QUERY_INTENT_ALIASES: Record<string, string[]> = {
   ],
   valorant: ["valorant", "riot", "riot client"],
   siege: ["siege", "rainbow six", "rainbow-six-siege", "r6"],
+  roblox: ["roblox", "rbx", "limited", "korblox", "headless"],
   supercell: [
     "supercell",
     "brawl stars",
@@ -2425,6 +2434,7 @@ function detectQueryIntent(query: string) {
     "fortnite",
     "valorant",
     "siege",
+    "roblox",
     "supercell",
     "cs2",
     "steam",
@@ -2517,6 +2527,9 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
     fortnite: ["fortnite"],
     valorant: ["valorant", "riot"],
     siege: ["siege", "rainbow-six-siege", "rainbow6", "r6", "uplay", "ubisoft"],
+    uplay: ["siege", "rainbow-six-siege", "rainbow6", "r6", "uplay", "ubisoft"],
+    "rainbow-six-siege": ["siege", "rainbow-six-siege", "rainbow6", "r6", "uplay", "ubisoft"],
+    roblox: ["roblox", "rbx", "limited", "korblox", "headless"],
     supercell: [
       "supercell",
       "brawl-stars",
@@ -3024,6 +3037,18 @@ function applyLocalFilters(
   const lolRegionRaw = options.supplierFilters?.lol_region ?? "";
   const lolExcludeRegionRaw = options.supplierFilters?.lol_exclude_region ?? "";
   const lolRank = (options.supplierFilters?.lol_rank ?? "").trim().toLowerCase();
+  const robloxLevelMin = Number(options.supplierFilters?.roblox_level_min ?? NaN);
+  const robloxLevelMax = Number(options.supplierFilters?.roblox_level_max ?? NaN);
+  const robloxRobuxMin = Number(options.supplierFilters?.roblox_robux_min ?? NaN);
+  const robloxRobuxMax = Number(options.supplierFilters?.roblox_robux_max ?? NaN);
+  const robloxFriendsMin = Number(options.supplierFilters?.roblox_friends_min ?? NaN);
+  const robloxFriendsMax = Number(options.supplierFilters?.roblox_friends_max ?? NaN);
+  const robloxFollowersMin = Number(options.supplierFilters?.roblox_followers_min ?? NaN);
+  const robloxFollowersMax = Number(options.supplierFilters?.roblox_followers_max ?? NaN);
+  const robloxInventoryMin = Number(options.supplierFilters?.roblox_inventory_value_min ?? NaN);
+  const robloxInventoryMax = Number(options.supplierFilters?.roblox_inventory_value_max ?? NaN);
+  const robloxAgeDaysMin = Number(options.supplierFilters?.roblox_age_days_min ?? NaN);
+  const robloxAgeDaysMax = Number(options.supplierFilters?.roblox_age_days_max ?? NaN);
   const steamGameCountMin = Number(options.supplierFilters?.steam_game_count_min ?? NaN);
   const cs2Prime = options.supplierFilters?.cs2_prime?.trim() ?? "";
   const cs2Rank = (options.supplierFilters?.cs2_rank ?? "").trim().toLowerCase();
@@ -3503,8 +3528,18 @@ function applyLocalFilters(
         containsToken("faceit")
       );
     }
-    if (normalizedToken === "siege") {
-      return containsToken("siege") || containsToken("rainbow") || containsToken("r6");
+    if (
+      normalizedToken === "siege" ||
+      normalizedToken === "uplay" ||
+      normalizedToken === "rainbow-six-siege"
+    ) {
+      return (
+        containsToken("siege") ||
+        containsToken("rainbow") ||
+        containsToken("r6") ||
+        containsToken("uplay") ||
+        containsToken("ubisoft")
+      );
     }
     if (normalizedToken === "supercell") {
       return (
@@ -3518,6 +3553,17 @@ function applyLocalFilters(
         containsToken("hay day") ||
         containsToken("hayday") ||
         containsToken("squad busters")
+      );
+    }
+    if (normalizedToken === "roblox") {
+      return (
+        containsToken("roblox") ||
+        containsToken("rbx") ||
+        containsToken("robux") ||
+        containsToken("limited") ||
+        containsToken("korblox") ||
+        containsToken("headless") ||
+        containsToken("blox fruits")
       );
     }
     if (
@@ -4219,6 +4265,16 @@ function applyLocalFilters(
     "grandmaster",
     "challenger"
   ];
+  const siegeRankOrder = [
+    "copper",
+    "bronze",
+    "silver",
+    "gold",
+    "platinum",
+    "emerald",
+    "diamond",
+    "champion"
+  ];
   const rankIndex = (rank: string, order: string[]) => {
     if (!rank) {
       return 0;
@@ -4716,6 +4772,7 @@ function applyLocalFilters(
   }
   for (const prefix of [
     "siege",
+    "roblox",
     "supercell",
     "media",
     "telegram",
@@ -4731,12 +4788,48 @@ function applyLocalFilters(
   applyIncludeTokens(getRawFilter("siege_rank"));
   applyIncludeTokens(getRawFilter("siege_region"));
   applyExcludeTokens(getRawFilter("siege_exclude_region"));
+  applyIncludeTokens(getRawFilter("siege_operators"));
+  applyIncludeTokens(getRawFilter("siege_skins"));
+  const siegeRankMin = normalizeText(getRawFilter("siege_rank_min"));
+  const siegeRankMax = normalizeText(getRawFilter("siege_rank_max"));
+  if (siegeRankMin) {
+    const target = rankIndex(siegeRankMin, siegeRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => extractRankIndexFromItem(item, siegeRankOrder) >= target);
+    }
+  }
+  if (siegeRankMax) {
+    const target = rankIndex(siegeRankMax, siegeRankOrder);
+    if (target > 0) {
+      output = output.filter((item) => {
+        const rank = extractRankIndexFromItem(item, siegeRankOrder);
+        return rank === 0 || rank <= target;
+      });
+    }
+  }
   applyRangeByKeys("siege_level_min", "siege_level_max", ["level", "account level"]);
   applyRangeByKeys("siege_operators_min", "siege_operators_max", ["operators", "operator"]);
   applyRangeByKeys("siege_skins_min", "siege_skins_max", ["skins", "skin"]);
   applyRangeByKeys("siege_credits_min", "siege_credits_max", ["credits", "r6 credits"]);
   applyRangeByKeys("siege_kd_min", "siege_kd_max", ["kd", "k d"]);
   applyRangeByKeys("siege_winrate_min", "siege_winrate_max", ["winrate", "win rate"]);
+  if (getFlagFilter("siege_banned") === "1") {
+    output = output.filter((item) => {
+      const text = itemSearchText(item);
+      return text.includes("ban") || text.includes("banned");
+    });
+  }
+  if (getFlagFilter("siege_banned") === "0") {
+    output = output.filter((item) => {
+      const text = itemSearchText(item);
+      return (
+        text.includes("no ban") ||
+        text.includes("without ban") ||
+        text.includes("clean") ||
+        text.includes("not banned")
+      );
+    });
+  }
 
   applyIncludeTokens(getRawFilter("supercell_game"));
   applyExcludeTokens(getRawFilter("supercell_exclude_game"));
@@ -4747,6 +4840,43 @@ function applyLocalFilters(
   );
   applyRangeByKeys("supercell_gems_min", "supercell_gems_max", ["gems", "gem"]);
   applyRangeByKeys("supercell_level_min", "supercell_level_max", ["level", "lvl"]);
+
+  applyScopedMetricRange(
+    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
+    ["level", "lvl"],
+    robloxLevelMin,
+    robloxLevelMax
+  );
+  applyScopedMetricRange(
+    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
+    ["robux", "rbx"],
+    robloxRobuxMin,
+    robloxRobuxMax
+  );
+  applyScopedMetricRange(
+    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
+    ["friends", "friend"],
+    robloxFriendsMin,
+    robloxFriendsMax
+  );
+  applyScopedMetricRange(
+    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
+    ["followers", "follows", "subs", "subscribers"],
+    robloxFollowersMin,
+    robloxFollowersMax
+  );
+  applyScopedMetricRange(
+    ["roblox", "rbx", "limited", "korblox", "headless"],
+    ["inventory value", "inventory", "value", "limited value"],
+    robloxInventoryMin,
+    robloxInventoryMax
+  );
+  applyScopedMetricRange(
+    ["roblox", "rbx", "account"],
+    ["age days", "days old", "registered"],
+    robloxAgeDaysMin,
+    robloxAgeDaysMax
+  );
 
   applyRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
   applyRangeByKeys("media_following_min", "media_following_max", ["following"]);
@@ -5818,14 +5948,17 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
     const hasTextQuery = Boolean(trimmedQuery);
+    const hasAscendingPriceSort = options.sort === "price_asc";
     const requiresDeepCandidateScan =
-      hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery;
+      hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery || hasAscendingPriceSort;
     const requiredAggregatedSize = requiresDeepCandidateScan
       ? hasFortniteSelectorFilters
         ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
-        : hasTextQuery
-          ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
-          : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
+        : hasAscendingPriceSort
+          ? Math.min(3600, Math.max(targetEnd + pageSize * 140, 1500))
+          : hasTextQuery
+            ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
+            : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
       : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
@@ -5846,7 +5979,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
-      ? hasLocalPriceFilter
+      ? hasLocalPriceFilter || hasAscendingPriceSort
         ? Math.max(page + 20, PRICE_FILTER_MAX_LOGICAL_PAGES)
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
@@ -5942,15 +6075,22 @@ export async function searchListings(query: string, options: SearchOptions = {})
       Boolean(searchOptions.supplierFilters?.[key]?.trim())
     );
     const needsDeepFilterFinalPass =
-      hasActiveSupplierFilters || needsStrictFortniteCountFinalPass || hasLocalPriceFilter;
+      hasActiveSupplierFilters ||
+      needsStrictFortniteCountFinalPass ||
+      hasLocalPriceFilter ||
+      hasAscendingPriceSort;
     const finalPassPoolSize = hasFortniteSelectorFilters
       ? Math.min(12000, Math.max(targetEnd + pageSize * 260, 5000))
+      : hasAscendingPriceSort
+        ? Math.min(4200, Math.max(targetEnd + pageSize * 180, 2000))
       : needsDeepFilterFinalPass
         ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const detailEnrichmentLimit = hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 6000)
+      : hasAscendingPriceSort
+        ? Math.min(finalPassPool.length, 260)
       : needsDeepFilterFinalPass
         ? Math.min(finalPassPool.length, 140)
         : 24;

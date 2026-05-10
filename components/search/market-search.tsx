@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Search, Wallet, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -108,6 +108,73 @@ type MarketSearchProps = {
   announcementText?: string;
 };
 
+type TourStepId =
+  | "welcome"
+  | "filters"
+  | "listings"
+  | "details"
+  | "checkout"
+  | "support"
+  | "done";
+
+type TourSpotlight = {
+  selector: string;
+  title: string;
+  message: string;
+  requiresClick?: boolean;
+};
+
+const TOUR_STORAGE_KEY = "ae_market_tour_completed_v1";
+const TOUR_STEPS: Array<{ id: TourStepId; spotlight?: TourSpotlight }> = [
+  {
+    id: "welcome"
+  },
+  {
+    id: "filters",
+    spotlight: {
+      selector: "[data-tour='filters']",
+      title: "Use Filters First",
+      message: "Use filters to find the best accounts within your budget."
+    }
+  },
+  {
+    id: "listings",
+    spotlight: {
+      selector: "[data-tour='listings']",
+      title: "Browse Listings",
+      message: "Browse available accounts here. Click any listing to view full details.",
+      requiresClick: true
+    }
+  },
+  {
+    id: "details",
+    spotlight: {
+      selector: "[data-tour='product-modal']",
+      title: "Review Details",
+      message: "Check all account details before purchasing."
+    }
+  },
+  {
+    id: "checkout",
+    spotlight: {
+      selector: "[data-tour='buy-button']",
+      title: "Secure Checkout",
+      message: "Secure checkout with instant delivery after purchase."
+    }
+  },
+  {
+    id: "support",
+    spotlight: {
+      selector: "[data-tour='support-button']",
+      title: "Support Anytime",
+      message: "Need help? Contact support anytime."
+    }
+  },
+  {
+    id: "done"
+  }
+];
+
 type GameFilterTarget =
   | "all"
   | "fortnite"
@@ -115,14 +182,15 @@ type GameFilterTarget =
   | "siege"
   | "roblox"
   | "supercell"
-  | "media"
+  | "tiktok"
+  | "instagram"
   | "telegram"
   | "discord"
   | "steam"
   | "cs2"
   | "battlenet";
 
-const DISCORD_CONTACT_URL = (process.env.NEXT_PUBLIC_DISCORD_CONTACT_URL ?? "").trim();
+const SUPPORT_HREF = "/support";
 
 const GAME_SEARCH_PARAMS: Record<
   GameFilterTarget,
@@ -131,15 +199,109 @@ const GAME_SEARCH_PARAMS: Record<
   all: {},
   fortnite: { game: "fortnite", category: "fortnite" },
   valorant: { game: "valorant", category: "riot" },
-  siege: { game: "uplay", category: "uplay" },
+  siege: { game: "siege", category: "rainbow-six-siege" },
   roblox: { game: "roblox", category: "roblox" },
   supercell: { game: "supercell", category: "supercell" },
-  media: { game: "social", category: "media" },
+  tiktok: { game: "social", category: "tiktok" },
+  instagram: { game: "social", category: "instagram" },
   telegram: { game: "telegram", category: "telegram" },
   discord: { game: "discord", category: "discord" },
   steam: { game: "steam", category: "steam" },
   cs2: { game: "cs2", category: "steam" },
   battlenet: { game: "battlenet", category: "battlenet" }
+};
+
+const MARKET_CATEGORY_TABS: Array<{
+  value: GameFilterTarget;
+  label: string;
+  iconSrc?: string;
+  iconText?: string;
+}> = [
+  { value: "all", label: "All Categories", iconText: "ALL" },
+  {
+    value: "fortnite",
+    label: "Fortnite",
+    iconSrc: "https://www.google.com/s2/favicons?domain=fortnite.com&sz=64"
+  },
+  {
+    value: "valorant",
+    label: "Riot Client",
+    iconSrc: "https://www.google.com/s2/favicons?domain=riotgames.com&sz=64"
+  },
+  {
+    value: "siege",
+    label: "Siege Accounts",
+    iconSrc: "https://www.google.com/s2/favicons?domain=rainbow6.com&sz=64"
+  },
+  {
+    value: "roblox",
+    label: "Roblox",
+    iconSrc: "https://www.google.com/s2/favicons?domain=roblox.com&sz=64"
+  },
+  {
+    value: "supercell",
+    label: "Supercell",
+    iconSrc: "https://www.google.com/s2/favicons?domain=supercell.com&sz=64"
+  },
+  {
+    value: "tiktok",
+    label: "TikTok",
+    iconSrc: "https://www.google.com/s2/favicons?domain=tiktok.com&sz=64"
+  },
+  {
+    value: "instagram",
+    label: "Instagram",
+    iconSrc: "https://www.google.com/s2/favicons?domain=instagram.com&sz=64"
+  },
+  {
+    value: "steam",
+    label: "Steam",
+    iconSrc: "https://www.google.com/s2/favicons?domain=steampowered.com&sz=64"
+  },
+  {
+    value: "cs2",
+    label: "Counter-Strike 2",
+    iconSrc: "https://www.google.com/s2/favicons?domain=counter-strike.net&sz=64"
+  },
+  {
+    value: "telegram",
+    label: "Telegram",
+    iconSrc: "https://www.google.com/s2/favicons?domain=telegram.org&sz=64"
+  },
+  {
+    value: "discord",
+    label: "Discord",
+    iconSrc: "https://www.google.com/s2/favicons?domain=discord.com&sz=64"
+  },
+  {
+    value: "battlenet",
+    label: "Battle.net",
+    iconSrc: "https://www.google.com/s2/favicons?domain=battle.net&sz=64"
+  }
+];
+
+const CATEGORY_PARAM_ALIASES: Record<string, GameFilterTarget> = {
+  all: "all",
+  fortnite: "fortnite",
+  valorant: "valorant",
+  riot: "valorant",
+  "riot-client": "valorant",
+  siege: "siege",
+  "siege-accounts": "siege",
+  "rainbow-six-siege": "siege",
+  uplay: "siege",
+  r6: "siege",
+  roblox: "roblox",
+  supercell: "supercell",
+  tiktok: "tiktok",
+  instagram: "instagram",
+  steam: "steam",
+  cs2: "cs2",
+  "counter-strike-2": "cs2",
+  telegram: "telegram",
+  discord: "discord",
+  battlenet: "battlenet",
+  "battle.net": "battlenet"
 };
 
 const GAME_TOGGLE_FILTERS: Record<
@@ -151,7 +313,8 @@ const GAME_TOGGLE_FILTERS: Record<
   siege: [],
   roblox: [],
   supercell: [],
-  media: [],
+  tiktok: [],
+  instagram: [],
   telegram: [],
   discord: [],
   steam: [],
@@ -263,23 +426,28 @@ const CATEGORY_SUGGESTION_SEEDS: Record<GameFilterTarget, string[]> = {
     "Legendary cards",
     "TH16"
   ],
-  media: [
-    "Instagram",
+  tiktok: [
     "TikTok",
-    "Facebook",
-    "YouTube",
-    "Twitter",
+    "Followers",
+    "High engagement",
+    "Monetized",
+    "Aged account",
+    "US audience",
+    "EU audience",
+    "Business page",
+    "Creator account"
+  ],
+  instagram: [
+    "Instagram",
     "Verified",
     "Blue check",
-    "Monetized",
     "Followers",
     "High engagement",
     "OG username",
     "Aged account",
     "US audience",
     "EU audience",
-    "Business page",
-    "Creator account"
+    "Business page"
   ],
   telegram: [
     "Premium",
@@ -980,6 +1148,18 @@ const LOL_RANK_OPTIONS = [
   "challenger"
 ];
 
+const SIEGE_RANK_OPTIONS = [
+  "",
+  "copper",
+  "bronze",
+  "silver",
+  "gold",
+  "platinum",
+  "emerald",
+  "diamond",
+  "champion"
+];
+
 const VALORANT_RANGE_FILTERS: RangeFilterConfig[] = [
   {
     label: "Skins",
@@ -1292,8 +1472,21 @@ export function MarketSearch({
   const [fortniteSelectorRemoteLoading, setFortniteSelectorRemoteLoading] = useState(false);
   const [fortniteTypingSuggestions, setFortniteTypingSuggestions] = useState<string[]>([]);
   const [remoteTitleSuggestions, setRemoteTitleSuggestions] = useState<string[]>([]);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStepId, setTourStepId] = useState<TourStepId>("welcome");
+  const [tourReady, setTourReady] = useState(false);
+  const [tourBlockMessage, setTourBlockMessage] = useState<string | null>(null);
+  const [tourSpotlightRect, setTourSpotlightRect] = useState<DOMRect | null>(null);
+  const [tourTick, setTourTick] = useState(0);
+  const tourCardRef = useRef<HTMLDivElement | null>(null);
   const debouncedQuery = useDebouncedValue(query);
   const debouncedFortniteSelectorSearch = useDebouncedValue(fortniteSelectorSearch, 220);
+  const tourStepIndex = useMemo(
+    () => TOUR_STEPS.findIndex((entry) => entry.id === tourStepId),
+    [tourStepId]
+  );
+  const activeTourStep = TOUR_STEPS[tourStepIndex] ?? TOUR_STEPS[0];
+  const activeSpotlight = activeTourStep.spotlight ?? null;
 
   function changePage(nextPage: number) {
     const normalized = Math.max(1, nextPage);
@@ -1303,8 +1496,95 @@ export function MarketSearch({
     }
   }
 
+  function completeTour() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(TOUR_STORAGE_KEY, "1");
+    }
+    setTourOpen(false);
+    setTourStepId("done");
+    setTourBlockMessage(null);
+  }
+
+  function startTour() {
+    setTourStepId("welcome");
+    setTourOpen(true);
+    setTourBlockMessage(null);
+    setTourTick((previous) => previous + 1);
+  }
+
+  function nextTourStep() {
+    const nextIndex = Math.min(TOUR_STEPS.length - 1, tourStepIndex + 1);
+    const next = TOUR_STEPS[nextIndex];
+    if (!next) {
+      completeTour();
+      return;
+    }
+    setTourStepId(next.id);
+  }
+
+  function previousTourStep() {
+    const previousIndex = Math.max(0, tourStepIndex - 1);
+    const previous = TOUR_STEPS[previousIndex];
+    if (!previous) {
+      return;
+    }
+    setTourStepId(previous.id);
+  }
+
+  function skipCurrentTourStep() {
+    setTourBlockMessage(null);
+    nextTourStep();
+  }
+
+  function getSpotlightElement() {
+    if (!activeSpotlight) {
+      return null;
+    }
+    return document.querySelector(activeSpotlight.selector) as HTMLElement | null;
+  }
+
+  function refreshTourSpotlightRect() {
+    if (!tourOpen || !activeSpotlight) {
+      setTourSpotlightRect(null);
+      return;
+    }
+    const element = getSpotlightElement();
+    if (!element) {
+      setTourSpotlightRect(null);
+      return;
+    }
+    element.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      setTourSpotlightRect(null);
+      return;
+    }
+    setTourSpotlightRect(rect);
+  }
+
+  function isTourEventAllowed(target: EventTarget | null) {
+    if (!(target instanceof Node)) {
+      return false;
+    }
+    if (tourCardRef.current?.contains(target)) {
+      return true;
+    }
+    if (!activeSpotlight) {
+      return false;
+    }
+    const element = getSpotlightElement();
+    if (!element) {
+      return false;
+    }
+    return element.contains(target);
+  }
+
   useEffect(() => {
-    setGameFilters({});
+    if (selectedGame === "tiktok" || selectedGame === "instagram") {
+      setGameFilters({ media_platform: selectedGame });
+    } else {
+      setGameFilters({});
+    }
     setFortniteSelectorOpen(null);
     setFortniteSelectorSearch("");
     setFortniteSelectorDraft([]);
@@ -1312,6 +1592,74 @@ export function MarketSearch({
     setFortniteSelectorRemoteLoading(false);
     setFortniteTypingSuggestions([]);
   }, [selectedGame]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const completed = window.localStorage.getItem(TOUR_STORAGE_KEY) === "1";
+    if (!completed) {
+      setTourOpen(true);
+      setTourStepId("welcome");
+    }
+    setTourReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tourOpen) {
+      setTourSpotlightRect(null);
+      return;
+    }
+    refreshTourSpotlightRect();
+    const sync = () => refreshTourSpotlightRect();
+    window.addEventListener("resize", sync);
+    window.addEventListener("scroll", sync, true);
+    return () => {
+      window.removeEventListener("resize", sync);
+      window.removeEventListener("scroll", sync, true);
+    };
+  }, [tourOpen, activeSpotlight, tourStepId, tourTick, activeListingId]);
+
+  useEffect(() => {
+    if (!tourOpen) {
+      setTourBlockMessage(null);
+      return;
+    }
+    if (tourStepId === "listings" && activeListingId) {
+      setTourBlockMessage(null);
+      setTourStepId("details");
+      return;
+    }
+    if ((tourStepId === "details" || tourStepId === "checkout") && !activeListingId) {
+      setTourBlockMessage("Open any listing to continue this step.");
+    } else if (tourStepId === "listings" && activeSpotlight?.requiresClick && !activeListingId) {
+      setTourBlockMessage("Click any listing card to continue.");
+    } else {
+      setTourBlockMessage(null);
+    }
+  }, [tourOpen, tourStepId, activeListingId, activeSpotlight]);
+
+  useEffect(() => {
+    if (!tourOpen) {
+      return;
+    }
+    const handler = (event: Event) => {
+      if (isTourEventAllowed(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if ("stopImmediatePropagation" in event) {
+        event.stopImmediatePropagation();
+      }
+    };
+    document.addEventListener("pointerdown", handler, true);
+    document.addEventListener("click", handler, true);
+    return () => {
+      document.removeEventListener("pointerdown", handler, true);
+      document.removeEventListener("click", handler, true);
+    };
+  }, [tourOpen, activeSpotlight, tourStepId]);
 
   useEffect(() => {
     if (!fortniteSelectorOpen) {
@@ -1430,11 +1778,9 @@ export function MarketSearch({
         if (searchTarget.category) {
           payload.category = searchTarget.category;
         }
-        if (selectedGame === "media") {
+        if (selectedGame === "tiktok" || selectedGame === "instagram") {
           const mediaPlatform = (gameFilters.media_platform ?? "").trim();
-          if (mediaPlatform) {
-            payload.category = mediaPlatform;
-          }
+          payload.category = mediaPlatform || selectedGame;
         }
 
         const response = await fetch("/api/search", {
@@ -1483,7 +1829,13 @@ export function MarketSearch({
     let cancelled = false;
     const controller = new AbortController();
     const normalized = debouncedQuery.trim();
-    const hasSearchContext = Boolean(normalized) || selectedGame !== "all";
+    const hasSearchContext =
+      Boolean(normalized) ||
+      selectedGame !== "all" ||
+      sort !== "relevance" ||
+      Boolean(minPrice.trim()) ||
+      Boolean(maxPrice.trim()) ||
+      Object.values(gameFilters).some((value) => Boolean(value.trim()));
 
     if (!hasSearchContext) {
       const runPopularListings = async () => {
@@ -1543,11 +1895,9 @@ export function MarketSearch({
         if (searchTarget.category) {
           payload.category = searchTarget.category;
         }
-        if (selectedGame === "media") {
+        if (selectedGame === "tiktok" || selectedGame === "instagram") {
           const mediaPlatform = (gameFilters.media_platform ?? "").trim();
-          if (mediaPlatform) {
-            payload.category = mediaPlatform;
-          }
+          payload.category = mediaPlatform || selectedGame;
         }
         if (minPrice.trim()) {
           payload.minPrice = minPrice.trim();
@@ -1623,6 +1973,23 @@ export function MarketSearch({
       setActiveListingId(itemId);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const categoryParam = (
+      searchParams.get("category") ??
+      searchParams.get("game") ??
+      ""
+    )
+      .toLowerCase()
+      .trim();
+    if (!categoryParam) {
+      return;
+    }
+    const mapped = CATEGORY_PARAM_ALIASES[categoryParam];
+    if (mapped && mapped !== selectedGame) {
+      setSelectedGame(mapped);
+    }
+  }, [searchParams, selectedGame]);
 
   const activeListing = useMemo(
     () => listings.find((listing) => listing.id === activeListingId) ?? null,
@@ -1789,6 +2156,35 @@ export function MarketSearch({
     );
   }
 
+  function renderTriStateFilter(
+    label: string,
+    key: string,
+    options: FilterOption[] = ANY_YES_NO_OPTIONS
+  ) {
+    return (
+      <div className="space-y-1.5 rounded-xl border border-white/10 bg-black/20 p-2">
+        <p className="text-xs font-semibold text-zinc-200">{label}</p>
+        <div className="grid grid-cols-3 gap-1">
+          {options.map((option) => (
+            <button
+              key={`${key}_${option.value || "any"}`}
+              type="button"
+              onClick={() => setGameFilter(key, option.value)}
+              className={cn(
+                "h-8 rounded-lg border text-xs transition",
+                (gameFilters[key] ?? "") === option.value
+                  ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-100"
+                  : "border-white/10 bg-black/25 text-zinc-300 hover:border-white/25 hover:text-white"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function openFortniteSelector(key: FortniteSelectorKey) {
     setFortniteSelectorOpen(key);
     setFortniteSelectorSearch("");
@@ -1853,7 +2249,13 @@ export function MarketSearch({
   ].filter(Boolean).length;
   const selectedGameToggles =
     selectedGame === "all" ? [] : GAME_TOGGLE_FILTERS[selectedGame];
-  const hasSearchContext = Boolean(query.trim()) || selectedGame !== "all";
+  const hasSearchContext =
+    Boolean(query.trim()) ||
+    selectedGame !== "all" ||
+    sort !== "relevance" ||
+    Boolean(minPrice.trim()) ||
+    Boolean(maxPrice.trim()) ||
+    Object.values(gameFilters).some((value) => Boolean(value.trim()));
   const pageButtons = useMemo(() => {
     const numbers = new Set<number>([currentPage]);
     if (currentPage > 1) {
@@ -1960,6 +2362,45 @@ export function MarketSearch({
     return scored;
   }, [query, selectedGame, listings, gameFilters, fortniteTypingSuggestions, remoteTitleSuggestions]);
   const showSuggestions = searchFocused && suggestions.length > 0;
+  const canAdvanceTourStep =
+    !tourOpen ||
+    (tourStepId === "listings" ? Boolean(activeListingId) : true) &&
+      (tourStepId === "details" || tourStepId === "checkout" ? Boolean(activeListingId) : true);
+  const spotlightFrame = useMemo(() => {
+    if (!tourOpen || !tourSpotlightRect) {
+      return null;
+    }
+    const padding = 8;
+    const top = Math.max(8, tourSpotlightRect.top - padding);
+    const left = Math.max(8, tourSpotlightRect.left - padding);
+    const width = Math.max(24, tourSpotlightRect.width + padding * 2);
+    const height = Math.max(24, tourSpotlightRect.height + padding * 2);
+    return { top, left, width, height };
+  }, [tourOpen, tourSpotlightRect]);
+  const tourCardStyle = useMemo(() => {
+    if (!tourOpen) {
+      return undefined;
+    }
+    const viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
+    const viewportHeight = typeof window === "undefined" ? 720 : window.innerHeight;
+    const cardWidth = Math.min(360, Math.max(260, viewportWidth - 24));
+    const fallbackTop = Math.min(viewportHeight - 250, 16);
+    const fallbackLeft = Math.max(12, (viewportWidth - cardWidth) / 2);
+    if (!spotlightFrame) {
+      return { top: `${fallbackTop}px`, left: `${fallbackLeft}px`, width: `${cardWidth}px` };
+    }
+    const gap = 12;
+    const preferredTop = spotlightFrame.top + spotlightFrame.height + gap;
+    const placeAbove = preferredTop + 220 > viewportHeight;
+    const top = placeAbove
+      ? Math.max(12, spotlightFrame.top - 220 - gap)
+      : Math.min(viewportHeight - 232, preferredTop);
+    const left = Math.min(
+      Math.max(12, spotlightFrame.left),
+      Math.max(12, viewportWidth - cardWidth - 12)
+    );
+    return { top: `${top}px`, left: `${left}px`, width: `${cardWidth}px` };
+  }, [tourOpen, spotlightFrame]);
   const activeFortniteSelector = useMemo(
     () =>
       FORTNITE_SELECTOR_CONFIG.find((config) => config.key === fortniteSelectorOpen) ?? null,
@@ -2200,43 +2641,57 @@ export function MarketSearch({
                 </a>
               </div>
             )}
-            {DISCORD_CONTACT_URL && (
-              <a
-                href={DISCORD_CONTACT_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full md:w-auto"
-              >
-                <Button variant="ghost" className="h-12 w-full gap-2 md:w-auto">
-                  <MessageCircle size={16} />
-                  Contact Us
-                </Button>
-              </a>
-            )}
+            <Link href={SUPPORT_HREF} className="w-full md:w-auto" data-tour="support-button">
+              <Button variant="ghost" className="h-12 w-full gap-2 md:w-auto">
+                <MessageCircle size={16} />
+                Support
+              </Button>
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-12 w-full md:w-auto"
+              onClick={startTour}
+            >
+              How it works
+            </Button>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="space-y-1 text-xs text-zinc-400">
-              Category
-              <select
-                value={selectedGame}
-                onChange={(event) => setSelectedGame(event.target.value as GameFilterTarget)}
-                className="h-11 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
-              >
-                <option value="all">All Categories</option>
-                <option value="fortnite">Fortnite</option>
-                <option value="valorant">Riot Client</option>
-                <option value="siege">Siege Accounts</option>
-                <option value="roblox">Roblox</option>
-                <option value="supercell">Supercell</option>
-                <option value="media">Media Accounts</option>
-                <option value="steam">Steam</option>
-                <option value="cs2">Counter-Strike 2</option>
-                <option value="telegram">Telegram</option>
-                <option value="discord">Discord</option>
-                <option value="battlenet">Battle.net</option>
-              </select>
-            </label>
+          <div data-tour="filters" className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs text-zinc-400">Categories</p>
+            <div className="flex flex-wrap gap-2">
+              {MARKET_CATEGORY_TABS.map((category) => {
+                const active = selectedGame === category.value;
+                return (
+                  <button
+                    key={category.value}
+                    type="button"
+                    onClick={() => setSelectedGame(category.value)}
+                    title={category.label}
+                    className={cn(
+                      "inline-flex h-12 w-12 items-center justify-center rounded-xl border text-xs font-medium transition",
+                      active
+                        ? "border-white/40 bg-white/15 text-white"
+                        : "border-white/15 bg-black/35 text-zinc-300 hover:border-white/25 hover:text-white"
+                    )}
+                  >
+                    {category.iconSrc ? (
+                      <img
+                        src={category.iconSrc}
+                        alt={category.label}
+                        className="h-7 w-7 rounded-sm object-contain"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-semibold tracking-wide">
+                        {category.iconText ?? category.label.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 
             <label className="space-y-1 text-xs text-zinc-400">
               Sort
@@ -2336,7 +2791,7 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "fortnite" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
+                      <div className="grid gap-3 lg:grid-cols-2">
                         <div className="space-y-2">
                           {FORTNITE_SELECTOR_CONFIG.map((selector) => {
                             const selectedValues = parseSelectedValues(gameFilters[selector.key]);
@@ -2786,9 +3241,10 @@ export function MarketSearch({
                     )}
 
                     {selectedGame === "siege" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Siege Accounts</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Rainbow Six Siege</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.siege_platform ?? ""}
                             onChange={(event) => setGameFilter("siege_platform", event.target.value)}
@@ -2799,17 +3255,48 @@ export function MarketSearch({
                             <option value="xbox">Xbox</option>
                             <option value="psn">PlayStation</option>
                           </select>
-                          <Input
-                            value={gameFilters.siege_rank ?? ""}
-                            onChange={(event) => setGameFilter("siege_rank", event.target.value)}
-                            placeholder="Rank"
-                            className="h-9"
-                          />
                           {renderRangePair("siege_level_min", "siege_level_max", "Level from")}
                           {renderRangePair("siege_operators_min", "siege_operators_max", "Operators from")}
                           {renderRangePair("siege_skins_min", "siege_skins_max", "Skins from")}
-                        </div>
-                        <div className="space-y-2">
+                          <Input
+                            value={gameFilters.siege_operators ?? ""}
+                            onChange={(event) => setGameFilter("siege_operators", event.target.value)}
+                            placeholder="Operators"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.siege_skins ?? ""}
+                            onChange={(event) => setGameFilter("siege_skins", event.target.value)}
+                            placeholder="Skins"
+                            className="h-9"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={gameFilters.siege_rank_min ?? ""}
+                              onChange={(event) => setGameFilter("siege_rank_min", event.target.value)}
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {SIEGE_RANK_OPTIONS.map((rank) => (
+                                <option key={`siege_rank_min_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "Rank from"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={gameFilters.siege_rank_max ?? ""}
+                              onChange={(event) => setGameFilter("siege_rank_max", event.target.value)}
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              {SIEGE_RANK_OPTIONS.map((rank) => (
+                                <option key={`siege_rank_max_${rank || "any"}`} value={rank}>
+                                  {rank ? rank.toUpperCase() : "up to"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {renderTriStateFilter("Has ban in game", "siege_banned")}
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <Input
                             value={gameFilters.siege_region ?? ""}
                             onChange={(event) => setGameFilter("siege_region", event.target.value)}
@@ -2825,14 +3312,151 @@ export function MarketSearch({
                           {renderRangePair("siege_credits_min", "siege_credits_max", "R6 Credits from")}
                           {renderRangePair("siege_kd_min", "siege_kd_max", "KD from")}
                           {renderRangePair("siege_winrate_min", "siege_winrate_max", "WinRate from")}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedGame === "roblox" && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Roblox Accounts</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                          {renderRangePair("roblox_friends_min", "roblox_friends_max", "Friends from")}
+                          {renderRangePair("roblox_followers_min", "roblox_followers_max", "Followers from")}
+                          {renderRangePair("roblox_level_min", "roblox_level_max", "Level from")}
+                          {renderRangePair("roblox_robux_min", "roblox_robux_max", "Robux from")}
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.roblox_registered_earlier ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("roblox_registered_earlier", event.target.value)
+                              }
+                              placeholder="Registered earlier"
+                              className="h-9"
+                            />
+                            <select
+                              value={gameFilters.roblox_registered_unit ?? "years"}
+                              onChange={(event) =>
+                                setGameFilter("roblox_registered_unit", event.target.value)
+                              }
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              <option value="years">years ago</option>
+                              <option value="months">months ago</option>
+                              <option value="days">days ago</option>
+                            </select>
+                          </div>
+                          <select
+                            value={gameFilters.roblox_subscription_type ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("roblox_subscription_type", event.target.value)
+                            }
+                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                          >
+                            <option value="">Subscription type</option>
+                            <option value="premium">Premium</option>
+                            <option value="none">Without subscription</option>
+                          </select>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              value={gameFilters.roblox_validity_for ?? ""}
+                              onChange={(event) => setGameFilter("roblox_validity_for", event.target.value)}
+                              placeholder="Validity for"
+                              className="h-9"
+                            />
+                            <select
+                              value={gameFilters.roblox_validity_unit ?? "days"}
+                              onChange={(event) => setGameFilter("roblox_validity_unit", event.target.value)}
+                              className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
+                            >
+                              <option value="days">Days</option>
+                              <option value="months">Months</option>
+                              <option value="years">Years</option>
+                            </select>
+                          </div>
+                          {renderRangePair(
+                            "roblox_transaction_robux_min",
+                            "roblox_transaction_robux_max",
+                            "Total robux from"
+                          )}
+                          {renderRangePair("roblox_gamepasses_min", "roblox_gamepasses_max", "Gamepasses from")}
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                          {renderRangePair(
+                            "roblox_inventory_value_min",
+                            "roblox_inventory_value_max",
+                            "Inventory value from"
+                          )}
+                          {renderRangePair("roblox_limited_rap_min", "roblox_limited_rap_max", "Limited items RAP from")}
+                          {renderRangePair("roblox_ugc_rap_min", "roblox_ugc_rap_max", "RAP UGC from")}
+                          {renderRangePair("roblox_offsale_items_min", "roblox_offsale_items_max", "Offsale items from")}
+                          {renderRangePair("roblox_credit_balance_min", "roblox_credit_balance_max", "Credit balance from")}
+                          {renderRangePair(
+                            "roblox_age_days_min",
+                            "roblox_age_days_max",
+                            "Age in days from"
+                          )}
+                          <Input
+                            value={gameFilters.roblox_country ?? ""}
+                            onChange={(event) => setGameFilter("roblox_country", event.target.value)}
+                            placeholder="Country"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.roblox_exclude_country ?? ""}
+                            onChange={(event) => setGameFilter("roblox_exclude_country", event.target.value)}
+                            placeholder="Exclude country"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.roblox_age_group ?? ""}
+                            onChange={(event) => setGameFilter("roblox_age_group", event.target.value)}
+                            placeholder="Age group"
+                            className="h-9"
+                          />
+                          <Input
+                            value={gameFilters.roblox_exclude_age_group ?? ""}
+                            onChange={(event) => setGameFilter("roblox_exclude_age_group", event.target.value)}
+                            placeholder="Exclude age group"
+                            className="h-9"
+                          />
+                          {renderTriStateFilter("Email is verified", "roblox_email_verified")}
+                          {renderTriStateFilter("Xbox connected", "roblox_xbox_connected")}
+                          {renderTriStateFilter("PSN connected", "roblox_psn_connected")}
+                          {renderTriStateFilter("Only verified", "roblox_only_verified")}
+                          {renderTriStateFilter("Age verified", "roblox_age_verified")}
+                          {renderTriStateFilter(
+                            "Auto renewal subscription",
+                            "roblox_auto_renewal_subscription"
+                          )}
+                          {renderTriStateFilter(
+                            "Donation in popular games",
+                            "roblox_donation_popular_games"
+                          )}
+                          {renderTriStateFilter("Voice chat available", "roblox_voice_chat")}
+                          <Input
+                            value={gameFilters.roblox_selected_game ?? ""}
+                            onChange={(event) =>
+                              setGameFilter("roblox_selected_game", event.target.value)
+                            }
+                            placeholder="Select a game"
+                            className="h-9"
+                          />
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "supercell" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Supercell Accounts</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Supercell Accounts</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <Input
                             value={gameFilters.supercell_game ?? ""}
                             onChange={(event) => setGameFilter("supercell_game", event.target.value)}
@@ -2853,37 +3477,27 @@ export function MarketSearch({
                             "Trophies from"
                           )}
                           {renderRangePair("supercell_gems_min", "supercell_gems_max", "Gems from")}
-                        </div>
-                        <div className="space-y-2">
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           {renderRangePair("supercell_level_min", "supercell_level_max", "Level from")}
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    {selectedGame === "media" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Media Accounts</p>
-                          <select
-                            value={gameFilters.media_platform ?? ""}
-                            onChange={(event) => setGameFilter("media_platform", event.target.value)}
-                            className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
-                          >
-                            <option value="">Platform</option>
-                            <option value="instagram">Instagram</option>
-                            <option value="tiktok">TikTok</option>
-                            <option value="facebook">Facebook</option>
-                            <option value="telegram">Telegram</option>
-                            <option value="discord">Discord</option>
-                            <option value="youtube">YouTube</option>
-                            <option value="twitter">X / Twitter</option>
-                          </select>
-                          {renderRangePair("media_followers_min", "media_followers_max", "Followers from")}
-                          {renderRangePair("media_following_min", "media_following_max", "Following from")}
-                          {renderRangePair("media_posts_min", "media_posts_max", "Posts from")}
-                          {renderRangePair("media_age_days_min", "media_age_days_max", "Age in days from")}
-                        </div>
-                        <div className="space-y-2">
+                    {(selectedGame === "tiktok" || selectedGame === "instagram") && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">
+                          {selectedGame === "tiktok" ? "TikTok Accounts" : "Instagram Accounts"}
+                        </p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                            {renderRangePair("media_followers_min", "media_followers_max", "Followers from")}
+                            {renderRangePair("media_following_min", "media_following_max", "Following from")}
+                            {renderRangePair("media_posts_min", "media_posts_max", "Posts from")}
+                            {renderRangePair("media_age_days_min", "media_age_days_max", "Age in days from")}
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.media_verified ?? ""}
                             onChange={(event) => setGameFilter("media_verified", event.target.value)}
@@ -2902,16 +3516,18 @@ export function MarketSearch({
                             <option value="">Account type</option>
                             <option value="personal">Personal</option>
                             <option value="business">Business</option>
-                            <option value="creator">Creator</option>
-                          </select>
+                              <option value="creator">Creator</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "telegram" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Telegram Accounts</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Telegram Accounts</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.telegram_premium ?? ""}
                             onChange={(event) => setGameFilter("telegram_premium", event.target.value)}
@@ -2924,19 +3540,21 @@ export function MarketSearch({
                           {renderRangePair("telegram_dialogs_min", "telegram_dialogs_max", "Dialogs from")}
                           {renderRangePair("telegram_channels_min", "telegram_channels_max", "Channels from")}
                           {renderRangePair("telegram_groups_min", "telegram_groups_max", "Groups from")}
-                        </div>
-                        <div className="space-y-2">
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           {renderRangePair("telegram_sessions_min", "telegram_sessions_max", "Sessions from")}
                           {renderRangePair("telegram_stars_min", "telegram_stars_max", "Stars from")}
                           {renderRangePair("telegram_age_days_min", "telegram_age_days_max", "Age in days from")}
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "discord" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Discord Accounts</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Discord Accounts</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.discord_nitro ?? ""}
                             onChange={(event) => setGameFilter("discord_nitro", event.target.value)}
@@ -2949,8 +3567,8 @@ export function MarketSearch({
                           {renderRangePair("discord_friends_min", "discord_friends_max", "Friends from")}
                           {renderRangePair("discord_servers_min", "discord_servers_max", "Servers from")}
                           {renderRangePair("discord_age_days_min", "discord_age_days_max", "Age in days from")}
-                        </div>
-                        <div className="space-y-2">
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.discord_phone_verified ?? ""}
                             onChange={(event) =>
@@ -2974,14 +3592,16 @@ export function MarketSearch({
                             <option value="0">No</option>
                           </select>
                           {renderRangePair("discord_badges_min", "discord_badges_max", "Badges from")}
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "steam" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Steam Accounts</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Steam Accounts</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           {renderRangePair("steam_game_count_min", "steam_game_count_max", "Games from")}
                           {renderRangePair("steam_level_min", "steam_level_max", "Level from")}
                           {renderRangePair(
@@ -2990,8 +3610,8 @@ export function MarketSearch({
                             "Inventory value from"
                           )}
                           {renderRangePair("steam_hours_min", "steam_hours_max", "Hours from")}
-                        </div>
-                        <div className="space-y-2">
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <Input
                             value={gameFilters.steam_rank ?? ""}
                             onChange={(event) => setGameFilter("steam_rank", event.target.value)}
@@ -3021,14 +3641,16 @@ export function MarketSearch({
                             <option value="1">VAC clean</option>
                             <option value="0">Has VAC</option>
                           </select>
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "cs2" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Counter-Strike 2</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Counter-Strike 2</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.cs2_prime ?? ""}
                             onChange={(event) => setGameFilter("cs2_prime", event.target.value)}
@@ -3050,8 +3672,8 @@ export function MarketSearch({
                             "cs2_premier_rating_max",
                             "Premier rating from"
                           )}
-                        </div>
-                        <div className="space-y-2">
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           {renderRangePair("cs2_wins_min", "cs2_wins_max", "Wins from")}
                           {renderRangePair("cs2_hours_min", "cs2_hours_max", "Hours from")}
                           {renderRangePair(
@@ -3068,14 +3690,16 @@ export function MarketSearch({
                             <option value="1">VAC clean</option>
                             <option value="0">Has VAC</option>
                           </select>
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {selectedGame === "battlenet" && (
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold text-zinc-200">Battle.net Accounts</p>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-zinc-200">Battle.net Accounts</p>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <select
                             value={gameFilters.battlenet_region ?? ""}
                             onChange={(event) =>
@@ -3090,8 +3714,8 @@ export function MarketSearch({
                           </select>
                           {renderRangePair("battlenet_level_min", "battlenet_level_max", "Level from")}
                           {renderRangePair("battlenet_games_min", "battlenet_games_max", "Games from")}
-                        </div>
-                        <div className="space-y-2">
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                           <Input
                             value={gameFilters.battlenet_rank ?? ""}
                             onChange={(event) => setGameFilter("battlenet_rank", event.target.value)}
@@ -3108,6 +3732,7 @@ export function MarketSearch({
                             placeholder="Exclude region"
                             className="h-9"
                           />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -3122,10 +3747,11 @@ export function MarketSearch({
               </div>
             )}
           </div>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section data-tour="listings" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading && (
           <div className="glass-panel col-span-full rounded-2xl p-5 text-center md:p-6">
             <p className="text-base font-semibold text-white">Loading listings, please wait</p>
@@ -3347,6 +3973,142 @@ export function MarketSearch({
                 Apply
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {tourReady && tourOpen && (
+        <div className="pointer-events-none fixed inset-0 z-[70]">
+          {!spotlightFrame && <div className="absolute inset-0 bg-black/84 backdrop-blur-[2px]" />}
+          {spotlightFrame && (
+            <>
+              <div
+                className="absolute left-0 right-0 top-0 bg-black/84 backdrop-blur-[2px]"
+                style={{ height: `${Math.max(0, spotlightFrame.top)}px` }}
+              />
+              <div
+                className="absolute left-0 bg-black/84 backdrop-blur-[2px]"
+                style={{
+                  top: `${spotlightFrame.top}px`,
+                  width: `${Math.max(0, spotlightFrame.left)}px`,
+                  height: `${spotlightFrame.height}px`
+                }}
+              />
+              <div
+                className="absolute right-0 bg-black/84 backdrop-blur-[2px]"
+                style={{
+                  top: `${spotlightFrame.top}px`,
+                  left: `${spotlightFrame.left + spotlightFrame.width}px`,
+                  height: `${spotlightFrame.height}px`
+                }}
+              />
+              <div
+                className="absolute bottom-0 left-0 right-0 bg-black/84 backdrop-blur-[2px]"
+                style={{ top: `${spotlightFrame.top + spotlightFrame.height}px` }}
+              />
+              <div
+                className="pointer-events-none absolute rounded-2xl border-2 border-white/85 transition-all duration-300"
+                style={{
+                  top: `${spotlightFrame.top}px`,
+                  left: `${spotlightFrame.left}px`,
+                  width: `${spotlightFrame.width}px`,
+                  height: `${spotlightFrame.height}px`
+                }}
+              />
+              <div
+                className="pointer-events-none absolute rounded-2xl border border-sky-300/70 animate-pulse"
+                style={{
+                  top: `${spotlightFrame.top - 2}px`,
+                  left: `${spotlightFrame.left - 2}px`,
+                  width: `${spotlightFrame.width + 4}px`,
+                  height: `${spotlightFrame.height + 4}px`
+                }}
+              />
+            </>
+          )}
+          <div
+            ref={tourCardRef}
+            className="pointer-events-auto absolute rounded-2xl border border-white/25 bg-gradient-to-br from-zinc-900/95 via-zinc-950/95 to-slate-950/95 p-4 text-zinc-100 shadow-2xl sm:p-5"
+            style={tourCardStyle}
+          >
+            {tourStepId === "welcome" ? (
+              <>
+                <p className="text-lg font-semibold text-white">Welcome to AE Marketplace</p>
+                <p className="mt-2 text-sm text-zinc-300">
+                  Lets quickly show you how everything works.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <Button type="button" className="flex-1" onClick={nextTourStep}>
+                    Start Tour
+                  </Button>
+                  <Button type="button" variant="ghost" className="flex-1" onClick={completeTour}>
+                    Skip All
+                  </Button>
+                </div>
+              </>
+            ) : tourStepId === "done" ? (
+              <>
+                <p className="text-lg font-semibold text-white">Youre all set</p>
+                <p className="mt-2 text-sm text-zinc-300">
+                  Enjoy browsing and grab the best deals.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <Button type="button" className="flex-1" onClick={completeTour}>
+                    Done
+                  </Button>
+                  <Button type="button" variant="ghost" className="flex-1" onClick={startTour}>
+                    Restart Tour
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold uppercase tracking-[0.14em] text-sky-300">
+                    Step {Math.max(1, tourStepIndex)} / {Math.max(1, TOUR_STEPS.length - 1)}
+                  </p>
+                  <button
+                    type="button"
+                    className="rounded-md px-2 py-1 text-xs text-zinc-300 hover:bg-white/10 hover:text-white"
+                    onClick={completeTour}
+                  >
+                    Skip All
+                  </button>
+                </div>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {activeSpotlight?.title ?? "Tour Step"}
+                </p>
+                <p className="mt-1 text-sm text-zinc-300">
+                  {activeSpotlight?.message ?? "Youre all set. Enjoy browsing and grab the best deals."}
+                </p>
+                {tourBlockMessage && (
+                  <p className="mt-3 rounded-xl border border-amber-300/25 bg-amber-950/35 px-3 py-2 text-xs text-amber-100">
+                    {tourBlockMessage}
+                  </p>
+                )}
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={tourStepIndex <= 0}
+                    onClick={previousTourStep}
+                  >
+                    Back
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={skipCurrentTourStep}>
+                    Skip Step
+                  </Button>
+                  <Button
+                    type="button"
+                    className="col-span-2"
+                    disabled={!canAdvanceTourStep}
+                    onClick={nextTourStep}
+                  >
+                    {tourStepId === "support" ? "Finish Tour" : "Next"}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

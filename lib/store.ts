@@ -35,11 +35,14 @@ function resolveDefaultMarkupPercent() {
 }
 
 const DEFAULT_MARKUP_PERCENT = resolveDefaultMarkupPercent();
+const DEFAULT_SUPPORT_AUTO_REPLY =
+  "Thanks for contacting AE support. We received your ticket and will reply as soon as possible.";
 
 const defaultStore: StoreData = {
   users: [],
   orders: [],
   transactions: [],
+  supportTickets: [],
   searchStats: [],
   settings: {
     markupPercent: DEFAULT_MARKUP_PERCENT,
@@ -47,7 +50,8 @@ const defaultStore: StoreData = {
     homeSubtitle:
       "Premium digital account marketplace with secure balance payments and instant automated delivery.",
     announcementText: "",
-    announcementEnabled: false
+    announcementEnabled: false,
+    supportAutoReplyText: DEFAULT_SUPPORT_AUTO_REPLY
   }
 };
 
@@ -109,18 +113,25 @@ function normalizeStore(raw: unknown): StoreData {
     typeof data.settings?.announcementEnabled === "boolean"
       ? data.settings.announcementEnabled
       : defaultStore.settings.announcementEnabled;
+  const supportAutoReplyText =
+    typeof rawSettings?.supportAutoReplyText === "string" &&
+    rawSettings.supportAutoReplyText.trim()
+      ? rawSettings.supportAutoReplyText.trim().slice(0, 2000)
+      : defaultStore.settings.supportAutoReplyText;
 
   return {
     users: Array.isArray(data.users) ? data.users : [],
     orders: Array.isArray(data.orders) ? data.orders : [],
     transactions: Array.isArray(data.transactions) ? data.transactions : [],
+    supportTickets: Array.isArray(data.supportTickets) ? data.supportTickets : [],
     searchStats: Array.isArray(data.searchStats) ? data.searchStats : [],
     settings: {
       markupPercent: markup,
       homeTitle,
       homeSubtitle,
       announcementText,
-      announcementEnabled
+      announcementEnabled,
+      supportAutoReplyText
     }
   };
 }

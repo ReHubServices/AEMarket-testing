@@ -301,6 +301,11 @@ const SUPPLIER_FILTER_KEYS = [
   "siege_kd_max",
   "siege_winrate_min",
   "siege_winrate_max",
+  "siege_operators",
+  "siege_skins",
+  "siege_rank_min",
+  "siege_rank_max",
+  "siege_banned",
   "supercell_account_origin",
   "supercell_exclude_account_origin",
   "supercell_country",
@@ -322,6 +327,59 @@ const SUPPLIER_FILTER_KEYS = [
   "supercell_gems_max",
   "supercell_level_min",
   "supercell_level_max",
+  "roblox_account_origin",
+  "roblox_exclude_account_origin",
+  "roblox_country",
+  "roblox_exclude_country",
+  "roblox_email_domain",
+  "roblox_exclude_mail_domain",
+  "roblox_mail_provider",
+  "roblox_exclude_mail_provider",
+  "roblox_last_activity_days_max",
+  "roblox_not_sold_before",
+  "roblox_sold_before",
+  "roblox_not_sold_before_by_me",
+  "roblox_sold_before_by_me",
+  "roblox_level_min",
+  "roblox_level_max",
+  "roblox_robux_min",
+  "roblox_robux_max",
+  "roblox_friends_min",
+  "roblox_friends_max",
+  "roblox_followers_min",
+  "roblox_followers_max",
+  "roblox_registered_earlier",
+  "roblox_registered_unit",
+  "roblox_subscription_type",
+  "roblox_validity_for",
+  "roblox_validity_unit",
+  "roblox_transaction_robux_min",
+  "roblox_transaction_robux_max",
+  "roblox_gamepasses_min",
+  "roblox_gamepasses_max",
+  "roblox_inventory_value_min",
+  "roblox_inventory_value_max",
+  "roblox_limited_rap_min",
+  "roblox_limited_rap_max",
+  "roblox_ugc_rap_min",
+  "roblox_ugc_rap_max",
+  "roblox_offsale_items_min",
+  "roblox_offsale_items_max",
+  "roblox_credit_balance_min",
+  "roblox_credit_balance_max",
+  "roblox_age_days_min",
+  "roblox_age_days_max",
+  "roblox_age_group",
+  "roblox_exclude_age_group",
+  "roblox_email_verified",
+  "roblox_xbox_connected",
+  "roblox_psn_connected",
+  "roblox_only_verified",
+  "roblox_age_verified",
+  "roblox_auto_renewal_subscription",
+  "roblox_donation_popular_games",
+  "roblox_voice_chat",
+  "roblox_selected_game",
   "media_account_origin",
   "media_exclude_account_origin",
   "media_country",
@@ -503,6 +561,12 @@ function resolveScopeFallbackQuery(game: string, category: string) {
   if (normalized.includes("siege") || normalized.includes("rainbow")) {
     return "siege";
   }
+  if (normalized.includes("uplay") || normalized.includes("ubisoft") || normalized.includes("r6")) {
+    return "siege";
+  }
+  if (normalized.includes("roblox") || normalized.includes("robux") || normalized.includes("rbx")) {
+    return "roblox";
+  }
   if (normalized.includes("supercell")) {
     return "supercell";
   }
@@ -638,21 +702,9 @@ function applyImplicitQueryFallbacks(input: {
   category: string;
   supplierFilters: Record<string, string>;
 }) {
-  let query = input.query;
-  let usedScopeFallbackQuery = false;
-  const hasFortniteSelectors = hasActiveFortniteSelectorFilters(input.supplierFilters);
-
-  if (!query && !hasFortniteSelectors) {
-    const fallbackQuery = clampText(resolveScopeFallbackQuery(input.game, input.category), 180);
-    if (fallbackQuery) {
-      query = fallbackQuery;
-      usedScopeFallbackQuery = true;
-    }
-  }
-
   return {
-    query,
-    usedScopeFallbackQuery
+    query: input.query,
+    usedScopeFallbackQuery: false
   };
 }
 

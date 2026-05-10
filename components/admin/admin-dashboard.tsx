@@ -57,6 +57,9 @@ export function AdminDashboard({
   const [announcementEnabled, setAnnouncementEnabled] = useState(
     Boolean(settings.announcementEnabled)
   );
+  const [supportAutoReplyText, setSupportAutoReplyText] = useState(
+    settings.supportAutoReplyText ?? ""
+  );
   const [saving, setSaving] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -110,7 +113,8 @@ export function AdminDashboard({
           homeTitle,
           homeSubtitle,
           announcementText,
-          announcementEnabled
+          announcementEnabled,
+          supportAutoReplyText
         })
       });
       const payload = (await response.json()) as { error?: string };
@@ -347,6 +351,19 @@ export function AdminDashboard({
               className="h-4 w-4"
             />
             Show announcement on homepage
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-[0.14em] text-zinc-400">
+              Support Auto Reply
+            </span>
+            <textarea
+              value={supportAutoReplyText}
+              onChange={(event) => setSupportAutoReplyText(event.target.value)}
+              maxLength={2000}
+              rows={4}
+              placeholder="Default support auto-reply sent when a new ticket is opened"
+              className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+            />
           </label>
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <Button className="w-full md:w-auto" disabled={savingContent}>
