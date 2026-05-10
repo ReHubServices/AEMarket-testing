@@ -4384,6 +4384,7 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
+  const looseScopeGameTokens = new Set(["roblox"]);
   if (effectiveGameFilter && effectiveGameFilter !== "uplay") {
     const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
     if (scoped.length > 0) {
@@ -4393,6 +4394,9 @@ function applyLocalFilters(
       if (fallbackFortnite.length > 0) {
         output = fallbackFortnite;
       }
+    } else if (phase === "final" && looseScopeGameTokens.has(effectiveGameFilter)) {
+      // Some provider records in scoped Roblox endpoints do not include explicit "roblox" tokens.
+      // Keep scoped endpoint results instead of force-emptying this pass.
     } else if ((hasExplicitScope || Boolean(inferredQueryGameFilter)) && phase === "final") {
       output = [];
     }
@@ -4411,6 +4415,8 @@ function applyLocalFilters(
     const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
     if (scopedByCategory.length > 0) {
       output = scopedByCategory;
+    } else if (phase === "final" && looseScopeGameTokens.has(categoryFilter)) {
+      // Same as game-scope fallback: trust scoped endpoint results for Roblox.
     } else if (selectedCategoryFilter && phase === "final") {
       output = [];
     }

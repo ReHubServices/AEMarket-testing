@@ -121,7 +121,6 @@ type TourSpotlight = {
   selector: string;
   title: string;
   message: string;
-  requiresClick?: boolean;
 };
 
 const TOUR_STORAGE_KEY = "ae_market_tour_completed_v1";
@@ -142,8 +141,7 @@ const TOUR_STEPS: Array<{ id: TourStepId; spotlight?: TourSpotlight }> = [
     spotlight: {
       selector: "[data-tour='listings']",
       title: "Browse Listings",
-      message: "Browse available accounts here. Click any listing to view full details.",
-      requiresClick: true
+      message: "Browse available accounts here. Click anywhere in the highlighted area to continue."
     }
   },
   {
@@ -1540,6 +1538,16 @@ export function MarketSearch({
     if (!activeSpotlight) {
       return null;
     }
+    if (tourStepId === "listings") {
+      const loadingElement = document.querySelector("[data-tour='listings-loading']") as HTMLElement | null;
+      if (loadingElement) {
+        return loadingElement;
+      }
+      const firstCard = document.querySelector("[data-tour='listing-card-primary']") as HTMLElement | null;
+      if (firstCard) {
+        return firstCard;
+      }
+    }
     return document.querySelector(activeSpotlight.selector) as HTMLElement | null;
   }
 
@@ -1553,7 +1561,6 @@ export function MarketSearch({
       setTourSpotlightRect(null);
       return;
     }
-    element.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
     const rect = element.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) {
       setTourSpotlightRect(null);
@@ -1610,6 +1617,10 @@ export function MarketSearch({
       setTourSpotlightRect(null);
       return;
     }
+    const element = getSpotlightElement();
+    if (element) {
+      element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
+    }
     refreshTourSpotlightRect();
     const sync = () => refreshTourSpotlightRect();
     window.addEventListener("resize", sync);
@@ -1625,25 +1636,27 @@ export function MarketSearch({
       setTourBlockMessage(null);
       return;
     }
-    if (tourStepId === "listings" && activeListingId) {
-      setTourBlockMessage(null);
-      setTourStepId("details");
-      return;
-    }
-    if ((tourStepId === "details" || tourStepId === "checkout") && !activeListingId) {
-      setTourBlockMessage("Open any listing to continue this step.");
-    } else if (tourStepId === "listings" && activeSpotlight?.requiresClick && !activeListingId) {
-      setTourBlockMessage("Click any listing card to continue.");
-    } else {
-      setTourBlockMessage(null);
-    }
-  }, [tourOpen, tourStepId, activeListingId, activeSpotlight]);
+    setTourBlockMessage(null);
+  }, [tourOpen, tourStepId]);
 
   useEffect(() => {
     if (!tourOpen) {
       return;
     }
     const handler = (event: Event) => {
+      if (
+        tourStepId === "listings" &&
+        isTourEventAllowed(event.target) &&
+        !(event.target instanceof Node && tourCardRef.current?.contains(event.target))
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        if ("stopImmediatePropagation" in event) {
+          event.stopImmediatePropagation();
+        }
+        nextTourStep();
+        return;
+      }
       if (isTourEventAllowed(event.target)) {
         return;
       }
@@ -1659,7 +1672,7 @@ export function MarketSearch({
       document.removeEventListener("pointerdown", handler, true);
       document.removeEventListener("click", handler, true);
     };
-  }, [tourOpen, activeSpotlight, tourStepId]);
+  }, [tourOpen, activeSpotlight, tourStepId, tourStepIndex]);
 
   useEffect(() => {
     if (!fortniteSelectorOpen) {
@@ -2362,15 +2375,12 @@ export function MarketSearch({
     return scored;
   }, [query, selectedGame, listings, gameFilters, fortniteTypingSuggestions, remoteTitleSuggestions]);
   const showSuggestions = searchFocused && suggestions.length > 0;
-  const canAdvanceTourStep =
-    !tourOpen ||
-    (tourStepId === "listings" ? Boolean(activeListingId) : true) &&
-      (tourStepId === "details" || tourStepId === "checkout" ? Boolean(activeListingId) : true);
+  const canAdvanceTourStep = true;
   const spotlightFrame = useMemo(() => {
     if (!tourOpen || !tourSpotlightRect) {
       return null;
     }
-    const padding = 8;
+    const padding = 4;
     const top = Math.max(8, tourSpotlightRect.top - padding);
     const left = Math.max(8, tourSpotlightRect.left - padding);
     const width = Math.max(24, tourSpotlightRect.width + padding * 2);
@@ -3753,7 +3763,10 @@ export function MarketSearch({
 
       <section data-tour="listings" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading && (
-          <div className="glass-panel col-span-full rounded-2xl p-5 text-center md:p-6">
+          <div
+            data-tour="listings-loading"
+            className="glass-panel col-span-full rounded-2xl p-5 text-center md:p-6"
+          >
             <p className="text-base font-semibold text-white">Loading listings, please wait</p>
             <div className="mt-3 inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.3s]" />
@@ -3764,11 +3777,12 @@ export function MarketSearch({
         )}
 
         {!loading &&
-          listings.map((listing) => {
+          listings.map((listing, index) => {
             const rarityTone = inferRarityTone(listing);
             return (
               <button
                 key={listing.id}
+                data-tour={index === 0 ? "listing-card-primary" : undefined}
                 type="button"
                 onClick={() => setActiveListingId(listing.id)}
                 className={cn(
