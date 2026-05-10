@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { LinkifiedText } from "@/components/ui/linkified-text";
 import { MarketListing, PublicViewer } from "@/lib/types";
 import {
@@ -23,6 +24,8 @@ type ProductDetailModalProps = {
   viewer: PublicViewer | null;
   onClose: () => void;
   onBuy: (listingId: string) => void;
+  couponCode?: string;
+  onCouponCodeChange?: (value: string) => void;
   buying: boolean;
   purchaseError?: string | null;
   descriptionLoading?: boolean;
@@ -35,6 +38,8 @@ export function ProductDetailModal({
   viewer,
   onClose,
   onBuy,
+  couponCode = "",
+  onCouponCodeChange,
   buying,
   purchaseError = null,
   descriptionLoading = false,
@@ -285,6 +290,13 @@ export function ProductDetailModal({
 
             <div className="sticky bottom-0 -mx-4 border-t border-white/15 bg-black/65 p-4 backdrop-blur sm:-mx-6 sm:px-6 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-0">
               <div className="flex flex-col gap-2">
+                <Input
+                  value={couponCode}
+                  onChange={(event) => onCouponCodeChange?.(event.target.value.toUpperCase())}
+                  placeholder="Coupon code (optional)"
+                  maxLength={32}
+                  className="h-10"
+                />
                 {purchaseError && (
                   <p className="rounded-xl border border-red-300/25 bg-red-950/25 px-3 py-2 text-xs text-red-100">
                     {purchaseError}

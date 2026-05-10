@@ -1461,6 +1461,7 @@ export function MarketSearch({
   const [detailListing, setDetailListing] = useState<MarketListing | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [purchaseCouponCode, setPurchaseCouponCode] = useState("");
   const [fortniteSelectorOpen, setFortniteSelectorOpen] = useState<FortniteSelectorKey | null>(
     null
   );
@@ -2095,6 +2096,7 @@ export function MarketSearch({
     if (buying) {
       return;
     }
+    setError(null);
     setPendingPurchaseListingId(listingId);
   }
 
@@ -2103,16 +2105,6 @@ export function MarketSearch({
       setPendingPurchaseListingId(null);
       return;
     }
-    const targetListing =
-      (modalListing && modalListing.id === pendingPurchaseListingId ? modalListing : null) ??
-      listings.find((listing) => listing.id === pendingPurchaseListingId) ??
-      null;
-    if (targetListing && viewer.balance < targetListing.price) {
-      setError("Insufficient balance. Add funds to continue.");
-      setPendingPurchaseListingId(null);
-      return;
-    }
-
     setBuying(true);
     setError(null);
     try {
@@ -2122,7 +2114,8 @@ export function MarketSearch({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          listingId: pendingPurchaseListingId
+          listingId: pendingPurchaseListingId,
+          couponCode: purchaseCouponCode.trim() || null
         })
       });
 
@@ -4152,6 +4145,8 @@ export function MarketSearch({
         viewer={viewer}
         onClose={() => setActiveListingId(null)}
         onBuy={requestBuy}
+        couponCode={purchaseCouponCode}
+        onCouponCodeChange={setPurchaseCouponCode}
         buying={buying}
         purchaseError={error}
         descriptionLoading={detailLoading}

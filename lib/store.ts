@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { neon } from "@neondatabase/serverless";
-import { StoreData } from "@/lib/types";
+import { CouponRecord, StoreData } from "@/lib/types";
 
 function resolveStoreDir() {
   const configured = process.env.STORE_DIR?.trim();
@@ -43,6 +43,7 @@ const defaultStore: StoreData = {
   orders: [],
   transactions: [],
   supportTickets: [],
+  coupons: [],
   searchStats: [],
   settings: {
     markupPercent: DEFAULT_MARKUP_PERCENT,
@@ -54,6 +55,48 @@ const defaultStore: StoreData = {
     supportAutoReplyText: DEFAULT_SUPPORT_AUTO_REPLY
   }
 };
+
+function normalizeCouponRecords(raw: unknown): CouponRecord[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const source = entry as Partial<CouponRecord>;
+      const code = typeof source.code === "string" ? source.code.trim().toUpperCase() : "";
+      const discountPercent = Number(source.discountPercent);
+      if (!code || !Number.isFinite(discountPercent) || discountPercent <= 0 || discountPercent > 95) {
+        return null;
+      }
+      const usageLimitRaw =
+        source.usageLimit === null || source.usageLimit === undefined ? null : Number(source.usageLimit);
+      const usageLimit =
+        usageLimitRaw === null || !Number.isFinite(usageLimitRaw) || usageLimitRaw <= 0
+          ? null
+          : Math.floor(usageLimitRaw);
+      const usedCountRaw = Number(source.usedCount);
+      const usedCount =
+        Number.isFinite(usedCountRaw) && usedCountRaw > 0 ? Math.floor(usedCountRaw) : 0;
+      const expiresAt =
+        typeof source.expiresAt === "string" && source.expiresAt.trim() ? source.expiresAt : null;
+      const now = new Date().toISOString();
+      return {
+        id: typeof source.id === "string" && source.id.trim() ? source.id : `cpn_${code.toLowerCase()}`,
+        code,
+        discountPercent: Math.min(95, Math.max(1, discountPercent)),
+        isActive: source.isActive !== false,
+        usageLimit,
+        usedCount,
+        expiresAt,
+        createdAt: typeof source.createdAt === "string" && source.createdAt ? source.createdAt : now,
+        updatedAt: typeof source.updatedAt === "string" && source.updatedAt ? source.updatedAt : now
+      } satisfies CouponRecord;
+    })
+    .filter((entry): entry is CouponRecord => Boolean(entry));
+}
 
 let queue: Promise<unknown> = Promise.resolve();
 let sqlClient: ReturnType<typeof neon> | null = null;
@@ -124,6 +167,7 @@ function normalizeStore(raw: unknown): StoreData {
     orders: Array.isArray(data.orders) ? data.orders : [],
     transactions: Array.isArray(data.transactions) ? data.transactions : [],
     supportTickets: Array.isArray(data.supportTickets) ? data.supportTickets : [],
+    coupons: normalizeCouponRecords((data as { coupons?: unknown }).coupons),
     searchStats: Array.isArray(data.searchStats) ? data.searchStats : [],
     settings: {
       markupPercent: markup,

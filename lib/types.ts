@@ -52,12 +52,26 @@ export type OrderRecord = {
   category: string;
   basePrice: number;
   finalPrice: number;
+  couponCode?: string | null;
+  couponDiscountAmount?: number | null;
   currency: string;
   status: OrderStatus;
   transactionId: string;
   supplierOrderId: string | null;
   delivery: DeliveryPayload | null;
   failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CouponRecord = {
+  id: string;
+  code: string;
+  discountPercent: number;
+  isActive: boolean;
+  usageLimit: number | null;
+  usedCount: number;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -124,6 +138,7 @@ export type StoreData = {
   orders: OrderRecord[];
   transactions: TransactionRecord[];
   supportTickets: SupportTicketRecord[];
+  coupons: CouponRecord[];
   settings: AppSettings;
   searchStats: SearchStatRecord[];
 };

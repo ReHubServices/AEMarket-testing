@@ -16,7 +16,18 @@ type PaymentReservation =
       orderId: string;
     };
 
-export async function createOrderFromBalance(input: { userId: string; listingId: string }) {
+function normalizeCouponCode(raw: unknown) {
+  if (typeof raw !== "string") {
+    return "";
+  }
+  return raw.trim().toUpperCase();
+}
+
+export async function createOrderFromBalance(input: {
+  userId: string;
+  listingId: string;
+  couponCode?: string | null;
+}) {
   const listing = await getListingById(input.listingId);
   if (!listing) {
     throw new Error("Listing not found");
@@ -25,17 +36,47 @@ export async function createOrderFromBalance(input: { userId: string; listingId:
   const now = new Date().toISOString();
   const orderId = createId("ord");
   const transactionId = createId("txn");
+  const normalizedCouponCode = normalizeCouponCode(input.couponCode);
 
   return updateStore((store) => {
     const user = store.users.find((item) => item.id === input.userId);
     if (!user) {
       throw new Error("User not found");
     }
-    if (user.balance < listing.price) {
+    let couponCode: string | null = null;
+    let couponDiscountAmount = 0;
+    let finalPrice = listing.price;
+
+    if (normalizedCouponCode) {
+      const coupon = store.coupons.find(
+        (item) => item.code === normalizedCouponCode && item.isActive
+      );
+      if (!coupon) {
+        throw new Error("INVALID_COUPON");
+      }
+      if (coupon.expiresAt) {
+        const expiresAtMs = Date.parse(coupon.expiresAt);
+        if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+          throw new Error("COUPON_EXPIRED");
+        }
+      }
+      if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+        throw new Error("COUPON_LIMIT_REACHED");
+      }
+
+      const rawDiscount = normalizeMoney((listing.price * coupon.discountPercent) / 100);
+      couponDiscountAmount = Math.min(listing.price, Math.max(0, rawDiscount));
+      finalPrice = normalizeMoney(Math.max(0.01, listing.price - couponDiscountAmount));
+      couponCode = coupon.code;
+      coupon.usedCount += 1;
+      coupon.updatedAt = now;
+    }
+
+    if (user.balance < finalPrice) {
       throw new Error("INSUFFICIENT_BALANCE");
     }
 
-    user.balance = normalizeMoney(user.balance - listing.price);
+    user.balance = normalizeMoney(user.balance - finalPrice);
 
     const order: OrderRecord = {
       id: orderId,
@@ -46,7 +87,9 @@ export async function createOrderFromBalance(input: { userId: string; listingId:
       game: listing.game,
       category: listing.category,
       basePrice: listing.basePrice,
-      finalPrice: listing.price,
+      finalPrice,
+      couponCode,
+      couponDiscountAmount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
       currency: listing.currency,
       status: "processing",
       transactionId,
@@ -63,11 +106,14 @@ export async function createOrderFromBalance(input: { userId: string; listingId:
       orderId: order.id,
       type: "purchase_debit",
       status: "completed",
-      amount: listing.price,
+      amount: finalPrice,
       currency: listing.currency,
       providerPaymentId: null,
       checkoutUrl: null,
-      details: "Balance deducted for account purchase",
+      details:
+        couponCode && couponDiscountAmount > 0
+          ? `Balance deducted for account purchase (coupon ${couponCode}, -${couponDiscountAmount.toFixed(2)})`
+          : "Balance deducted for account purchase",
       createdAt: now,
       updatedAt: now
     };
@@ -453,9 +499,17 @@ export async function getAdminOverview() {
       volume: normalizeMoney(totalVolume)
     },
     settings: store.settings,
+    coupons: store.coupons
+      .slice()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     users: store.users
       .slice()
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => {
+        if (b.balance !== a.balance) {
+          return b.balance - a.balance;
+        }
+        return b.createdAt.localeCompare(a.createdAt);
+      })
       .slice(0, 100),
     orders: store.orders
       .slice()

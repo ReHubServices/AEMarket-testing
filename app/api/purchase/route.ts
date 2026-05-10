@@ -28,8 +28,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as { listingId?: string };
+    const body = (await request.json()) as { listingId?: string; couponCode?: string };
     const listingId = body.listingId?.trim();
+    const couponCode = typeof body.couponCode === "string" ? body.couponCode.trim() : "";
 
     if (!listingId) {
       return fail("Listing ID is required", 400);
@@ -37,7 +38,8 @@ export async function POST(request: NextRequest) {
 
     const reserved = await createOrderFromBalance({
       userId: viewer.id,
-      listingId
+      listingId,
+      couponCode: couponCode || null
     });
 
     try {
@@ -79,6 +81,15 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Purchase initialization failed";
     if (message === "INSUFFICIENT_BALANCE") {
       return fail("Insufficient balance. Add funds to continue.", 400);
+    }
+    if (message === "INVALID_COUPON") {
+      return fail("Coupon code is invalid.", 400);
+    }
+    if (message === "COUPON_EXPIRED") {
+      return fail("Coupon has expired.", 400);
+    }
+    if (message === "COUPON_LIMIT_REACHED") {
+      return fail("Coupon usage limit reached.", 400);
     }
     if (message === "Listing not found") {
       return fail("Listing not found", 404);

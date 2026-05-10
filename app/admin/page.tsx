@@ -18,6 +18,7 @@ export default async function AdminPage() {
     <AdminDashboard
       stats={data.stats}
       settings={data.settings}
+      coupons={data.coupons}
       users={data.users}
       orders={data.orders}
       transactions={data.transactions}

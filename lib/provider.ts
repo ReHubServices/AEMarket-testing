@@ -5961,7 +5961,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? hasFortniteSelectorFilters
         ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
         : hasAscendingPriceSort
-          ? Math.min(3600, Math.max(targetEnd + pageSize * 140, 1500))
+          ? Math.min(6400, Math.max(targetEnd + pageSize * 220, 2600))
           : hasTextQuery
             ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
             : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
@@ -5986,7 +5986,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     let logicalCursor = 1;
     const maxLogicalPages = requiresDeepCandidateScan
       ? hasLocalPriceFilter || hasAscendingPriceSort
-        ? Math.max(page + 20, PRICE_FILTER_MAX_LOGICAL_PAGES)
+        ? Math.max(page + 40, PRICE_FILTER_MAX_LOGICAL_PAGES)
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
           : hasFortniteSelectorOnlyFilters
@@ -6088,7 +6088,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const finalPassPoolSize = hasFortniteSelectorFilters
       ? Math.min(12000, Math.max(targetEnd + pageSize * 260, 5000))
       : hasAscendingPriceSort
-        ? Math.min(4200, Math.max(targetEnd + pageSize * 180, 2000))
+        ? Math.min(7600, Math.max(targetEnd + pageSize * 260, 3200))
       : needsDeepFilterFinalPass
         ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
         : Math.max(targetEnd + 1, pageSize + 1);
@@ -6096,7 +6096,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const detailEnrichmentLimit = hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 6000)
       : hasAscendingPriceSort
-        ? Math.min(finalPassPool.length, 260)
+        ? Math.min(finalPassPool.length, 800)
       : needsDeepFilterFinalPass
         ? Math.min(finalPassPool.length, 140)
         : 24;

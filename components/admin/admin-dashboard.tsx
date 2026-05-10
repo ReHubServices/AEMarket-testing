@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Input } from "@/components/ui/input";
-import { AppSettings, OrderRecord, TransactionRecord, UserRecord } from "@/lib/types";
+import { AppSettings, CouponRecord, OrderRecord, TransactionRecord, UserRecord } from "@/lib/types";
 
 type AdminDashboardProps = {
   stats: {
@@ -15,6 +15,7 @@ type AdminDashboardProps = {
     volume: number;
   };
   settings: AppSettings;
+  coupons: CouponRecord[];
   users: UserRecord[];
   orders: OrderRecord[];
   transactions: TransactionRecord[];
@@ -56,6 +57,7 @@ function formatDateTime(value: string) {
 export function AdminDashboard({
   stats,
   settings,
+  coupons,
   users,
   orders,
   transactions
@@ -82,6 +84,11 @@ export function AdminDashboard({
   const [userQuery, setUserQuery] = useState("");
   const [orderQuery, setOrderQuery] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [couponPercentInput, setCouponPercentInput] = useState("10");
+  const [couponLimitInput, setCouponLimitInput] = useState("");
+  const [couponExpiryInput, setCouponExpiryInput] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
 
   async function onSaveMarkup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -203,6 +210,66 @@ export function AdminDashboard({
       const message = fundError instanceof Error ? fundError.message : "Unable to add funds";
       setStatus(message);
       setFundingKey(null);
+    }
+  }
+
+  async function createCoupon(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCouponBusy(true);
+    setStatus(null);
+    try {
+      const response = await fetch("/api/admin/coupons", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          code: couponCodeInput,
+          discountPercent: Number(couponPercentInput),
+          usageLimit: couponLimitInput.trim() ? Number(couponLimitInput) : null,
+          expiresAt: couponExpiryInput.trim() || null
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to create coupon");
+      }
+      setCouponCodeInput("");
+      setCouponPercentInput("10");
+      setCouponLimitInput("");
+      setCouponExpiryInput("");
+      setStatus("Coupon created");
+      router.refresh();
+    } catch (couponError) {
+      const message = couponError instanceof Error ? couponError.message : "Unable to create coupon";
+      setStatus(message);
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  async function deleteCoupon(couponId: string) {
+    setCouponBusy(true);
+    setStatus(null);
+    try {
+      const response = await fetch("/api/admin/coupons", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ id: couponId })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to delete coupon");
+      }
+      setStatus("Coupon deleted");
+      router.refresh();
+    } catch (couponError) {
+      const message = couponError instanceof Error ? couponError.message : "Unable to delete coupon";
+      setStatus(message);
+    } finally {
+      setCouponBusy(false);
     }
   }
 
@@ -347,6 +414,85 @@ export function AdminDashboard({
 
       <section className="glass-panel rounded-3xl p-5 md:p-6">
         <h2 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
+          Coupons
+        </h2>
+        <form onSubmit={createCoupon} className="mt-4 grid gap-2 md:grid-cols-5">
+          <Input
+            value={couponCodeInput}
+            onChange={(event) => setCouponCodeInput(event.target.value.toUpperCase())}
+            placeholder="Code (e.g. SAVE10)"
+            className="h-9"
+            maxLength={32}
+          />
+          <Input
+            type="number"
+            min={1}
+            max={95}
+            value={couponPercentInput}
+            onChange={(event) => setCouponPercentInput(event.target.value)}
+            placeholder="% off"
+            className="h-9"
+          />
+          <Input
+            type="number"
+            min={1}
+            value={couponLimitInput}
+            onChange={(event) => setCouponLimitInput(event.target.value)}
+            placeholder="Usage limit (optional)"
+            className="h-9"
+          />
+          <Input
+            type="datetime-local"
+            value={couponExpiryInput}
+            onChange={(event) => setCouponExpiryInput(event.target.value)}
+            className="h-9"
+          />
+          <Button type="submit" className="h-9" disabled={couponBusy}>
+            {couponBusy ? "Saving..." : "Add Coupon"}
+          </Button>
+        </form>
+        <div className="mt-4 max-h-[220px] space-y-2 overflow-auto pr-1">
+          {coupons.map((coupon) => (
+            <div
+              key={coupon.id}
+              className="flex flex-col gap-2 rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm md:flex-row md:items-center md:justify-between"
+            >
+              <div className="text-zinc-200">
+                <p className="font-medium text-white">
+                  {coupon.code} - {coupon.discountPercent}% off
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Used {coupon.usedCount}
+                  {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""} |{" "}
+                  {coupon.expiresAt ? `Expires ${formatDateTime(coupon.expiresAt)}` : "No expiry"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-300">
+                  {coupon.isActive ? "Active" : "Disabled"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 border border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                  disabled={couponBusy}
+                  onClick={() => deleteCoupon(coupon.id)}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))}
+          {coupons.length === 0 && (
+            <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-4 text-sm text-zinc-300">
+              No coupons yet.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="glass-panel rounded-3xl p-5 md:p-6">
+        <h2 className="font-[var(--font-space-grotesk)] text-xl font-semibold text-white">
           Homepage Content
         </h2>
         <form onSubmit={onSaveContent} className="mt-4 space-y-3">
@@ -438,6 +584,7 @@ export function AdminDashboard({
                   <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                     <div>
                       <p className="font-medium text-white">{user.username}</p>
+                      <p className="break-all text-xs text-zinc-400">{user.id}</p>
                       <p className="text-zinc-400">{user.isAdmin ? "Admin" : "User"}</p>
                       <p className="text-zinc-300">{formatPrice(user.balance, "USD")}</p>
                     </div>
