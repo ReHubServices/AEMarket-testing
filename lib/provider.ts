@@ -4414,8 +4414,8 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  // Keep category scoping strict to avoid cross-category leakage (e.g. Apex in Roblox view).
-  const looseScopeGameTokens = new Set<string>();
+  // Roblox records are often sparse/mislabeled; allow scoped fallback but trim obvious leaks later.
+  const looseScopeGameTokens = new Set(["roblox"]);
   if (effectiveGameFilter && effectiveGameFilter !== "uplay") {
     const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
     if (scoped.length > 0) {
@@ -4450,6 +4450,39 @@ function applyLocalFilters(
       // Same as game-scope fallback: trust scoped endpoint results for Roblox.
     } else if (selectedCategoryFilter && phase === "final") {
       output = [];
+    }
+  }
+  const hasRobloxExclusionSignal = (item: MarketListing) => {
+    const haystack = itemScopeHaystack(item);
+    const exclusionTokens = [
+      "apex",
+      "ea account",
+      "fifa",
+      "fortnite",
+      "valorant",
+      "riot client",
+      "counter strike",
+      "cs2",
+      "steam",
+      "rainbow",
+      "siege",
+      "uplay",
+      "telegram",
+      "discord",
+      "battle net",
+      "battlenet",
+      "blizzard",
+      "supercell",
+      "brawl stars",
+      "clash royale",
+      "clash of clans"
+    ].map((token) => normalizeText(token));
+    return exclusionTokens.some((token) => token && haystack.includes(token));
+  };
+  if (effectiveGameFilter === "roblox" || categoryFilter === "roblox") {
+    const withoutObviousLeaks = output.filter((item) => !hasRobloxExclusionSignal(item));
+    if (withoutObviousLeaks.length > 0) {
+      output = withoutObviousLeaks;
     }
   }
   if (hasKeywordQuery) {
