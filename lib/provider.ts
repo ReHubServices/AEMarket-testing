@@ -4500,15 +4500,6 @@ function applyLocalFilters(
       output = platformScoped;
     }
   }
-  if (Number.isFinite(mediaFollowersMin) && mediaFollowersMin > 0) {
-    output = output.filter((item) => {
-      const followers = extractFollowers(item);
-      if (!Number.isFinite(followers) || followers <= 0) {
-        return phase === "pre";
-      }
-      return followers >= mediaFollowersMin;
-    });
-  }
   applyIncludeTokens(fortniteAccountOrigin);
   applyExcludeTokens(fortniteExcludeAccountOrigin);
   applyIncludeTokens(fortniteAccountLogin);
