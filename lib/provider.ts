@@ -4363,10 +4363,8 @@ function applyLocalFilters(
 
     const filtered = output.filter((_, index) => {
       const value = values[index] ?? 0;
-      // Keep unknown metrics so media filters do not collapse results to empty
-      // when supplier metadata is sparse.
       if (value <= 0) {
-        return true;
+        return phase === "pre";
       }
       if (hasMin && value < min) {
         return false;
@@ -4376,9 +4374,6 @@ function applyLocalFilters(
       }
       return true;
     });
-    if (phase === "final" && filtered.length === 0) {
-      return;
-    }
     output = filtered;
   };
   const applyPrefixCommonFilters = (prefix: string) => {
@@ -4508,9 +4503,8 @@ function applyLocalFilters(
   if (Number.isFinite(mediaFollowersMin) && mediaFollowersMin > 0) {
     output = output.filter((item) => {
       const followers = extractFollowers(item);
-      // Keep listings with unknown follower count instead of dropping everything.
       if (!Number.isFinite(followers) || followers <= 0) {
-        return true;
+        return phase === "pre";
       }
       return followers >= mediaFollowersMin;
     });
