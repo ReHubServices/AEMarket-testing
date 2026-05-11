@@ -4419,7 +4419,8 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
-  const looseScopeGameTokens = new Set(["roblox"]);
+  // Keep category scoping strict to avoid cross-category leakage (e.g. Apex in Roblox view).
+  const looseScopeGameTokens = new Set<string>();
   if (effectiveGameFilter && effectiveGameFilter !== "uplay") {
     const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
     if (scoped.length > 0) {
