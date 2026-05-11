@@ -3535,31 +3535,170 @@ export function MarketSearch({
                     {selectedGame === "supercell" && (
                       <div className="space-y-2">
                         <p className="text-sm font-semibold text-zinc-200">Supercell Accounts</p>
-                        <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="grid gap-3 lg:grid-cols-3">
                           <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-                          <Input
-                            value={gameFilters.supercell_game ?? ""}
-                            onChange={(event) => setGameFilter("supercell_game", event.target.value)}
-                            placeholder="Game (Brawl Stars / Clash of Clans / Clash Royale)"
-                            className="h-9"
-                          />
-                          <Input
-                            value={gameFilters.supercell_exclude_game ?? ""}
-                            onChange={(event) =>
-                              setGameFilter("supercell_exclude_game", event.target.value)
-                            }
-                            placeholder="Exclude game"
-                            className="h-9"
-                          />
-                          {renderRangePair(
-                            "supercell_trophies_min",
-                            "supercell_trophies_max",
-                            "Trophies from"
-                          )}
-                          {renderRangePair("supercell_gems_min", "supercell_gems_max", "Gems from")}
+                            <Input
+                              value={gameFilters.supercell_account_origin ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_account_origin", event.target.value)
+                              }
+                              placeholder="Account origin"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_exclude_account_origin ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_exclude_account_origin", event.target.value)
+                              }
+                              placeholder="Exclude account origin"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_email_domain ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_email_domain", event.target.value)
+                              }
+                              placeholder="Email domain"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_exclude_mail_domain ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_exclude_mail_domain", event.target.value)
+                              }
+                              placeholder="Exclude mail domain"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_mail_provider ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_mail_provider", event.target.value)
+                              }
+                              placeholder="Mail provider"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_exclude_mail_provider ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_exclude_mail_provider", event.target.value)
+                              }
+                              placeholder="Exclude mail provider"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_game ?? ""}
+                              onChange={(event) => setGameFilter("supercell_game", event.target.value)}
+                              placeholder="Game (Brawl Stars / Clash of Clans / Clash Royale)"
+                              className="h-9"
+                            />
+                            <Input
+                              value={gameFilters.supercell_exclude_game ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_exclude_game", event.target.value)
+                              }
+                              placeholder="Exclude game"
+                              className="h-9"
+                            />
+                            {renderRangePair(
+                              "supercell_trophies_min",
+                              "supercell_trophies_max",
+                              "Trophies from"
+                            )}
+                            {renderRangePair("supercell_gems_min", "supercell_gems_max", "Gems from")}
+                            {renderRangePair("supercell_level_min", "supercell_level_max", "Level from")}
+                            <Input
+                              value={gameFilters.supercell_last_activity_days_max ?? ""}
+                              onChange={(event) =>
+                                setGameFilter("supercell_last_activity_days_max", event.target.value)
+                              }
+                              placeholder="Last activity in days (max)"
+                              className="h-9"
+                            />
                           </div>
                           <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-                          {renderRangePair("supercell_level_min", "supercell_level_max", "Level from")}
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                              Brawl Stars
+                            </p>
+                            {renderRangePair("supercell_brawl_brawlers_min", "supercell_brawl_brawlers_max", "Brawlers from")}
+                            {renderRangePair("supercell_brawl_skins_min", "supercell_brawl_skins_max", "Skins from")}
+                            {renderRangePair("supercell_brawl_wins_min", "supercell_brawl_wins_max", "Wins from")}
+                            {renderRangePair(
+                              "supercell_brawl_legendary_brawlers_min",
+                              "supercell_brawl_legendary_brawlers_max",
+                              "Legendary brawlers from"
+                            )}
+                            {renderRangePair(
+                              "supercell_brawl_hypercharges_min",
+                              "supercell_brawl_hypercharges_max",
+                              "Hypercharges from"
+                            )}
+                            {renderRangePair(
+                              "supercell_brawl_highest_trophies_min",
+                              "supercell_brawl_highest_trophies_max",
+                              "Highest trophies from"
+                            )}
+                            {renderTriStateFilter("Brawl Pass", "supercell_brawl_pass")}
+                            <p className="pt-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                              Clash Royale
+                            </p>
+                            {renderRangePair("supercell_cr_crown_level_min", "supercell_cr_crown_level_max", "Crown level from")}
+                            {renderRangePair("supercell_cr_evolved_cards_min", "supercell_cr_evolved_cards_max", "Evolved cards from")}
+                            {renderRangePair("supercell_cr_champions_min", "supercell_cr_champions_max", "Champions from")}
+                            {renderRangePair(
+                              "supercell_cr_league_trophies_min",
+                              "supercell_cr_league_trophies_max",
+                              "League trophies from"
+                            )}
+                            {renderRangePair(
+                              "supercell_cr_league_number_min",
+                              "supercell_cr_league_number_max",
+                              "League number from"
+                            )}
+                            {renderTriStateFilter("Royale Pass", "supercell_cr_royale_pass")}
+                          </div>
+                          <div className="h-full space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                              Clash of Clans
+                            </p>
+                            {renderRangePair("supercell_coc_cup_count_min", "supercell_coc_cup_count_max", "Cup count from")}
+                            {renderRangePair("supercell_coc_wins_min", "supercell_coc_wins_max", "Wins from")}
+                            {renderRangePair("supercell_coc_town_hall_min", "supercell_coc_town_hall_max", "Town Hall from")}
+                            {renderRangePair(
+                              "supercell_coc_total_hero_level_min",
+                              "supercell_coc_total_hero_level_max",
+                              "Total hero level from"
+                            )}
+                            {renderRangePair(
+                              "supercell_coc_total_troops_level_min",
+                              "supercell_coc_total_troops_level_max",
+                              "Total troops level from"
+                            )}
+                            {renderRangePair(
+                              "supercell_coc_total_spell_level_min",
+                              "supercell_coc_total_spell_level_max",
+                              "Total spell level from"
+                            )}
+                            {renderRangePair(
+                              "supercell_coc_total_heroes_builder_min",
+                              "supercell_coc_total_heroes_builder_max",
+                              "Builder village heroes from"
+                            )}
+                            {renderRangePair(
+                              "supercell_coc_total_troops_builder_min",
+                              "supercell_coc_total_troops_builder_max",
+                              "Builder village troops from"
+                            )}
+                            {renderRangePair(
+                              "supercell_coc_builder_hall_cups_min",
+                              "supercell_coc_builder_hall_cups_max",
+                              "Builder hall cup count from"
+                            )}
+                            {renderRangePair(
+                              "supercell_coc_builder_hall_min",
+                              "supercell_coc_builder_hall_max",
+                              "Builder Hall from"
+                            )}
+                            {renderTriStateFilter("Gold Pass", "supercell_coc_gold_pass")}
                           </div>
                         </div>
                       </div>
@@ -3583,7 +3722,7 @@ export function MarketSearch({
                             onChange={(event) => setGameFilter("media_verified", event.target.value)}
                             className="h-9 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-white focus-visible:outline-none focus-visible:shadow-focus"
                           >
-                            <option value="">Verified</option>
+                            <option value="">No matter</option>
                             <option value="1">Only verified</option>
                             <option value="0">Not verified</option>
                           </select>

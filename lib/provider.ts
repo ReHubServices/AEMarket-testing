@@ -3345,6 +3345,7 @@ function applyLocalFilters(
     if (!normalizedTerm) {
       return false;
     }
+    const compactTerm = normalizedTerm.replace(/\s+/g, "");
     const selectorHints: Record<FortniteSelectorKey, string[]> = {
       fortnite_outfits: ["outfit", "outfits", "skin", "skins", "character", "hero"],
       fortnite_pickaxes: ["pickaxe", "pickaxes", "axe", "axes", "harvesting"],
@@ -3359,24 +3360,42 @@ function applyLocalFilters(
     };
 
     const candidates: string[] = [];
-    const termTokens = normalizedTerm.split(" ").filter((token) => token.length >= 2);
-    const compactTerm = normalizedTerm.replace(/\s+/g, "");
-    const matchesWordTokenLoosely = (word: string, token: string) => {
-      if (word === token || word.startsWith(token) || token.startsWith(word)) {
+    const splitCandidateParts = (value: string) =>
+      value
+        .replace(/\[[^\]]+]/g, " ")
+        .replace(/\([^)]*\)/g, " ")
+        .split(/(?:\s*\|\s*|,\s*|;\s*|\/\s*|\n+)+/g)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+    const matchesExactCandidate = (source: string) => {
+      const normalizedSource = normalizeText(source);
+      if (!normalizedSource) {
+        return false;
+      }
+      if (normalizedSource === normalizedTerm) {
         return true;
       }
-      if (token.length >= 3 && token.length <= 4 && word.endsWith(token)) {
+      const compactSource = normalizedSource.replace(/\s+/g, "");
+      if (compactTerm.length >= 3 && compactSource === compactTerm) {
         return true;
       }
-      if (token.length >= 6) {
-        const prefixLength = token.length >= 8 ? 5 : 4;
-        const prefix = token.slice(0, prefixLength);
-        if (word.startsWith(prefix)) {
+      for (const part of splitCandidateParts(source)) {
+        const normalizedPart = normalizeText(part);
+        if (!normalizedPart) {
+          continue;
+        }
+        if (normalizedPart === normalizedTerm) {
+          return true;
+        }
+        const compactPart = normalizedPart.replace(/\s+/g, "");
+        if (compactTerm.length >= 3 && compactPart === compactTerm) {
           return true;
         }
       }
       return false;
     };
+
     for (const spec of item.specs) {
       const label = normalizeText(spec.label);
       const value = normalizeText(spec.value);
@@ -3396,35 +3415,16 @@ function applyLocalFilters(
     for (const match of item.description.matchAll(descriptionPatterns[selectorKey])) {
       candidates.push(match[1] ?? "");
     }
-    candidates.push(item.title);
-    candidates.push(item.description);
     if (candidates.length === 0) {
       return false;
     }
 
     for (const source of candidates) {
-      const normalizedSource = normalizeText(source);
-      if (!normalizedSource) {
-        continue;
-      }
-      if (normalizedSource.includes(normalizedTerm)) {
+      if (matchesExactCandidate(source)) {
         return true;
-      }
-      const compactSource = normalizedSource.replace(/\s+/g, "");
-      if (compactTerm.length >= 5 && compactSource.includes(compactTerm)) {
-        return true;
-      }
-      if (termTokens.length > 0) {
-        const sourceWords = normalizedSource.split(" ").filter(Boolean);
-        const tokenMatched = termTokens.every((token) =>
-          sourceWords.some((word) => matchesWordTokenLoosely(word, token))
-        );
-        if (tokenMatched) {
-          return true;
-        }
       }
     }
-    return matchesStrictPhrase(item, term);
+    return false;
   };
 
   const hasFortniteSignal = (item: MarketListing) => {
@@ -4346,6 +4346,41 @@ function applyLocalFilters(
   const applyRangeByKeys = (minKey: string, maxKey: string, aliases: string[]) => {
     applyMetricRange(aliases, getNumberFilter(minKey), getNumberFilter(maxKey));
   };
+  const applySoftMediaRangeByKeys = (minKey: string, maxKey: string, aliases: string[]) => {
+    const min = getNumberFilter(minKey);
+    const max = getNumberFilter(maxKey);
+    const hasMin = Number.isFinite(min) && min > 0;
+    const hasMax = Number.isFinite(max) && max > 0;
+    if (!hasMin && !hasMax) {
+      return;
+    }
+
+    const values = output.map((item) => extractMetricValue(item, aliases));
+    const parsableCount = values.filter((value) => value > 0).length;
+    if (phase === "final" && parsableCount === 0) {
+      return;
+    }
+
+    const filtered = output.filter((_, index) => {
+      const value = values[index] ?? 0;
+      // Keep unknown metrics so media filters do not collapse results to empty
+      // when supplier metadata is sparse.
+      if (value <= 0) {
+        return true;
+      }
+      if (hasMin && value < min) {
+        return false;
+      }
+      if (hasMax && value > max) {
+        return false;
+      }
+      return true;
+    });
+    if (phase === "final" && filtered.length === 0) {
+      return;
+    }
+    output = filtered;
+  };
   const applyPrefixCommonFilters = (prefix: string) => {
     applyIncludeTokens(getRawFilter(`${prefix}_account_origin`));
     applyExcludeTokens(getRawFilter(`${prefix}_exclude_account_origin`));
@@ -4457,13 +4492,27 @@ function applyLocalFilters(
         : "";
   if (resolvedMediaPlatform) {
     const platformTokens = mediaPlatformKeywords[resolvedMediaPlatform] ?? [];
-    output = output.filter((item) => {
-      const haystack = `${item.title} ${item.description} ${item.game} ${item.category}`.toLowerCase();
+    const platformScoped = output.filter((item) => {
+      const haystack = `${item.title} ${item.description} ${item.game} ${item.category} ${item.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`.toLowerCase();
       return platformTokens.some((token) => haystack.includes(token));
     });
+    // Some supplier records only carry platform hints in sparse/irregular fields.
+    // Keep scoped endpoint results instead of collapsing to zero when none are parseable.
+    if (platformScoped.length > 0) {
+      output = platformScoped;
+    }
   }
   if (Number.isFinite(mediaFollowersMin) && mediaFollowersMin > 0) {
-    output = output.filter((item) => extractFollowers(item) >= mediaFollowersMin);
+    output = output.filter((item) => {
+      const followers = extractFollowers(item);
+      // Keep listings with unknown follower count instead of dropping everything.
+      if (!Number.isFinite(followers) || followers <= 0) {
+        return true;
+      }
+      return followers >= mediaFollowersMin;
+    });
   }
   applyIncludeTokens(fortniteAccountOrigin);
   applyExcludeTokens(fortniteExcludeAccountOrigin);
@@ -4846,6 +4895,97 @@ function applyLocalFilters(
   );
   applyRangeByKeys("supercell_gems_min", "supercell_gems_max", ["gems", "gem"]);
   applyRangeByKeys("supercell_level_min", "supercell_level_max", ["level", "lvl"]);
+  applyRangeByKeys("supercell_brawl_brawlers_min", "supercell_brawl_brawlers_max", ["brawlers"]);
+  applyRangeByKeys("supercell_brawl_skins_min", "supercell_brawl_skins_max", ["skins"]);
+  applyRangeByKeys("supercell_brawl_wins_min", "supercell_brawl_wins_max", ["wins"]);
+  applyRangeByKeys(
+    "supercell_brawl_legendary_brawlers_min",
+    "supercell_brawl_legendary_brawlers_max",
+    ["legendary brawlers"]
+  );
+  applyRangeByKeys(
+    "supercell_brawl_hypercharges_min",
+    "supercell_brawl_hypercharges_max",
+    ["hypercharges", "hypercharge"]
+  );
+  applyRangeByKeys(
+    "supercell_brawl_highest_trophies_min",
+    "supercell_brawl_highest_trophies_max",
+    ["highest trophies"]
+  );
+  if (getFlagFilter("supercell_brawl_pass") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("brawl pass"));
+  }
+  if (getFlagFilter("supercell_brawl_pass") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("brawl pass"));
+  }
+  applyRangeByKeys("supercell_cr_crown_level_min", "supercell_cr_crown_level_max", ["crown level"]);
+  applyRangeByKeys(
+    "supercell_cr_evolved_cards_min",
+    "supercell_cr_evolved_cards_max",
+    ["evolved cards", "evolved"]
+  );
+  applyRangeByKeys("supercell_cr_champions_min", "supercell_cr_champions_max", ["champions"]);
+  applyRangeByKeys(
+    "supercell_cr_league_trophies_min",
+    "supercell_cr_league_trophies_max",
+    ["league trophies"]
+  );
+  applyRangeByKeys(
+    "supercell_cr_league_number_min",
+    "supercell_cr_league_number_max",
+    ["league number", "league"]
+  );
+  if (getFlagFilter("supercell_cr_royale_pass") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("royale pass"));
+  }
+  if (getFlagFilter("supercell_cr_royale_pass") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("royale pass"));
+  }
+  applyRangeByKeys("supercell_coc_cup_count_min", "supercell_coc_cup_count_max", ["cup count", "trophies"]);
+  applyRangeByKeys("supercell_coc_wins_min", "supercell_coc_wins_max", ["wins"]);
+  applyRangeByKeys("supercell_coc_town_hall_min", "supercell_coc_town_hall_max", ["town hall"]);
+  applyRangeByKeys(
+    "supercell_coc_total_hero_level_min",
+    "supercell_coc_total_hero_level_max",
+    ["total hero level", "hero level"]
+  );
+  applyRangeByKeys(
+    "supercell_coc_total_troops_level_min",
+    "supercell_coc_total_troops_level_max",
+    ["total troops level", "troops level"]
+  );
+  applyRangeByKeys(
+    "supercell_coc_total_spell_level_min",
+    "supercell_coc_total_spell_level_max",
+    ["total spell level", "spell level"]
+  );
+  applyRangeByKeys(
+    "supercell_coc_total_heroes_builder_min",
+    "supercell_coc_total_heroes_builder_max",
+    ["heroes in the builder", "builder heroes"]
+  );
+  applyRangeByKeys(
+    "supercell_coc_total_troops_builder_min",
+    "supercell_coc_total_troops_builder_max",
+    ["troops in the builder", "builder troops"]
+  );
+  applyRangeByKeys(
+    "supercell_coc_builder_hall_cups_min",
+    "supercell_coc_builder_hall_cups_max",
+    ["cup count in builder hall", "builder hall cups"]
+  );
+  applyRangeByKeys(
+    "supercell_coc_builder_hall_min",
+    "supercell_coc_builder_hall_max",
+    ["builder hall"]
+  );
+  if (getFlagFilter("supercell_coc_gold_pass") === "1") {
+    output = output.filter((item) => itemSearchText(item).includes("gold pass"));
+  }
+  if (getFlagFilter("supercell_coc_gold_pass") === "0") {
+    output = output.filter((item) => !itemSearchText(item).includes("gold pass"));
+  }
 
   applyScopedMetricRange(
     ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
@@ -4884,11 +5024,11 @@ function applyLocalFilters(
     robloxAgeDaysMax
   );
 
-  applyRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
-  applyRangeByKeys("media_following_min", "media_following_max", ["following"]);
-  applyRangeByKeys("media_posts_min", "media_posts_max", ["posts"]);
-  applyRangeByKeys("media_age_days_min", "media_age_days_max", ["age days", "days old", "registered"]);
-  applyRangeByKeys("media_engagement_min", "media_engagement_max", ["engagement", "er"]);
+  applySoftMediaRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
+  applySoftMediaRangeByKeys("media_following_min", "media_following_max", ["following"]);
+  applySoftMediaRangeByKeys("media_posts_min", "media_posts_max", ["posts"]);
+  applySoftMediaRangeByKeys("media_age_days_min", "media_age_days_max", ["age days", "days old", "registered"]);
+  applySoftMediaRangeByKeys("media_engagement_min", "media_engagement_max", ["engagement", "er"]);
   applyIncludeTokens(getRawFilter("media_account_type"));
 
   if (getFlagFilter("telegram_premium") === "1") {
