@@ -718,6 +718,74 @@ function applyHardFortniteFilters(
   return filtered;
 }
 
+function isRobloxScopedRequest(game: string, category: string) {
+  const normalized = normalizeText(`${game} ${category}`);
+  return normalized.includes("roblox");
+}
+
+function applyHardRobloxScopeFilters(listings: MarketListing[]) {
+  const includeTokens = [
+    "roblox",
+    "robux",
+    "rbx",
+    "limited",
+    "korblox",
+    "headless",
+    "gamepass",
+    "gamepasses",
+    "rap",
+    "blox fruits"
+  ];
+  const excludeTokens = [
+    "telegram",
+    "discord",
+    "instagram",
+    "tiktok",
+    "phys sim",
+    "physical sim",
+    "sim card",
+    "phone number"
+  ];
+
+  const looksLikePhoneSimListing = (title: string) => {
+    const normalizedTitle = normalizeText(title);
+    return /^\+\d/.test(title.trim()) || normalizedTitle.includes("sim");
+  };
+
+  return listings.filter((listing) => {
+    const haystack = normalizeText(
+      `${listing.game} ${listing.category} ${listing.title} ${listing.description} ${listing.specs
+        .map((spec) => `${spec.label} ${spec.value}`)
+        .join(" ")}`
+    );
+
+    if (excludeTokens.some((token) => haystack.includes(token))) {
+      return false;
+    }
+    if (looksLikePhoneSimListing(listing.title)) {
+      return false;
+    }
+
+    const hasRobloxSignal = includeTokens.some((token) => haystack.includes(token));
+    if (hasRobloxSignal) {
+      return true;
+    }
+
+    const hasRobloxMetricSignal = listing.specs.some((spec) => {
+      const label = normalizeText(spec.label);
+      return (
+        label.includes("robux") ||
+        label.includes("friends") ||
+        label.includes("followers") ||
+        label.includes("inventory value") ||
+        label.includes("gamepasses") ||
+        label.includes("limited")
+      );
+    });
+    return hasRobloxMetricSignal;
+  });
+}
+
 function getFirstFortniteSelectorTerm(supplierFilters: Record<string, string>) {
   for (const key of FORTNITE_SELECTOR_FILTER_KEYS) {
     const firstTerm = supplierFilters[key]?.split(",")[0]?.trim() ?? "";
@@ -929,8 +997,11 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
   try {
     const buildPayload = (result: Awaited<ReturnType<typeof searchListings>>) => {
       const fortniteScoped = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
+      const robloxScoped = isRobloxScopedRequest(parsed.game, parsed.category)
+        ? applyHardRobloxScopeFilters(fortniteScoped)
+        : fortniteScoped;
       const listings = applyHardPriceFilters(
-        fortniteScoped,
+        robloxScoped,
         parsed.minPrice,
         parsed.maxPrice
       );
