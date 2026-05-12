@@ -4553,9 +4553,46 @@ function applyLocalFilters(
     ].map((token) => normalizeText(token));
     return exclusionTokens.some((token) => token && haystack.includes(token));
   };
+  const hasRobloxMetricSignal = (item: MarketListing) => {
+    const haystack = itemSearchText(item);
+    const keywordSignals = [
+      "robux",
+      "rbx",
+      "korblox",
+      "headless",
+      "limited",
+      "rap",
+      "gamepass",
+      "gamepasses",
+      "voice chat",
+      "xbox connected",
+      "psn connected"
+    ];
+    if (keywordSignals.some((token) => haystack.includes(normalizeText(token)))) {
+      return true;
+    }
+    const metricSignals = [
+      extractMetricValue(item, ["robux", "rbx"]),
+      extractMetricValue(item, ["friends", "friend"]),
+      extractMetricValue(item, ["followers", "follows", "subs", "subscribers"]),
+      extractMetricValue(item, ["inventory value", "limited value", "rap"]),
+      extractMetricValue(item, ["gamepasses", "gamepass"])
+    ];
+    return metricSignals.some((value) => Number.isFinite(value) && value > 0);
+  };
   if (effectiveGameFilter === "roblox" || categoryFilter === "roblox") {
+    const strongRobloxScoped = output.filter(
+      (item) => matchesGameToken(item, "roblox") || hasRobloxMetricSignal(item)
+    );
+    if (strongRobloxScoped.length > 0) {
+      output = strongRobloxScoped;
+    }
     const withoutObviousLeaks = output.filter((item) => !hasRobloxExclusionSignal(item));
-    output = withoutObviousLeaks;
+    if (withoutObviousLeaks.length > 0) {
+      output = withoutObviousLeaks;
+    } else if (strongRobloxScoped.length > 0) {
+      output = strongRobloxScoped;
+    }
   }
   if (hasKeywordQuery) {
     const ranked = output.map((item) => ({
