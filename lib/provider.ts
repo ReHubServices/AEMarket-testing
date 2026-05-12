@@ -3360,6 +3360,41 @@ function applyLocalFilters(
     };
 
     const candidates: string[] = [];
+    const normalizeFortniteCosmeticCode = (value: string) => {
+      const compact = value
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+      if (!compact) {
+        return "";
+      }
+      const withoutCommonPrefix = compact.replace(/^(?:cid|character|eid|glider)_/, "");
+      return withoutCommonPrefix || compact;
+    };
+    const termCode = normalizeFortniteCosmeticCode(term);
+    const splitTermTokens = normalizedTerm
+      .split(" ")
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+      .filter(
+        (token) =>
+          ![
+            "fortnite",
+            "skin",
+            "skins",
+            "outfit",
+            "outfits",
+            "pickaxe",
+            "pickaxes",
+            "emote",
+            "emotes",
+            "dance",
+            "dances",
+            "glider",
+            "gliders"
+          ].includes(token)
+      );
     const splitCandidateParts = (value: string) =>
       value
         .replace(/\[[^\]]+]/g, " ")
@@ -3380,6 +3415,12 @@ function applyLocalFilters(
       if (compactTerm.length >= 3 && compactSource === compactTerm) {
         return true;
       }
+      if (termCode) {
+        const sourceCode = normalizeFortniteCosmeticCode(source);
+        if (sourceCode && sourceCode === termCode) {
+          return true;
+        }
+      }
       for (const part of splitCandidateParts(source)) {
         const normalizedPart = normalizeText(part);
         if (!normalizedPart) {
@@ -3390,6 +3431,32 @@ function applyLocalFilters(
         }
         const compactPart = normalizedPart.replace(/\s+/g, "");
         if (compactTerm.length >= 3 && compactPart === compactTerm) {
+          return true;
+        }
+        if (termCode) {
+          const partCode = normalizeFortniteCosmeticCode(part);
+          if (partCode && partCode === termCode) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    const matchesLooseCandidate = (source: string) => {
+      if (splitTermTokens.length === 0) {
+        return false;
+      }
+      const parts = [source, ...splitCandidateParts(source)];
+      for (const part of parts) {
+        const normalizedPart = normalizeText(part);
+        if (!normalizedPart) {
+          continue;
+        }
+        const words = normalizedPart.split(" ").filter(Boolean);
+        const matchedAll = splitTermTokens.every((token) =>
+          words.some((word) => word === token || word.startsWith(token) || token.startsWith(word))
+        );
+        if (matchedAll) {
           return true;
         }
       }
@@ -3421,6 +3488,11 @@ function applyLocalFilters(
 
     for (const source of candidates) {
       if (matchesExactCandidate(source)) {
+        return true;
+      }
+    }
+    for (const source of candidates) {
+      if (matchesLooseCandidate(source)) {
         return true;
       }
     }
@@ -5136,7 +5208,43 @@ function applyLocalFilters(
     const strictMatched = output.filter((item) =>
       terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
-    output = strictMatched;
+    if (strictMatched.length > 0) {
+      output = strictMatched;
+      return;
+    }
+
+    // Supplier payloads are inconsistent across listings. If strict exact matching
+    // yields nothing, retry with token-aware matching instead of returning false zero-results.
+    const normalizedTerms = terms
+      .map((value) => normalizeText(value))
+      .filter(Boolean)
+      .slice(0, 20);
+    const looseMatched = output.filter((item) => {
+      const haystack = normalizeText(
+        `${item.title} ${item.description} ${item.specs
+          .map((spec) => `${spec.label} ${spec.value}`)
+          .join(" ")}`
+      );
+      if (!haystack) {
+        return false;
+      }
+      const words = haystack.split(" ").filter(Boolean);
+      return normalizedTerms.every((normalizedTerm) => {
+        const tokens = normalizedTerm
+          .split(" ")
+          .map((token) => token.trim())
+          .filter((token) => token.length >= 2);
+        if (tokens.length === 0) {
+          return false;
+        }
+        return tokens.every((token) =>
+          words.some((word) => word === token || word.startsWith(token) || token.startsWith(word))
+        );
+      });
+    });
+    if (looseMatched.length > 0) {
+      output = looseMatched;
+    }
   };
   applyFortniteSelectedTerms(fortniteOutfits, "fortnite_outfits");
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
@@ -5769,6 +5877,15 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
       addTokenizedVariants(term);
       addVariant(`fortnite ${term}`);
       addVariant(`${term} fortnite`);
+      const normalizedSelectorAlias = term
+        .replace(/^(?:cid|character|eid|glider)_/i, "")
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (normalizedSelectorAlias && normalizedSelectorAlias.toLowerCase() !== term.toLowerCase()) {
+        addTokenizedVariants(normalizedSelectorAlias);
+        addVariant(`fortnite ${normalizedSelectorAlias}`);
+      }
     }
 
     if (!normalized && selectedTerms.length === 0) {
