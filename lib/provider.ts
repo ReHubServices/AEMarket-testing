@@ -4489,22 +4489,30 @@ function applyLocalFilters(
   if (Number.isFinite(options.maxPrice ?? NaN)) {
     output = output.filter((item) => item.basePrice <= Number(options.maxPrice));
   }
+  const hasRobloxSpecificFilters = Object.entries(options.supplierFilters ?? {}).some(
+    ([key, rawValue]) => key.startsWith("roblox_") && String(rawValue ?? "").trim().length > 0
+  );
   // Roblox records are often sparse/mislabeled; allow scoped fallback but trim obvious leaks later.
   const looseScopeGameTokens = new Set(["roblox"]);
   if (effectiveGameFilter && effectiveGameFilter !== "uplay") {
-    const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
-    if (scoped.length > 0) {
-      output = scoped;
-    } else if (!hasExplicitScope && effectiveGameFilter === "fortnite") {
-      const fallbackFortnite = output.filter((item) => !hasSocialKeyword(item));
-      if (fallbackFortnite.length > 0) {
-        output = fallbackFortnite;
+    const skipRobloxTokenNarrowing =
+      effectiveGameFilter === "roblox" && !hasRobloxSpecificFilters;
+
+    if (!skipRobloxTokenNarrowing) {
+      const scoped = output.filter((item) => matchesGameToken(item, effectiveGameFilter));
+      if (scoped.length > 0) {
+        output = scoped;
+      } else if (!hasExplicitScope && effectiveGameFilter === "fortnite") {
+        const fallbackFortnite = output.filter((item) => !hasSocialKeyword(item));
+        if (fallbackFortnite.length > 0) {
+          output = fallbackFortnite;
+        }
+      } else if (phase === "final" && looseScopeGameTokens.has(effectiveGameFilter)) {
+        // Some provider records in scoped Roblox endpoints do not include explicit "roblox" tokens.
+        // Keep scoped endpoint results instead of force-emptying this pass.
+      } else if ((hasExplicitScope || Boolean(inferredQueryGameFilter)) && phase === "final") {
+        output = [];
       }
-    } else if (phase === "final" && looseScopeGameTokens.has(effectiveGameFilter)) {
-      // Some provider records in scoped Roblox endpoints do not include explicit "roblox" tokens.
-      // Keep scoped endpoint results instead of force-emptying this pass.
-    } else if ((hasExplicitScope || Boolean(inferredQueryGameFilter)) && phase === "final") {
-      output = [];
     }
   }
   if (effectiveGameFilter === "fortnite") {
@@ -4518,13 +4526,17 @@ function applyLocalFilters(
     categoryFilter !== "uplay" &&
     (!effectiveGameFilter || categoryFilter === effectiveGameFilter)
   ) {
-    const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
-    if (scopedByCategory.length > 0) {
-      output = scopedByCategory;
-    } else if (phase === "final" && looseScopeGameTokens.has(categoryFilter)) {
-      // Same as game-scope fallback: trust scoped endpoint results for Roblox.
-    } else if (selectedCategoryFilter && phase === "final") {
-      output = [];
+    const skipRobloxCategoryTokenNarrowing =
+      categoryFilter === "roblox" && !hasRobloxSpecificFilters;
+    if (!skipRobloxCategoryTokenNarrowing) {
+      const scopedByCategory = output.filter((item) => matchesGameToken(item, categoryFilter));
+      if (scopedByCategory.length > 0) {
+        output = scopedByCategory;
+      } else if (phase === "final" && looseScopeGameTokens.has(categoryFilter)) {
+        // Same as game-scope fallback: trust scoped endpoint results for Roblox.
+      } else if (selectedCategoryFilter && phase === "final") {
+        output = [];
+      }
     }
   }
   const hasRobloxExclusionSignal = (item: MarketListing) => {
@@ -4556,9 +4568,6 @@ function applyLocalFilters(
     ].map((token) => normalizeText(token));
     return exclusionTokens.some((token) => token && haystack.includes(token));
   };
-  const hasRobloxSpecificFilters = Object.entries(options.supplierFilters ?? {}).some(
-    ([key, rawValue]) => key.startsWith("roblox_") && String(rawValue ?? "").trim().length > 0
-  );
   const hasRobloxMetricSignal = (item: MarketListing) => {
     const haystack = itemSearchText(item);
     const keywordSignals = [
@@ -4611,11 +4620,8 @@ function applyLocalFilters(
       } else if (phase === "final") {
         output = [];
       }
-    } else if (strictRobloxScoped.length > 0) {
-      // Even without explicit Roblox filters, keep only listings with concrete Roblox signals.
-      output = strictRobloxScoped;
-    } else if (phase === "pre" && withoutObviousLeaks.length > 0) {
-      // Allow broader pre-pass collection, but never keep broad scope results in final pass.
+    } else if (withoutObviousLeaks.length > 0) {
+      // No explicit Roblox filters: trust scoped Roblox endpoint data and only trim obvious cross-vertical leaks.
       output = withoutObviousLeaks;
     } else if (phase === "final") {
       output = [];
