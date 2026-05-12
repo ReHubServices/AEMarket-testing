@@ -645,23 +645,47 @@ function normalizeText(value: string) {
 }
 
 function parseFortniteSkinCount(listing: MarketListing) {
+  const parseCount = (value: string) => {
+    const numeric = Number(value.replace(/[^\d]/g, ""));
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+  };
+
   for (const spec of listing.specs) {
     const label = normalizeText(spec.label);
-    if (label.includes("fortnite skin count") || label === "skin count") {
-      const value = Number(String(spec.value).replace(/[^\d]/g, ""));
-      if (Number.isFinite(value)) {
+    const hasSkinCountLabel =
+      label.includes("fortnite skin count") ||
+      label.includes("skin count") ||
+      label.includes("skins count") ||
+      label.includes("outfit count") ||
+      label.includes("outfits count") ||
+      label.includes("count skins") ||
+      label.includes("count outfits");
+    if (hasSkinCountLabel) {
+      const value = parseCount(String(spec.value));
+      if (value != null) {
         return value;
       }
     }
   }
-  const descriptionMatch = listing.description.match(/\bskins?\s*[:=-]?\s*(\d+)/i);
-  if (descriptionMatch) {
-    const value = Number(descriptionMatch[1]);
-    if (Number.isFinite(value)) {
+
+  const titleMatch = listing.title.match(/\b(\d{1,5})\s+skins?\b/i);
+  if (titleMatch) {
+    const value = parseCount(titleMatch[1] ?? "");
+    if (value != null) {
       return value;
     }
   }
-  return 0;
+
+  const descriptionMatch = listing.description.match(
+    /\b(?:skins?|skin count|outfits?|outfit count)\s*[:=-]?\s*(\d{1,5})\b/i
+  );
+  if (descriptionMatch) {
+    const value = parseCount(descriptionMatch[1] ?? "");
+    if (value != null) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function applyHardFortniteFilters(
@@ -676,6 +700,11 @@ function applyHardFortniteFilters(
   if (hasMin || hasMax) {
     filtered = filtered.filter((listing) => {
       const count = parseFortniteSkinCount(listing);
+      // Keep listing when count is not parseable at this API layer.
+      // Provider-side deep filtering still applies stricter checks later.
+      if (count == null) {
+        return true;
+      }
       if (hasMin && count < minSkins) {
         return false;
       }
