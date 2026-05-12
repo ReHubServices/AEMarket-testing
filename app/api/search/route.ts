@@ -724,18 +724,6 @@ function isRobloxScopedRequest(game: string, category: string) {
 }
 
 function applyHardRobloxScopeFilters(listings: MarketListing[]) {
-  const includeTokens = [
-    "roblox",
-    "robux",
-    "rbx",
-    "limited",
-    "korblox",
-    "headless",
-    "gamepass",
-    "gamepasses",
-    "rap",
-    "blox fruits"
-  ];
   const excludeTokens = [
     "telegram",
     "discord",
@@ -765,24 +753,7 @@ function applyHardRobloxScopeFilters(listings: MarketListing[]) {
     if (looksLikePhoneSimListing(listing.title)) {
       return false;
     }
-
-    const hasRobloxSignal = includeTokens.some((token) => haystack.includes(token));
-    if (hasRobloxSignal) {
-      return true;
-    }
-
-    const hasRobloxMetricSignal = listing.specs.some((spec) => {
-      const label = normalizeText(spec.label);
-      return (
-        label.includes("robux") ||
-        label.includes("friends") ||
-        label.includes("followers") ||
-        label.includes("inventory value") ||
-        label.includes("gamepasses") ||
-        label.includes("limited")
-      );
-    });
-    return hasRobloxMetricSignal;
+    return true;
   });
 }
 

@@ -6173,7 +6173,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
-      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode || isRobloxScope;
+      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode;
       const primary = shouldUsePrimaryEndpoint
         ? await fetchFromEndpointForQueries(
             endpoint,
