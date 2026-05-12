@@ -54,6 +54,74 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
+function normalizeDeliveredLabel(label: string) {
+  return label.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function cleanDeliveredLabel(label: string) {
+  return label
+    .trim()
+    .replace(/^item\s+/i, "")
+    .replace(/^fortnite\s+/i, "")
+    .replace(/^uplay\s+r6\s+/i, "")
+    .replace(/\s+/g, " ");
+}
+
+function isBuyerUsefulDeliveryField(label: string) {
+  const normalized = normalizeDeliveredLabel(label);
+  if (!normalized) {
+    return false;
+  }
+
+  const credentialsOrTopSection = [
+    "account username",
+    "account password",
+    "account email",
+    "notes",
+    "item login data raw",
+    "item login data encoded raw",
+    "item login data login",
+    "item login data password",
+    "item login data encoded password",
+    "item login"
+  ];
+  if (credentialsOrTopSection.includes(normalized)) {
+    return false;
+  }
+
+  const noisySupplierMetadata =
+    /(feedback|encoded|raw|item id|item state|category id|published date|update stat date|refreshed date|edit date|pending deletion date|is sticky|item origin|resale|extended guarantee|guarantee|ask discount|custom title|email provider|email type|domain|title en|provider|can view|can update|can report|can manage|max discount|auto bump|transaction stats|status\b|supplier order|order id|reference|nsb)/i;
+  if (noisySupplierMetadata.test(normalized)) {
+    return false;
+  }
+
+  const usefulSignals =
+    /(skin count|pickaxe count|dance count|emote count|glider count|shop skins count|shop pickaxes count|shop dances count|shop gliders count|level|wins|rank|hours|inventory value|troph|robux|friends|followers|following|posts|engagement|operators|gems|cups|fighters|country|region|ban|vac status|prime status|faceit|premier|verified|voice chat|subscription|age)/i;
+  return usefulSignals.test(normalized);
+}
+
+function getVisibleDeliveredItems(items: Array<{ label: string; value: string }>) {
+  const deduped = new Set<string>();
+  const output: Array<{ label: string; value: string }> = [];
+  for (const item of items) {
+    if (!isBuyerUsefulDeliveryField(item.label)) {
+      continue;
+    }
+    const cleanedLabel = cleanDeliveredLabel(item.label);
+    const cleanedValue = String(item.value ?? "").trim();
+    if (!cleanedLabel || !cleanedValue) {
+      continue;
+    }
+    const key = `${normalizeDeliveredLabel(cleanedLabel)}::${cleanedValue.toLowerCase()}`;
+    if (deduped.has(key)) {
+      continue;
+    }
+    deduped.add(key);
+    output.push({ label: cleanedLabel, value: cleanedValue });
+  }
+  return output;
+}
+
 export function AdminDashboard({
   stats,
   settings,
@@ -653,6 +721,9 @@ export function AdminDashboard({
               const owner = usersById.get(order.userId);
               const ownerName = owner?.username ?? order.userId;
               const expanded = activeOrderId === order.id;
+              const visibleDeliveredItems = order.delivery
+                ? getVisibleDeliveredItems(order.delivery.deliveredItems)
+                : [];
               return (
                 <div
                   key={order.id}
@@ -748,10 +819,10 @@ export function AdminDashboard({
                               </div>
                             </div>
                             <div className="max-h-44 overflow-auto rounded-lg border border-white/10 bg-black/25 p-2">
-                              {order.delivery.deliveredItems.length === 0 && (
+                              {visibleDeliveredItems.length === 0 && (
                                 <p className="text-zinc-300">No delivered item entries.</p>
                               )}
-                              {order.delivery.deliveredItems.map((item, index) => (
+                              {visibleDeliveredItems.map((item, index) => (
                                 <div
                                   key={`${item.label}-${item.value}-${index}`}
                                   className="grid grid-cols-[1fr_1fr] gap-2 border-b border-white/10 py-1 last:border-b-0"

@@ -50,7 +50,7 @@ function isBuyerUsefulDeliveryField(label: string) {
   }
 
   const noisySupplierMetadata =
-    /(feedback|encoded|raw|item id|item state|category id|published date|update stat date|refreshed date|edit date|pending deletion date|is sticky|item origin|resale|extended guarantee|guarantee|ask discount|custom title|email provider|email type|domain|title en|provider|can view|can update|can report|can manage|max discount|auto bump|transaction stats|status\b|supplier order|order id|reference)/i;
+    /(feedback|encoded|raw|item id|item state|category id|published date|update stat date|refreshed date|edit date|pending deletion date|is sticky|item origin|resale|extended guarantee|guarantee|ask discount|custom title|email provider|email type|domain|title en|provider|can view|can update|can report|can manage|max discount|auto bump|transaction stats|status\b|supplier order|order id|reference|nsb)/i;
   if (noisySupplierMetadata.test(normalized)) {
     return false;
   }
