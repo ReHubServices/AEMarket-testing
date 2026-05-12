@@ -815,6 +815,16 @@ function applyImplicitQueryFallbacks(input: {
   category: string;
   supplierFilters: Record<string, string>;
 }) {
+  const scoped = normalizeText(`${input.game} ${input.category}`);
+  const hasRobloxScope = scoped.includes("roblox");
+  const hasExplicitQuery = input.query.trim().length > 0;
+  if (hasRobloxScope && !hasExplicitQuery) {
+    return {
+      query: "roblox",
+      usedScopeFallbackQuery: true
+    };
+  }
+
   return {
     query: input.query,
     usedScopeFallbackQuery: false
