@@ -724,33 +724,30 @@ function isRobloxScopedRequest(game: string, category: string) {
 }
 
 function applyHardRobloxScopeFilters(listings: MarketListing[]) {
-  const excludeTokens = [
-    "telegram",
-    "discord",
-    "instagram",
-    "tiktok",
-    "phys sim",
-    "physical sim",
-    "sim card",
-    "phone number"
-  ];
+  const strongRobloxSignals = ["roblox", "rbx", "robux", "headless", "korblox", "limited"];
+  const wrongVerticalSignals = ["telegram", "discord", "instagram", "tiktok"];
+  const phoneSimSignals = ["phys sim", "physical sim", "sim card", "phone number"];
 
-  const looksLikePhoneSimListing = (title: string) => {
+  const looksLikePhoneSimListing = (title: string, scope: string) => {
     const normalizedTitle = normalizeText(title);
-    return /^\+\d/.test(title.trim()) || normalizedTitle.includes("sim");
+    return (
+      /^\+\d/.test(title.trim()) ||
+      phoneSimSignals.some((token) => scope.includes(token)) ||
+      (normalizedTitle.includes("sim") && !strongRobloxSignals.some((token) => scope.includes(token)))
+    );
   };
 
   return listings.filter((listing) => {
-    const haystack = normalizeText(
-      `${listing.game} ${listing.category} ${listing.title} ${listing.description} ${listing.specs
-        .map((spec) => `${spec.label} ${spec.value}`)
-        .join(" ")}`
-    );
+    // Keep this scope guard conservative: only inspect top-level fields.
+    // Roblox listings often mention other platforms inside details/specs.
+    const scope = normalizeText(`${listing.game} ${listing.category} ${listing.title}`);
+    const hasRobloxSignal = strongRobloxSignals.some((token) => scope.includes(token));
+    const hasWrongVerticalSignal = wrongVerticalSignals.some((token) => scope.includes(token));
 
-    if (excludeTokens.some((token) => haystack.includes(token))) {
+    if (hasWrongVerticalSignal && !hasRobloxSignal) {
       return false;
     }
-    if (looksLikePhoneSimListing(listing.title)) {
+    if (looksLikePhoneSimListing(listing.title, scope)) {
       return false;
     }
     return true;
@@ -815,16 +812,6 @@ function applyImplicitQueryFallbacks(input: {
   category: string;
   supplierFilters: Record<string, string>;
 }) {
-  const scoped = normalizeText(`${input.game} ${input.category}`);
-  const hasRobloxScope = scoped.includes("roblox");
-  const hasExplicitQuery = input.query.trim().length > 0;
-  if (hasRobloxScope && !hasExplicitQuery) {
-    return {
-      query: "roblox",
-      usedScopeFallbackQuery: true
-    };
-  }
-
   return {
     query: input.query,
     usedScopeFallbackQuery: false
