@@ -4611,8 +4611,11 @@ function applyLocalFilters(
       } else if (phase === "final") {
         output = [];
       }
-    } else if (withoutObviousLeaks.length > 0) {
-      // No explicit Roblox filters: trust Roblox-scoped endpoint data but trim obvious cross-game leaks.
+    } else if (strictRobloxScoped.length > 0) {
+      // Even without explicit Roblox filters, keep only listings with concrete Roblox signals.
+      output = strictRobloxScoped;
+    } else if (phase === "pre" && withoutObviousLeaks.length > 0) {
+      // Allow broader pre-pass collection, but never keep broad scope results in final pass.
       output = withoutObviousLeaks;
     } else if (phase === "final") {
       output = [];
