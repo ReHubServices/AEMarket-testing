@@ -6212,6 +6212,27 @@ export async function searchListings(query: string, options: SearchOptions = {})
     }
     const targetStart = (page - 1) * pageSize;
     const targetEnd = targetStart + pageSize;
+    const strictFortniteCountFilterKeys = [
+      "fortnite_skin_count_min",
+      "fortnite_skin_count_max",
+      "fortnite_pickaxe_count_min",
+      "fortnite_pickaxe_count_max",
+      "fortnite_emote_count_min",
+      "fortnite_emote_count_max",
+      "fortnite_glider_count_min",
+      "fortnite_glider_count_max",
+      "fortnite_paid_skin_count_min",
+      "fortnite_paid_skin_count_max",
+      "fortnite_paid_pickaxe_count_min",
+      "fortnite_paid_pickaxe_count_max",
+      "fortnite_paid_emote_count_min",
+      "fortnite_paid_emote_count_max",
+      "fortnite_paid_glider_count_min",
+      "fortnite_paid_glider_count_max"
+    ];
+    const hasStrictFortniteCountFilters = strictFortniteCountFilterKeys.some((key) =>
+      Boolean(searchOptions.supplierFilters?.[key]?.trim())
+    );
     const hasTextQuery = Boolean(trimmedQuery);
     const hasAscendingPriceSort = options.sort === "price_asc";
     const requiresDeepCandidateScan =
@@ -6219,6 +6240,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const requiredAggregatedSize = requiresDeepCandidateScan
       ? hasFortniteSelectorFilters
         ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
+        : hasStrictFortniteCountFilters
+          ? Math.min(20000, Math.max(targetEnd + pageSize * 460, 9000))
         : hasAscendingPriceSort
           ? Math.min(6400, Math.max(targetEnd + pageSize * 220, 2600))
           : hasTextQuery
@@ -6246,6 +6269,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const maxLogicalPages = requiresDeepCandidateScan
       ? hasLocalPriceFilter || hasAscendingPriceSort
         ? Math.max(page + 40, PRICE_FILTER_MAX_LOGICAL_PAGES)
+        : hasStrictFortniteCountFilters
+          ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
           : hasFortniteSelectorOnlyFilters
@@ -6288,7 +6313,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
-      const probeLimit = hasNonSelectorSupplierFilters ? 1 : 2;
+      const probeLimit = hasStrictFortniteCountFilters ? 5 : hasNonSelectorSupplierFilters ? 1 : 2;
       for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
         const probeChunk = await loadFilteredPage(
@@ -6318,24 +6343,6 @@ export async function searchListings(query: string, options: SearchOptions = {})
         }
       }
     }
-    const strictFortniteCountFilterKeys = [
-      "fortnite_skin_count_min",
-      "fortnite_skin_count_max",
-      "fortnite_pickaxe_count_min",
-      "fortnite_pickaxe_count_max",
-      "fortnite_emote_count_min",
-      "fortnite_emote_count_max",
-      "fortnite_glider_count_min",
-      "fortnite_glider_count_max",
-      "fortnite_paid_skin_count_min",
-      "fortnite_paid_skin_count_max",
-      "fortnite_paid_pickaxe_count_min",
-      "fortnite_paid_pickaxe_count_max",
-      "fortnite_paid_emote_count_min",
-      "fortnite_paid_emote_count_max",
-      "fortnite_paid_glider_count_min",
-      "fortnite_paid_glider_count_max"
-    ];
     const needsStrictFortniteCountFinalPass = strictFortniteCountFilterKeys.some((key) =>
       Boolean(searchOptions.supplierFilters?.[key]?.trim())
     );
@@ -6346,6 +6353,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasAscendingPriceSort;
     const finalPassPoolSize = hasFortniteSelectorFilters
       ? Math.min(12000, Math.max(targetEnd + pageSize * 260, 5000))
+      : hasStrictFortniteCountFilters
+        ? Math.min(18000, Math.max(targetEnd + pageSize * 420, 9000))
       : hasAscendingPriceSort
         ? Math.min(7600, Math.max(targetEnd + pageSize * 260, 3200))
       : needsDeepFilterFinalPass
@@ -6354,6 +6363,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const detailEnrichmentLimit = hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 6000)
+      : hasStrictFortniteCountFilters
+        ? Math.min(finalPassPool.length, 9000)
       : hasAscendingPriceSort
         ? Math.min(finalPassPool.length, 800)
       : needsDeepFilterFinalPass
