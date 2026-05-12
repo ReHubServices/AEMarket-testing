@@ -83,6 +83,10 @@ export default async function OrderDetailPage({
   const deliveredItems = Array.isArray(order.delivery?.deliveredItems)
     ? order.delivery.deliveredItems
     : [];
+  const rawSupplierPayload =
+    typeof order.delivery?.rawSupplierPayload === "string" && order.delivery.rawSupplierPayload.trim()
+      ? order.delivery.rawSupplierPayload
+      : null;
   const visibleDeliveredItems = (() => {
     const deduped = new Set<string>();
     const output: Array<{ label: string; value: string }> = [];
@@ -209,6 +213,29 @@ export default async function OrderDetailPage({
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-emerald-400/30 bg-black/45">
+            <div className="border-b border-emerald-400/20 px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">
+                Exact LZT Delivery Payload
+              </p>
+              <p className="mt-1 text-xs text-zinc-300">
+                Raw supplier response exactly as received. Copy what you need directly from here.
+              </p>
+            </div>
+            {rawSupplierPayload ? (
+              <textarea
+                readOnly
+                value={rawSupplierPayload}
+                className="min-h-[220px] w-full resize-y bg-black/30 px-4 py-3 font-mono text-xs text-zinc-100 outline-none"
+                spellCheck={false}
+              />
+            ) : (
+              <div className="px-4 py-3 text-sm text-zinc-300">
+                Raw payload is unavailable for this older order.
+              </div>
+            )}
           </div>
         </section>
       )}

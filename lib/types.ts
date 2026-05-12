@@ -29,6 +29,7 @@ export type DeliveryPayload = {
   accountPassword: string;
   accountEmail: string | null;
   notes: string | null;
+  rawSupplierPayload?: string | null;
   deliveredItems: Array<{
     label: string;
     value: string;

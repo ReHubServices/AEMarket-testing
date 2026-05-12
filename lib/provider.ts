@@ -6380,6 +6380,7 @@ export async function buyFromSupplier(listingId: string) {
       supplierOrderId: `sim_${listingId}_${Date.now()}`,
       delivery: {
         ...simulatedDelivery,
+        rawSupplierPayload: JSON.stringify(simulatedDelivery, null, 2),
         deliveredItems: buildDeliveredItems(simulatedDelivery)
       }
     };
@@ -6553,6 +6554,7 @@ export async function buyFromSupplier(listingId: string) {
       accountPassword,
       accountEmail: accountEmailRaw == null ? null : extractText(accountEmailRaw),
       notes: notes || null,
+      rawSupplierPayload: JSON.stringify(data, null, 2),
       deliveredItems
     }
   };

@@ -532,6 +532,10 @@ export async function updateMarkupPercent(markupPercent: number) {
 }
 
 function sanitizeDelivery(payload: DeliveryPayload) {
+  const rawSupplierPayload =
+    typeof payload.rawSupplierPayload === "string" && payload.rawSupplierPayload.trim()
+      ? payload.rawSupplierPayload
+      : null;
   const deliveredItems = Array.isArray(payload.deliveredItems)
     ? payload.deliveredItems
         .map((item) => ({
@@ -557,6 +561,7 @@ function sanitizeDelivery(payload: DeliveryPayload) {
     accountPassword: payload.accountPassword || "N/A",
     accountEmail: payload.accountEmail || null,
     notes: payload.notes || null,
+    rawSupplierPayload,
     deliveredItems
   };
 }
