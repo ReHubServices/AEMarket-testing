@@ -4457,6 +4457,8 @@ function applyLocalFilters(
     const exclusionTokens = [
       "apex",
       "ea account",
+      "ea play",
+      "electronic arts",
       "fifa",
       "fortnite",
       "valorant",
