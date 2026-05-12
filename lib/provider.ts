@@ -6079,6 +6079,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
 
   const executeSearch = async (): Promise<SearchResult> => {
     try {
+    const normalizedScopeGame = (searchOptions.game ?? "").trim().toLowerCase();
+    const normalizedScopeCategory = (searchOptions.category ?? "").trim().toLowerCase();
+    const isRobloxScope = normalizedScopeGame === "roblox" || normalizedScopeCategory === "roblox";
+    const hasRobloxFilters = Object.keys(searchOptions.supplierFilters ?? {}).some((key) =>
+      key.startsWith("roblox_")
+    );
     const fetchFromEndpointForQueries = async (
       endpointTarget: string,
       pageOptions: SearchOptions,
@@ -6146,7 +6152,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
-      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode;
+      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode || isRobloxScope;
       const primary = shouldUsePrimaryEndpoint
         ? await fetchFromEndpointForQueries(
             endpoint,
@@ -6273,15 +6279,17 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const requiresDeepCandidateScan =
       hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery || hasAscendingPriceSort;
     const requiredAggregatedSize = requiresDeepCandidateScan
-      ? hasFortniteSelectorFilters
-        ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
-        : hasStrictFortniteCountFilters
-          ? Math.min(20000, Math.max(targetEnd + pageSize * 460, 9000))
-        : hasAscendingPriceSort
-          ? Math.min(6400, Math.max(targetEnd + pageSize * 220, 2600))
-          : hasTextQuery
-            ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
-            : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
+      ? isRobloxScope && hasRobloxFilters
+        ? Math.min(420, Math.max(targetEnd + pageSize * 8, 180))
+        : hasFortniteSelectorFilters
+          ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
+          : hasStrictFortniteCountFilters
+            ? Math.min(20000, Math.max(targetEnd + pageSize * 460, 9000))
+            : hasAscendingPriceSort
+              ? Math.min(6400, Math.max(targetEnd + pageSize * 220, 2600))
+              : hasTextQuery
+                ? Math.min(1800, Math.max(targetEnd + pageSize * 80, 600))
+                : Math.min(900, Math.max(targetEnd + pageSize * (hasLocalPriceFilter ? 12 : 16), 260))
       : targetEnd + 1;
     const aggregated: MarketListing[] = [];
     const seenIds = new Set<string>();
@@ -6304,6 +6312,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const maxLogicalPages = requiresDeepCandidateScan
       ? hasLocalPriceFilter || hasAscendingPriceSort
         ? Math.max(page + 40, PRICE_FILTER_MAX_LOGICAL_PAGES)
+        : isRobloxScope && hasRobloxFilters
+          ? Math.max(page + 3, 6)
         : hasStrictFortniteCountFilters
           ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
@@ -6390,6 +6400,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? Math.min(12000, Math.max(targetEnd + pageSize * 260, 5000))
       : hasStrictFortniteCountFilters
         ? Math.min(18000, Math.max(targetEnd + pageSize * 420, 9000))
+      : isRobloxScope && hasRobloxFilters
+        ? Math.min(520, Math.max(targetEnd + pageSize * 14, 240))
       : hasAscendingPriceSort
         ? Math.min(7600, Math.max(targetEnd + pageSize * 260, 3200))
       : needsDeepFilterFinalPass
@@ -6400,6 +6412,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? Math.min(finalPassPool.length, 6000)
       : hasStrictFortniteCountFilters
         ? Math.min(finalPassPool.length, 9000)
+      : isRobloxScope && hasRobloxFilters
+        ? Math.min(finalPassPool.length, 120)
       : hasAscendingPriceSort
         ? Math.min(finalPassPool.length, 800)
       : needsDeepFilterFinalPass
