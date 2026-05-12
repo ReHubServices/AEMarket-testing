@@ -5008,42 +5008,23 @@ function applyLocalFilters(
     output = output.filter((item) => !itemSearchText(item).includes("gold pass"));
   }
 
-  applyScopedMetricRange(
-    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
-    ["level", "lvl"],
-    robloxLevelMin,
-    robloxLevelMax
-  );
-  applyScopedMetricRange(
-    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
-    ["robux", "rbx"],
-    robloxRobuxMin,
-    robloxRobuxMax
-  );
-  applyScopedMetricRange(
-    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
-    ["friends", "friend"],
-    robloxFriendsMin,
-    robloxFriendsMax
-  );
-  applyScopedMetricRange(
-    ["roblox", "rbx", "blox fruits", "adopt me", "pet simulator", "murder mystery"],
+  // Roblox listings frequently expose metrics in plain specs (e.g. "Friends: 42")
+  // without repeating a Roblox scope token in the same field.
+  // Use direct metric parsing here to avoid false zero-results.
+  applyMetricRange(["level", "lvl", "account level"], robloxLevelMin, robloxLevelMax);
+  applyMetricRange(["robux", "rbx"], robloxRobuxMin, robloxRobuxMax);
+  applyMetricRange(["friends", "friend"], robloxFriendsMin, robloxFriendsMax);
+  applyMetricRange(
     ["followers", "follows", "subs", "subscribers"],
     robloxFollowersMin,
     robloxFollowersMax
   );
-  applyScopedMetricRange(
-    ["roblox", "rbx", "limited", "korblox", "headless"],
+  applyMetricRange(
     ["inventory value", "inventory", "value", "limited value"],
     robloxInventoryMin,
     robloxInventoryMax
   );
-  applyScopedMetricRange(
-    ["roblox", "rbx", "account"],
-    ["age days", "days old", "registered"],
-    robloxAgeDaysMin,
-    robloxAgeDaysMax
-  );
+  applyMetricRange(["age days", "days old", "registered"], robloxAgeDaysMin, robloxAgeDaysMax);
 
   applySoftMediaRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
   applySoftMediaRangeByKeys("media_following_min", "media_following_max", ["following"]);
