@@ -4555,9 +4555,7 @@ function applyLocalFilters(
   };
   if (effectiveGameFilter === "roblox" || categoryFilter === "roblox") {
     const withoutObviousLeaks = output.filter((item) => !hasRobloxExclusionSignal(item));
-    if (withoutObviousLeaks.length > 0) {
-      output = withoutObviousLeaks;
-    }
+    output = withoutObviousLeaks;
   }
   if (hasKeywordQuery) {
     const ranked = output.map((item) => ({
