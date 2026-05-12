@@ -4581,17 +4581,32 @@ function applyLocalFilters(
     return metricSignals.some((value) => Number.isFinite(value) && value > 0);
   };
   if (effectiveGameFilter === "roblox" || categoryFilter === "roblox") {
-    const strongRobloxScoped = output.filter(
-      (item) => matchesGameToken(item, "roblox") || hasRobloxMetricSignal(item)
-    );
-    if (strongRobloxScoped.length > 0) {
-      output = strongRobloxScoped;
-    }
-    const withoutObviousLeaks = output.filter((item) => !hasRobloxExclusionSignal(item));
-    if (withoutObviousLeaks.length > 0) {
-      output = withoutObviousLeaks;
-    } else if (strongRobloxScoped.length > 0) {
-      output = strongRobloxScoped;
+    const hasRobloxTextSignal = (item: MarketListing) => {
+      const haystack = itemSearchText(item);
+      return (
+        haystack.includes("roblox") ||
+        haystack.includes("rbx") ||
+        haystack.includes("robux") ||
+        haystack.includes("korblox") ||
+        haystack.includes("headless") ||
+        haystack.includes("limited")
+      );
+    };
+    const strictRobloxScoped = output.filter((item) => {
+      if (hasRobloxExclusionSignal(item)) {
+        return false;
+      }
+      return (
+        matchesGameToken(item, "roblox") ||
+        hasRobloxMetricSignal(item) ||
+        hasRobloxTextSignal(item)
+      );
+    });
+    if (strictRobloxScoped.length > 0) {
+      output = strictRobloxScoped;
+    } else if (phase === "final") {
+      // Do not leak generic gaming cards into Roblox scope.
+      output = [];
     }
   }
   if (hasKeywordQuery) {
