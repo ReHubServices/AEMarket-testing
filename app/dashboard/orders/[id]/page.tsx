@@ -60,6 +60,32 @@ function isBuyerUsefulDeliveryField(label: string) {
   return usefulSignals.test(normalized);
 }
 
+function pickFirstNonEmpty(values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function looksMissingCredential(value: string | null | undefined) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return !text || text === "n/a" || text === "not provided";
+}
+
+function splitLoginRaw(value: string) {
+  const raw = value.trim();
+  if (!raw || !raw.includes(":")) {
+    return { login: "", password: "" };
+  }
+  const index = raw.indexOf(":");
+  const login = raw.slice(0, index).trim();
+  const password = raw.slice(index + 1).trim();
+  return { login, password };
+}
+
 export default async function OrderDetailPage({
   params
 }: {
@@ -83,6 +109,46 @@ export default async function OrderDetailPage({
   const deliveredItems = Array.isArray(order.delivery?.deliveredItems)
     ? order.delivery.deliveredItems
     : [];
+  const deliveredLookup = new Map<string, string>();
+  for (const item of deliveredItems) {
+    const key = normalizeDeliveredLabel(item.label);
+    const value = String(item.value ?? "").trim();
+    if (!key || !value || deliveredLookup.has(key)) {
+      continue;
+    }
+    deliveredLookup.set(key, value);
+  }
+  const parsedLoginRaw = splitLoginRaw(
+    pickFirstNonEmpty([
+      deliveredLookup.get("item login data raw"),
+      deliveredLookup.get("item login"),
+      deliveredLookup.get("item email login data raw")
+    ])
+  );
+  const fallbackLogin = pickFirstNonEmpty([
+    deliveredLookup.get("item login data login"),
+    parsedLoginRaw.login
+  ]);
+  const fallbackPassword = pickFirstNonEmpty([
+    deliveredLookup.get("item login data password"),
+    parsedLoginRaw.password
+  ]);
+  const fallbackEmail = fallbackLogin.includes("@") ? fallbackLogin : "";
+
+  const displayUsername = !looksMissingCredential(order.delivery?.accountUsername)
+    ? String(order.delivery?.accountUsername ?? "")
+    : fallbackLogin || "N/A";
+  const displayPassword = !looksMissingCredential(order.delivery?.accountPassword)
+    ? String(order.delivery?.accountPassword ?? "")
+    : fallbackPassword || "N/A";
+  const displayEmail = !looksMissingCredential(order.delivery?.accountEmail)
+    ? String(order.delivery?.accountEmail ?? "")
+    : fallbackEmail || "Not provided";
+  const displayNotes = pickFirstNonEmpty([
+    order.delivery?.notes,
+    deliveredLookup.get("notes"),
+    "No additional notes"
+  ]);
   const visibleDeliveredItems = (() => {
     const deduped = new Set<string>();
     const output: Array<{ label: string; value: string }> = [];
@@ -145,25 +211,19 @@ export default async function OrderDetailPage({
           <div className="mt-4 grid gap-3 rounded-2xl border border-white/15 bg-black/35 p-4 text-sm md:grid-cols-2">
             <div>
               <p className="text-zinc-400">Account Username</p>
-              <LinkifiedText text={order.delivery.accountUsername} className="font-medium text-white" />
+              <LinkifiedText text={displayUsername} className="font-medium text-white" />
             </div>
             <div>
               <p className="text-zinc-400">Account Password</p>
-              <LinkifiedText text={order.delivery.accountPassword} className="font-medium text-white" />
+              <LinkifiedText text={displayPassword} className="font-medium text-white" />
             </div>
             <div>
               <p className="text-zinc-400">Account Email</p>
-              <LinkifiedText
-                text={order.delivery.accountEmail || "Not provided"}
-                className="font-medium text-white"
-              />
+              <LinkifiedText text={displayEmail} className="font-medium text-white" />
             </div>
             <div>
               <p className="text-zinc-400">Notes</p>
-              <LinkifiedText
-                text={order.delivery.notes || "No additional notes"}
-                className="font-medium text-white"
-              />
+              <LinkifiedText text={displayNotes} className="font-medium text-white" />
             </div>
           </div>
 
