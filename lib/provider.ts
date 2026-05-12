@@ -255,6 +255,9 @@ function inferEndpointGameHint(endpoint: string) {
   if (matches(["rainbow-six-siege", "rainbowsixsiege", "siege", "r6"])) {
     return "Rainbow Six Siege";
   }
+  if (matches(["roblox", "rbx", "blox"])) {
+    return "Roblox";
+  }
   if (matches(["steam", "cs2", "counter-strike", "counterstrike", "csgo"])) {
     return "Steam";
   }
