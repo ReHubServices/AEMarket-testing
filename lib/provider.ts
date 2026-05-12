@@ -4553,6 +4553,9 @@ function applyLocalFilters(
     ].map((token) => normalizeText(token));
     return exclusionTokens.some((token) => token && haystack.includes(token));
   };
+  const hasRobloxSpecificFilters = Object.entries(options.supplierFilters ?? {}).some(
+    ([key, rawValue]) => key.startsWith("roblox_") && String(rawValue ?? "").trim().length > 0
+  );
   const hasRobloxMetricSignal = (item: MarketListing) => {
     const haystack = itemSearchText(item);
     const keywordSignals = [
@@ -4592,20 +4595,23 @@ function applyLocalFilters(
         haystack.includes("limited")
       );
     };
-    const strictRobloxScoped = output.filter((item) => {
-      if (hasRobloxExclusionSignal(item)) {
-        return false;
-      }
-      return (
+    const withoutObviousLeaks = output.filter((item) => !hasRobloxExclusionSignal(item));
+    const strictRobloxScoped = withoutObviousLeaks.filter(
+      (item) =>
         matchesGameToken(item, "roblox") ||
         hasRobloxMetricSignal(item) ||
         hasRobloxTextSignal(item)
-      );
-    });
-    if (strictRobloxScoped.length > 0) {
-      output = strictRobloxScoped;
+    );
+    if (hasRobloxSpecificFilters) {
+      if (strictRobloxScoped.length > 0) {
+        output = strictRobloxScoped;
+      } else if (phase === "final") {
+        output = [];
+      }
+    } else if (withoutObviousLeaks.length > 0) {
+      // No explicit Roblox filters: trust Roblox-scoped endpoint data but trim obvious cross-game leaks.
+      output = withoutObviousLeaks;
     } else if (phase === "final") {
-      // Do not leak generic gaming cards into Roblox scope.
       output = [];
     }
   }
