@@ -70,7 +70,7 @@ const FORTNITE_SELECTOR_FILTER_KEYS = [
   "fortnite_emotes",
   "fortnite_gliders"
 ] as const;
-const FILTER_BACKFILL_MAX_PAGES = 4;
+const FILTER_BACKFILL_MAX_PAGES = 1;
 
 function sanitizeSupplierFilterValue(key: string, value: string) {
   const trimmed = value.trim();

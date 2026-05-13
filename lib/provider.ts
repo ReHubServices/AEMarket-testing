@@ -39,7 +39,7 @@ const SEARCH_RESULT_STALE_TTL_MS = Number(
 const RUB_TO_USD_RATE_RAW = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
 const EUR_TO_USD_RATE_RAW = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
-const SUPPLIER_FETCH_TIMEOUT_MS = 7000;
+const SUPPLIER_FETCH_TIMEOUT_MS = 4500;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
 const SUPPLIER_MAX_PAGE_SPAN = 2;
 const SUPPLIER_MAX_CATEGORY_ENDPOINTS = 4;
@@ -6377,7 +6377,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? isRobloxScope && hasRobloxFilters
         ? Math.min(5200, Math.max(targetEnd + pageSize * 180, 1800))
         : hasFortniteSelectorFilters
-          ? Math.min(2800, Math.max(targetEnd + pageSize * 70, 900))
+          ? Math.min(1600, Math.max(targetEnd + pageSize * 48, 700))
           : hasStrictFortniteCountFilters
             ? Math.min(20000, Math.max(targetEnd + pageSize * 460, 9000))
             : hasAscendingPriceSort
@@ -6414,7 +6414,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
         : hasFortniteSelectorOnlyFilters
-            ? Math.max(page + 8, 18)
+            ? Math.max(page + 4, 10)
             : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
@@ -6492,7 +6492,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasLocalPriceFilter ||
       hasAscendingPriceSort;
     const finalPassPoolSize = hasFortniteSelectorFilters
-      ? Math.min(3200, Math.max(targetEnd + pageSize * 90, 1100))
+      ? Math.min(1500, Math.max(targetEnd + pageSize * 50, 700))
       : hasStrictFortniteCountFilters
         ? Math.min(18000, Math.max(targetEnd + pageSize * 420, 9000))
       : isRobloxScope && hasRobloxFilters
@@ -6504,7 +6504,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const detailEnrichmentLimit = hasFortniteSelectorFilters
-      ? Math.min(finalPassPool.length, 500)
+      ? Math.min(finalPassPool.length, 260)
       : hasStrictFortniteCountFilters
         ? Math.min(finalPassPool.length, 9000)
       : isRobloxScope && hasRobloxFilters
@@ -6549,11 +6549,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasFortniteSelectorFilters &&
       !Boolean(normalizedOptions.disableNativeFortniteSelectorParams)
     ) {
-      const shouldFallbackFromStrictNativeSelector =
-        result.listings.length === 0 ||
-        (page === 1 &&
-          !result.hasMore &&
-          result.listings.length < Math.min(pageSize, 8));
+      const shouldFallbackFromStrictNativeSelector = result.listings.length === 0;
 
       if (shouldFallbackFromStrictNativeSelector) {
         // Native selector params can under-report results when seller data is incomplete.
