@@ -3492,6 +3492,11 @@ function applyLocalFilters(
       return false;
     };
 
+    // Include title/description first because many suppliers only expose cosmetics there.
+    // Some listings have sparse specs, but still clearly list selected cosmetics in title text.
+    candidates.push(item.title);
+    candidates.push(item.description);
+
     for (const spec of item.specs) {
       const label = normalizeText(spec.label);
       const value = normalizeText(spec.value);
@@ -5297,6 +5302,7 @@ function applyLocalFilters(
   if (mediaVerified === "0") {
     output = output.filter((item) => !isVerifiedMedia(item));
   }
+  const preFortniteSelectorOutput = output.slice();
   const applyFortniteSelectedTerms = (terms: string[], selectorKey: FortniteSelectorKey) => {
     if (terms.length === 0 || phase === "pre" || useNativeFortniteSelectorParams) {
       return;
@@ -5348,6 +5354,27 @@ function applyLocalFilters(
   applyFortniteSelectedTerms(fortnitePickaxes, "fortnite_pickaxes");
   applyFortniteSelectedTerms(fortniteEmotes, "fortnite_emotes");
   applyFortniteSelectedTerms(fortniteGliders, "fortnite_gliders");
+  if (
+    phase === "final" &&
+    !useNativeFortniteSelectorParams &&
+    output.length === 0 &&
+    (fortniteOutfits.length > 0 ||
+      fortnitePickaxes.length > 0 ||
+      fortniteEmotes.length > 0 ||
+      fortniteGliders.length > 0)
+  ) {
+    const groups: Array<{ key: FortniteSelectorKey; terms: string[] }> = [
+      { key: "fortnite_outfits", terms: fortniteOutfits },
+      { key: "fortnite_pickaxes", terms: fortnitePickaxes },
+      { key: "fortnite_emotes", terms: fortniteEmotes },
+      { key: "fortnite_gliders", terms: fortniteGliders }
+    ];
+    output = preFortniteSelectorOutput.filter((item) =>
+      groups.some(({ key, terms }) =>
+        terms.some((term) => matchesSelectedFortniteTerm(item, term, key))
+      )
+    );
+  }
   if (options.hasImage) {
     output = output.filter((item) => hasRealImage(item.imageUrl));
   }
