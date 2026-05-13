@@ -106,6 +106,7 @@ type MarketSearchProps = {
   homeSubtitle?: string;
   announcementEnabled?: boolean;
   announcementText?: string;
+  routeCategory?: string | null;
 };
 
 type TourStepId =
@@ -208,6 +209,27 @@ const GAME_SEARCH_PARAMS: Record<
   cs2: { game: "cs2", category: "steam" },
   battlenet: { game: "battlenet", category: "battlenet" }
 };
+
+const GAME_ROUTE_SEGMENTS: Record<GameFilterTarget, string> = {
+  all: "",
+  fortnite: "fortnite",
+  valorant: "valorant",
+  siege: "siege",
+  roblox: "roblox",
+  supercell: "supercell",
+  tiktok: "tiktok",
+  instagram: "instagram",
+  telegram: "telegram",
+  discord: "discord",
+  steam: "steam",
+  cs2: "cs2",
+  battlenet: "battlenet"
+};
+
+function buildCategoryRoutePath(target: GameFilterTarget) {
+  const segment = GAME_ROUTE_SEGMENTS[target];
+  return segment ? `/${segment}` : "/";
+}
 
 const MARKET_CATEGORY_TABS: Array<{
   value: GameFilterTarget;
@@ -1434,7 +1456,8 @@ export function MarketSearch({
   homeSubtitle =
     "Premium digital account marketplace with secure balance payments and instant automated delivery.",
   announcementEnabled = false,
-  announcementText = ""
+  announcementText = "",
+  routeCategory = null
 }: MarketSearchProps) {
   const PAGE_SIZE = 15;
   const router = useRouter();
@@ -1496,6 +1519,14 @@ export function MarketSearch({
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  }
+
+  function selectCategory(nextGame: GameFilterTarget) {
+    if (nextGame !== selectedGame) {
+      setSelectedGame(nextGame);
+    }
+    const nextPath = buildCategoryRoutePath(nextGame);
+    router.replace(nextPath, { scroll: false });
   }
 
   function completeTour() {
@@ -2012,21 +2043,22 @@ export function MarketSearch({
   }, [searchParams]);
 
   useEffect(() => {
-    const categoryParam = (
+    const routeCategoryParam = String(routeCategory ?? "")
+      .toLowerCase()
+      .trim();
+    const queryCategoryParam = (
       searchParams.get("category") ??
       searchParams.get("game") ??
       ""
     )
       .toLowerCase()
       .trim();
-    if (!categoryParam) {
-      return;
-    }
-    const mapped = CATEGORY_PARAM_ALIASES[categoryParam];
-    if (mapped && mapped !== selectedGame) {
+    const categoryParam = routeCategoryParam || queryCategoryParam || "all";
+    const mapped = CATEGORY_PARAM_ALIASES[categoryParam] ?? "all";
+    if (mapped !== selectedGame) {
       setSelectedGame(mapped);
     }
-  }, [searchParams, selectedGame]);
+  }, [routeCategory, searchParams, selectedGame]);
 
   const activeListing = useMemo(
     () => listings.find((listing) => listing.id === activeListingId) ?? null,
@@ -2746,7 +2778,7 @@ export function MarketSearch({
                   <button
                     key={category.value}
                     type="button"
-                    onClick={() => setSelectedGame(category.value)}
+                    onClick={() => selectCategory(category.value)}
                     title={category.label}
                     className={cn(
                       "inline-flex h-12 w-12 items-center justify-center rounded-xl border text-xs font-medium transition",
