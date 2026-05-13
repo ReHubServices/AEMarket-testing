@@ -965,11 +965,8 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
   try {
     const buildPayload = (result: Awaited<ReturnType<typeof searchListings>>) => {
       const fortniteScoped = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
-      const robloxScoped = isRobloxScopedRequest(parsed.game, parsed.category)
-        ? applyHardRobloxScopeFilters(fortniteScoped)
-        : fortniteScoped;
       const listings = applyHardPriceFilters(
-        robloxScoped,
+        fortniteScoped,
         parsed.minPrice,
         parsed.maxPrice
       );

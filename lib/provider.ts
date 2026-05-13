@@ -2932,6 +2932,7 @@ function applyLocalFilters(
   const inferredQueryGameFilter =
     !selectedGameFilter && !selectedCategoryFilter ? detectQueryIntent(queryTerm) : "";
   const hasExplicitScope = Boolean(selectedGameFilter || selectedCategoryFilter);
+  const trustSupplierScopedEndpoint = hasExplicitScope;
   const gameFilter = selectedGameFilter || inferredQueryGameFilter;
   const categoryFilter = selectedCategoryFilter;
   const hasKeywordQuery = Boolean(queryTerm.trim());
@@ -4526,7 +4527,7 @@ function applyLocalFilters(
   );
   // Roblox records are often sparse/mislabeled; allow scoped fallback but trim obvious leaks later.
   const looseScopeGameTokens = new Set(["roblox"]);
-  if (effectiveGameFilter && effectiveGameFilter !== "uplay") {
+  if (!trustSupplierScopedEndpoint && effectiveGameFilter && effectiveGameFilter !== "uplay") {
     const skipRobloxTokenNarrowing =
       effectiveGameFilter === "roblox" && !hasRobloxSpecificFilters;
 
@@ -4547,13 +4548,14 @@ function applyLocalFilters(
       }
     }
   }
-  if (effectiveGameFilter === "fortnite") {
+  if (!trustSupplierScopedEndpoint && effectiveGameFilter === "fortnite") {
     const fortniteScoped = output.filter((item) => hasFortniteSignal(item));
     if (phase === "final" || fortniteScoped.length > 0) {
       output = fortniteScoped;
     }
   }
   if (
+    !trustSupplierScopedEndpoint &&
     categoryFilter &&
     categoryFilter !== "uplay" &&
     (!effectiveGameFilter || categoryFilter === effectiveGameFilter)
@@ -4627,7 +4629,7 @@ function applyLocalFilters(
     ];
     return metricSignals.some((value) => Number.isFinite(value) && value > 0);
   };
-  if (effectiveGameFilter === "roblox" || categoryFilter === "roblox") {
+  if (!trustSupplierScopedEndpoint && (effectiveGameFilter === "roblox" || categoryFilter === "roblox")) {
     const hasRobloxTextSignal = (item: MarketListing) => {
       const haystack = itemSearchText(item);
       return (
