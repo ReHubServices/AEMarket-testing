@@ -37,12 +37,15 @@ function isBuyerUsefulDeliveryField(label: string) {
     "account username",
     "account password",
     "account email",
+    "email password",
     "notes",
     "item login data raw",
     "item login data encoded raw",
     "item login data login",
     "item login data password",
     "item login data encoded password",
+    "item email login data password",
+    "item email login data encoded password",
     "item login"
   ];
   if (credentialsOrTopSection.includes(normalized)) {
@@ -118,22 +121,34 @@ export default async function OrderDetailPage({
     }
     deliveredLookup.set(key, value);
   }
-  const parsedLoginRaw = splitLoginRaw(
+  const parsedAccountLoginRaw = splitLoginRaw(
     pickFirstNonEmpty([
       deliveredLookup.get("item login data raw"),
-      deliveredLookup.get("item login"),
-      deliveredLookup.get("item email login data raw")
+      deliveredLookup.get("item login")
     ])
+  );
+  const parsedEmailLoginRaw = splitLoginRaw(
+    pickFirstNonEmpty([deliveredLookup.get("item email login data raw")])
   );
   const fallbackLogin = pickFirstNonEmpty([
     deliveredLookup.get("item login data login"),
-    parsedLoginRaw.login
+    parsedAccountLoginRaw.login
   ]);
   const fallbackPassword = pickFirstNonEmpty([
     deliveredLookup.get("item login data password"),
-    parsedLoginRaw.password
+    parsedAccountLoginRaw.password
   ]);
-  const fallbackEmail = fallbackLogin.includes("@") ? fallbackLogin : "";
+  const fallbackEmail = fallbackLogin.includes("@")
+    ? fallbackLogin
+    : parsedEmailLoginRaw.login || "";
+  const displayEmailPassword = pickFirstNonEmpty([
+    deliveredLookup.get("item email login data password"),
+    deliveredLookup.get("item email login data encoded password"),
+    deliveredLookup.get("email password"),
+    deliveredLookup.get("mail password"),
+    parsedEmailLoginRaw.password,
+    "Not provided"
+  ]);
 
   const displayUsername = !looksMissingCredential(order.delivery?.accountUsername)
     ? String(order.delivery?.accountUsername ?? "")
@@ -220,6 +235,10 @@ export default async function OrderDetailPage({
             <div>
               <p className="text-zinc-400">Account Email</p>
               <LinkifiedText text={displayEmail} className="font-medium text-white" />
+            </div>
+            <div>
+              <p className="text-zinc-400">Email Password</p>
+              <LinkifiedText text={displayEmailPassword} className="font-medium text-white" />
             </div>
             <div>
               <p className="text-zinc-400">Notes</p>

@@ -77,12 +77,15 @@ function isBuyerUsefulDeliveryField(label: string) {
     "account username",
     "account password",
     "account email",
+    "email password",
     "notes",
     "item login data raw",
     "item login data encoded raw",
     "item login data login",
     "item login data password",
     "item login data encoded password",
+    "item email login data password",
+    "item email login data encoded password",
     "item login"
   ];
   if (credentialsOrTopSection.includes(normalized)) {
@@ -120,6 +123,27 @@ function getVisibleDeliveredItems(items: Array<{ label: string; value: string }>
     output.push({ label: cleanedLabel, value: cleanedValue });
   }
   return output;
+}
+
+function pickFirstNonEmpty(values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function splitLoginRaw(value: string) {
+  const raw = value.trim();
+  if (!raw || !raw.includes(":")) {
+    return { login: "", password: "" };
+  }
+  const index = raw.indexOf(":");
+  const login = raw.slice(0, index).trim();
+  const password = raw.slice(index + 1).trim();
+  return { login, password };
 }
 
 export function AdminDashboard({
@@ -724,6 +748,28 @@ export function AdminDashboard({
               const visibleDeliveredItems = order.delivery
                 ? getVisibleDeliveredItems(order.delivery.deliveredItems)
                 : [];
+              const deliveredLookup = new Map<string, string>();
+              if (order.delivery) {
+                for (const item of order.delivery.deliveredItems) {
+                  const key = normalizeDeliveredLabel(item.label);
+                  const value = String(item.value ?? "").trim();
+                  if (!key || !value || deliveredLookup.has(key)) {
+                    continue;
+                  }
+                  deliveredLookup.set(key, value);
+                }
+              }
+              const parsedEmailLoginRaw = splitLoginRaw(
+                pickFirstNonEmpty([deliveredLookup.get("item email login data raw")])
+              );
+              const displayEmailPassword = pickFirstNonEmpty([
+                deliveredLookup.get("item email login data password"),
+                deliveredLookup.get("item email login data encoded password"),
+                deliveredLookup.get("email password"),
+                deliveredLookup.get("mail password"),
+                parsedEmailLoginRaw.password,
+                "Not provided"
+              ]);
               return (
                 <div
                   key={order.id}
@@ -812,6 +858,10 @@ export function AdminDashboard({
                               <div>
                                 <p className="text-zinc-400">Account Email</p>
                                 <p className="text-zinc-100">{order.delivery.accountEmail || "Not provided"}</p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">Email Password</p>
+                                <p className="text-zinc-100">{displayEmailPassword}</p>
                               </div>
                               <div>
                                 <p className="text-zinc-400">Notes</p>
