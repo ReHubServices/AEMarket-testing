@@ -2526,6 +2526,25 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const requestedCategory = options.category ? toSlug(options.category) : "";
   const requestedGame = options.game ? toSlug(options.game) : "";
   const requested = requestedCategory || requestedGame;
+  const strictScopedCategorySlugMap: Record<string, string> = {
+    fortnite: "fortnite",
+    valorant: "riot",
+    riot: "riot",
+    siege: "rainbow-six-siege",
+    "rainbow-six-siege": "rainbow-six-siege",
+    uplay: "rainbow-six-siege",
+    roblox: "roblox",
+    supercell: "supercell",
+    tiktok: "tiktok",
+    instagram: "instagram",
+    telegram: "telegram",
+    discord: "discord",
+    steam: "steam",
+    cs2: "steam",
+    battlenet: "battlenet",
+    epicgames: "epicgames",
+    ea: "ea"
+  };
   const requestedAliases: Record<string, string[]> = {
     fortnite: ["fortnite"],
     valorant: ["valorant", "riot"],
@@ -2573,6 +2592,20 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
     requested.length > 0
       ? Array.from(new Set([requested, ...(requestedAliases[requested] ?? [])]))
       : [];
+  const root = normalizeEndpoint(baseEndpoint);
+
+  // Strict scoped mode: when a category/game is selected, use its dedicated endpoint path
+  // (same shape as direct LZT category pages like /roblox, /fortnite, /tiktok, ...).
+  if (requested.length > 0) {
+    const strictSlug = strictScopedCategorySlugMap[requested] ?? requested;
+    const preferred = categories.find((item) => toSlug(item) === strictSlug) ?? strictSlug;
+    return [
+      preferred.startsWith("http://") || preferred.startsWith("https://")
+        ? preferred
+        : `${root}${preferred}`
+    ];
+  }
+
   const narrowedCategories =
     requested.length > 0
       ? categories.filter((item) => {
@@ -2590,7 +2623,6 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
           return false;
         })
       : categories;
-  const root = normalizeEndpoint(baseEndpoint);
 
   const selectedCategories =
     requested.length > 0
