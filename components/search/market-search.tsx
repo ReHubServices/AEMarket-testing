@@ -198,7 +198,7 @@ const GAME_SEARCH_PARAMS: Record<
   all: {},
   fortnite: { game: "fortnite", category: "fortnite" },
   valorant: { game: "valorant", category: "riot" },
-  siege: { game: "siege", category: "rainbow-six-siege" },
+  siege: { game: "siege", category: "uplay" },
   roblox: { game: "roblox", category: "roblox" },
   supercell: { game: "supercell", category: "supercell" },
   tiktok: { game: "social", category: "tiktok" },
