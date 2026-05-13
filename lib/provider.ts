@@ -2104,15 +2104,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     "fortnite_vbucks_max",
     "media_followers_min",
     "media_verified",
-    "media_platform",
-    "roblox_level_min",
-    "roblox_level_max",
-    "roblox_robux_min",
-    "roblox_robux_max",
-    "roblox_inventory_value_min",
-    "roblox_inventory_value_max",
-    "roblox_age_days_min",
-    "roblox_age_days_max"
+    "media_platform"
   ]);
   const appendMultiValueParam = (rawValue: string | undefined, targetKey: string) => {
     const values = (rawValue ?? "")
@@ -2526,24 +2518,24 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   const requestedCategory = options.category ? toSlug(options.category) : "";
   const requestedGame = options.game ? toSlug(options.game) : "";
   const requested = requestedCategory || requestedGame;
-  const strictScopedCategorySlugMap: Record<string, string> = {
-    fortnite: "fortnite",
-    valorant: "riot",
-    riot: "riot",
-    siege: "uplay",
-    "rainbow-six-siege": "uplay",
-    uplay: "uplay",
-    roblox: "roblox",
-    supercell: "supercell",
-    tiktok: "tiktok",
-    instagram: "instagram",
-    telegram: "telegram",
-    discord: "discord",
-    steam: "steam",
-    cs2: "steam",
-    battlenet: "battlenet",
-    epicgames: "epicgames",
-    ea: "ea"
+  const strictScopedCategorySlugMap: Record<string, string[]> = {
+    fortnite: ["fortnite"],
+    valorant: ["riot"],
+    riot: ["riot"],
+    siege: ["rainbow-six-siege", "uplay"],
+    "rainbow-six-siege": ["rainbow-six-siege", "uplay"],
+    uplay: ["uplay", "rainbow-six-siege"],
+    roblox: ["roblox"],
+    supercell: ["supercell"],
+    tiktok: ["tiktok"],
+    instagram: ["instagram"],
+    telegram: ["telegram"],
+    discord: ["discord"],
+    steam: ["steam"],
+    cs2: ["steam"],
+    battlenet: ["battlenet"],
+    epicgames: ["epicgames"],
+    ea: ["ea"]
   };
   const requestedAliases: Record<string, string[]> = {
     fortnite: ["fortnite"],
@@ -2597,13 +2589,14 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
   // Strict scoped mode: when a category/game is selected, use its dedicated endpoint path
   // (same shape as direct LZT category pages like /roblox, /fortnite, /tiktok, ...).
   if (requested.length > 0) {
-    const strictSlug = strictScopedCategorySlugMap[requested] ?? requested;
-    const preferred = categories.find((item) => toSlug(item) === strictSlug) ?? strictSlug;
-    return [
-      preferred.startsWith("http://") || preferred.startsWith("https://")
+    const strictSlugs = strictScopedCategorySlugMap[requested] ?? [requested];
+    const strictTargets = strictSlugs.map((slug) => {
+      const preferred = categories.find((item) => toSlug(item) === slug) ?? slug;
+      return preferred.startsWith("http://") || preferred.startsWith("https://")
         ? preferred
-        : `${root}${preferred}`
-    ];
+        : `${root}${preferred}`;
+    });
+    return Array.from(new Set(strictTargets));
   }
 
   const narrowedCategories =
@@ -5182,23 +5175,24 @@ function applyLocalFilters(
     output = output.filter((item) => !itemSearchText(item).includes("gold pass"));
   }
 
-  // Roblox listings frequently expose metrics in plain specs (e.g. "Friends: 42")
-  // without repeating a Roblox scope token in the same field.
-  // Use direct metric parsing here to avoid false zero-results.
-  applyMetricRange(["level", "lvl", "account level"], robloxLevelMin, robloxLevelMax);
-  applyMetricRange(["robux", "rbx"], robloxRobuxMin, robloxRobuxMax);
-  applyMetricRange(["friends", "friend"], robloxFriendsMin, robloxFriendsMax);
-  applyMetricRange(
-    ["followers", "follows", "subs", "subscribers"],
-    robloxFollowersMin,
-    robloxFollowersMax
-  );
-  applyMetricRange(
-    ["inventory value", "inventory", "value", "limited value"],
-    robloxInventoryMin,
-    robloxInventoryMax
-  );
-  applyMetricRange(["age days", "days old", "registered"], robloxAgeDaysMin, robloxAgeDaysMax);
+  // For explicit scoped category pages (e.g. /roblox), trust supplier-side filtering first.
+  // Local Roblox metric parsing is kept only as fallback for broad/mixed result modes.
+  if (!(trustSupplierScopedEndpoint && hasRobloxSpecificFilters)) {
+    applyMetricRange(["level", "lvl", "account level"], robloxLevelMin, robloxLevelMax);
+    applyMetricRange(["robux", "rbx"], robloxRobuxMin, robloxRobuxMax);
+    applyMetricRange(["friends", "friend"], robloxFriendsMin, robloxFriendsMax);
+    applyMetricRange(
+      ["followers", "follows", "subs", "subscribers"],
+      robloxFollowersMin,
+      robloxFollowersMax
+    );
+    applyMetricRange(
+      ["inventory value", "inventory", "value", "limited value"],
+      robloxInventoryMin,
+      robloxInventoryMax
+    );
+    applyMetricRange(["age days", "days old", "registered"], robloxAgeDaysMin, robloxAgeDaysMax);
+  }
 
   applySoftMediaRangeByKeys("media_followers_min", "media_followers_max", ["followers", "subs", "subscribers"]);
   applySoftMediaRangeByKeys("media_following_min", "media_following_max", ["following"]);
@@ -6071,14 +6065,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
   ) {
     const resolution = await resolveFortniteSelectorFiltersWithMeta(resolvedSupplierFilters);
     resolvedSupplierFilters = resolution.filters;
-    if (resolution.hadLookupData && !resolution.fullyResolved) {
+    // Use native selector params when lookup is available and fully resolved.
+    // Fall back to local matching only when lookup data is unavailable/incomplete.
+    if (!resolution.hadLookupData || !resolution.fullyResolved) {
       disableNativeFortniteSelectorParams = true;
     }
-  }
-  if (hasFortniteSelectorInput) {
-    // Native selector params are currently too restrictive/inconsistent for many cosmetics
-    // (e.g. Crystal-like cases). Force broad fetch + local detail matching.
-    disableNativeFortniteSelectorParams = true;
   }
   const searchOptions: SearchOptions = {
     ...effectiveOptions,
@@ -6119,8 +6110,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
     pageSize: fetchPageSize
   };
   const hasLocalPriceFilter =
-    Number.isFinite(normalizedOptions.minPrice ?? NaN) ||
-    Number.isFinite(normalizedOptions.maxPrice ?? NaN);
+    (Number.isFinite(normalizedOptions.minPrice ?? NaN) &&
+      Number(normalizedOptions.minPrice) > 0) ||
+    (Number.isFinite(normalizedOptions.maxPrice ?? NaN) &&
+      Number(normalizedOptions.maxPrice) > 0);
   const cacheKey = buildSearchResultCacheKey(trimmedQuery, normalizedOptions, store.settings.markupPercent);
   const cachedResult = readSearchResultCache(cacheKey);
   if (cachedResult) {
@@ -6347,7 +6340,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery || hasAscendingPriceSort;
     const requiredAggregatedSize = requiresDeepCandidateScan
       ? isRobloxScope && hasRobloxFilters
-        ? Math.min(420, Math.max(targetEnd + pageSize * 8, 180))
+        ? Math.min(5200, Math.max(targetEnd + pageSize * 180, 1800))
         : hasFortniteSelectorFilters
           ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
           : hasStrictFortniteCountFilters
@@ -6380,7 +6373,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? hasLocalPriceFilter || hasAscendingPriceSort
         ? Math.max(page + 40, PRICE_FILTER_MAX_LOGICAL_PAGES)
         : isRobloxScope && hasRobloxFilters
-          ? Math.max(page + 3, 6)
+          ? Math.max(page + 45, 80)
         : hasStrictFortniteCountFilters
           ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
@@ -6468,7 +6461,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       : hasStrictFortniteCountFilters
         ? Math.min(18000, Math.max(targetEnd + pageSize * 420, 9000))
       : isRobloxScope && hasRobloxFilters
-        ? Math.min(520, Math.max(targetEnd + pageSize * 14, 240))
+        ? Math.min(5600, Math.max(targetEnd + pageSize * 200, 2200))
       : hasAscendingPriceSort
         ? Math.min(7600, Math.max(targetEnd + pageSize * 260, 3200))
       : needsDeepFilterFinalPass
@@ -6480,7 +6473,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       : hasStrictFortniteCountFilters
         ? Math.min(finalPassPool.length, 9000)
       : isRobloxScope && hasRobloxFilters
-        ? Math.min(finalPassPool.length, 120)
+        ? Math.min(finalPassPool.length, 1800)
       : hasAscendingPriceSort
         ? Math.min(finalPassPool.length, 800)
       : needsDeepFilterFinalPass
