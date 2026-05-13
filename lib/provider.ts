@@ -5301,8 +5301,10 @@ function applyLocalFilters(
     if (terms.length === 0 || phase === "pre" || useNativeFortniteSelectorParams) {
       return;
     }
+    // Treat multi-selects inside one selector as OR, not AND.
+    // Example: 2 pickaxes selected should match listings containing either pickaxe.
     const strictMatched = output.filter((item) =>
-      terms.every((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
+      terms.some((term) => matchesSelectedFortniteTerm(item, term, selectorKey))
     );
     if (strictMatched.length > 0) {
       output = strictMatched;
@@ -5325,7 +5327,7 @@ function applyLocalFilters(
         return false;
       }
       const words = haystack.split(" ").filter(Boolean);
-      return normalizedTerms.every((normalizedTerm) => {
+      return normalizedTerms.some((normalizedTerm) => {
         const tokens = normalizedTerm
           .split(" ")
           .map((token) => token.trim())
@@ -6348,7 +6350,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? isRobloxScope && hasRobloxFilters
         ? Math.min(5200, Math.max(targetEnd + pageSize * 180, 1800))
         : hasFortniteSelectorFilters
-          ? Math.min(14000, Math.max(targetEnd + pageSize * 220, 4200))
+          ? Math.min(2800, Math.max(targetEnd + pageSize * 70, 900))
           : hasStrictFortniteCountFilters
             ? Math.min(20000, Math.max(targetEnd + pageSize * 460, 9000))
             : hasAscendingPriceSort
@@ -6384,8 +6386,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
           ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
-          : hasFortniteSelectorOnlyFilters
-            ? Math.max(page + 50, 90)
+        : hasFortniteSelectorOnlyFilters
+            ? Math.max(page + 8, 18)
             : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES)
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
@@ -6463,7 +6465,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasLocalPriceFilter ||
       hasAscendingPriceSort;
     const finalPassPoolSize = hasFortniteSelectorFilters
-      ? Math.min(12000, Math.max(targetEnd + pageSize * 260, 5000))
+      ? Math.min(3200, Math.max(targetEnd + pageSize * 90, 1100))
       : hasStrictFortniteCountFilters
         ? Math.min(18000, Math.max(targetEnd + pageSize * 420, 9000))
       : isRobloxScope && hasRobloxFilters
@@ -6475,7 +6477,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const detailEnrichmentLimit = hasFortniteSelectorFilters
-      ? Math.min(finalPassPool.length, 6000)
+      ? Math.min(finalPassPool.length, 500)
       : hasStrictFortniteCountFilters
         ? Math.min(finalPassPool.length, 9000)
       : isRobloxScope && hasRobloxFilters
