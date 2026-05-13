@@ -78,6 +78,12 @@ function sanitizeSupplierFilterValue(key: string, value: string) {
     return "";
   }
 
+  // Treat zero in numeric range keys as "unset" to avoid accidental empty result sets.
+  // Keep tri-state boolean filters ("0" = No) untouched since they do not use _min/_max.
+  if (trimmed === "0" && /_(min|max)$/.test(key)) {
+    return "";
+  }
+
   if (MULTI_VALUE_FILTER_KEYS.has(key)) {
     const values = trimmed
       .split(",")

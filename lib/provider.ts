@@ -6028,7 +6028,13 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
 
   const finalized = Array.from(variants).filter(Boolean);
   if (hasScope && normalized) {
-    return finalized.slice(0, 2);
+    const scoped = finalized.slice(0, 2);
+    // In scoped mode with active filters, keep one broad fallback query to avoid
+    // false empty pages from strict text matching (especially on price_asc).
+    if (hasActiveSupplierFilters) {
+      return Array.from(new Set([...scoped, ""]));
+    }
+    return scoped;
   }
   return finalized.slice(0, maxVariants);
 }

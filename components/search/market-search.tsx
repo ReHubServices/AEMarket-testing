@@ -1316,6 +1316,18 @@ function normalizeSelectorTerm(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function shouldSendSupplierFilter(key: string, rawValue: string) {
+  const value = rawValue.trim();
+  if (!value) {
+    return false;
+  }
+  // Zero in numeric range fields should behave as "unset" to avoid accidental hard filtering.
+  if (value === "0" && /_(min|max)$/.test(key)) {
+    return false;
+  }
+  return true;
+}
+
 function normalizeSuggestionValue(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -1903,7 +1915,7 @@ export function MarketSearch({
       sort !== "relevance" ||
       Boolean(minPrice.trim()) ||
       Boolean(maxPrice.trim()) ||
-      Object.values(gameFilters).some((value) => Boolean(value.trim()));
+      Object.entries(gameFilters).some(([key, value]) => shouldSendSupplierFilter(key, value));
 
     if (!hasSearchContext) {
       const runPopularListings = async () => {
@@ -1976,9 +1988,10 @@ export function MarketSearch({
         const supplierFilters: Record<string, string> = {};
         for (const [key, value] of Object.entries(gameFilters)) {
           const normalizedValue = value.trim();
-          if (normalizedValue) {
-            supplierFilters[key] = normalizedValue;
+          if (!shouldSendSupplierFilter(key, normalizedValue)) {
+            continue;
           }
+          supplierFilters[key] = normalizedValue;
         }
         payload.supplierFilters = supplierFilters;
 
@@ -2360,7 +2373,7 @@ export function MarketSearch({
 
   const activeAdvancedFiltersCount = [
     selectedGame !== "all",
-    ...Object.values(gameFilters).map((value) => Boolean(value.trim()))
+    ...Object.entries(gameFilters).map(([key, value]) => shouldSendSupplierFilter(key, value))
   ].filter(Boolean).length;
   const selectedGameToggles =
     selectedGame === "all" ? [] : GAME_TOGGLE_FILTERS[selectedGame];
@@ -2370,7 +2383,7 @@ export function MarketSearch({
     sort !== "relevance" ||
     Boolean(minPrice.trim()) ||
     Boolean(maxPrice.trim()) ||
-    Object.values(gameFilters).some((value) => Boolean(value.trim()));
+    Object.entries(gameFilters).some(([key, value]) => shouldSendSupplierFilter(key, value));
   const pageButtons = useMemo(() => {
     const numbers = new Set<number>([currentPage]);
     if (currentPage > 1) {
