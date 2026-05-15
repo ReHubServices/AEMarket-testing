@@ -2127,11 +2127,16 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
     url.searchParams.set("query", normalizedQuery);
     url.searchParams.set("search", normalizedQuery);
   }
-  // For selector filters, supplier-side price ordering starves the candidate pool.
-  // Pull newest candidates, then apply requested sort locally after filtering.
-  const supplierOrderBy = useNativeFortniteSelectorParams
-    ? "pdate_to_down"
-    : resolveSupplierSort(options.sort);
+  // For Fortnite selector filters:
+  // - Keep newest mode for relevance/newest.
+  // - For explicit price sorting, request supplier-side price order to avoid
+  //   returning a tiny non-cheapest subset.
+  const supplierOrderBy =
+    useNativeFortniteSelectorParams &&
+    options.sort !== "price_asc" &&
+    options.sort !== "price_desc"
+      ? "pdate_to_down"
+      : resolveSupplierSort(options.sort);
   url.searchParams.set("order_by", supplierOrderBy);
   const page = Number.isFinite(options.page ?? NaN) ? Math.max(1, Number(options.page)) : 1;
   const pageSize = Number.isFinite(options.pageSize ?? NaN)
@@ -6371,11 +6376,14 @@ export async function searchListings(query: string, options: SearchOptions = {})
     );
     const hasTextQuery = Boolean(trimmedQuery);
     const hasAscendingPriceSort = options.sort === "price_asc";
+    const hasFortniteSelectorPriceAsc = hasFortniteSelectorFilters && hasAscendingPriceSort;
     const requiresDeepCandidateScan =
       hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery || hasAscendingPriceSort;
     const requiredAggregatedSize = requiresDeepCandidateScan
       ? isRobloxScope && hasRobloxFilters
         ? Math.min(5200, Math.max(targetEnd + pageSize * 180, 1800))
+        : hasFortniteSelectorPriceAsc
+          ? Math.min(2600, Math.max(targetEnd + pageSize * 110, 1200))
         : hasFortniteSelectorFilters
           ? Math.min(1600, Math.max(targetEnd + pageSize * 48, 700))
           : hasStrictFortniteCountFilters
@@ -6413,6 +6421,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
           ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
           ? Math.max(page + 6, HEAVY_FILTER_MAX_LOGICAL_PAGES)
+        : hasFortniteSelectorPriceAsc
+            ? Math.max(page + 20, 40)
         : hasFortniteSelectorOnlyFilters
             ? Math.max(page + 4, 10)
             : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES)
@@ -6491,7 +6501,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
       needsStrictFortniteCountFinalPass ||
       hasLocalPriceFilter ||
       hasAscendingPriceSort;
-    const finalPassPoolSize = hasFortniteSelectorFilters
+    const finalPassPoolSize = hasFortniteSelectorPriceAsc
+      ? Math.min(2600, Math.max(targetEnd + pageSize * 120, 1300))
+      : hasFortniteSelectorFilters
       ? Math.min(1500, Math.max(targetEnd + pageSize * 50, 700))
       : hasStrictFortniteCountFilters
         ? Math.min(18000, Math.max(targetEnd + pageSize * 420, 9000))
@@ -6503,7 +6515,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
-    const detailEnrichmentLimit = hasFortniteSelectorFilters
+    const detailEnrichmentLimit = hasFortniteSelectorPriceAsc
+      ? Math.min(finalPassPool.length, 420)
+      : hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 260)
       : hasStrictFortniteCountFilters
         ? Math.min(finalPassPool.length, 9000)
@@ -6549,7 +6563,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasFortniteSelectorFilters &&
       !Boolean(normalizedOptions.disableNativeFortniteSelectorParams)
     ) {
-      const shouldFallbackFromStrictNativeSelector = result.listings.length === 0;
+      const shouldFallbackFromStrictNativeSelector =
+        result.listings.length === 0 ||
+        (options.sort === "price_asc" &&
+          page === 1 &&
+          !result.hasMore &&
+          result.listings.length < Math.min(pageSize, 5));
 
       if (shouldFallbackFromStrictNativeSelector) {
         // Native selector params can under-report results when seller data is incomplete.
