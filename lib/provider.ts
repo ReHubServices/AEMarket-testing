@@ -2067,6 +2067,30 @@ function resolveSupplierSort(sort: SearchSort | undefined) {
   return "pdate_to_down";
 }
 
+function resolveScopedCategoryId(options: SearchOptions) {
+  const slug = toSlug(options.category ?? options.game ?? "");
+  const categoryIdsBySlug: Record<string, number> = {
+    steam: 1,
+    ea: 3,
+    battlenet: 11,
+    epicgames: 12,
+    riot: 13,
+    supercell: 15,
+    tiktok: 20,
+    discord: 22,
+    telegram: 24,
+    roblox: 31,
+    fortnite: 9,
+    valorant: 13,
+    siege: 5,
+    uplay: 5,
+    "rainbow-six-siege": 5,
+    instagram: 10,
+    cs2: 1
+  };
+  return categoryIdsBySlug[slug] ?? null;
+}
+
 function buildSearchUrl(endpoint: string, query: string, options: SearchOptions) {
   const url = new URL(normalizeEndpoint(endpoint));
   const normalizedQuery = query.trim();
@@ -2181,6 +2205,11 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
         url.searchParams.set("pmax", String(max));
       }
     }
+  }
+
+  const scopedCategoryId = resolveScopedCategoryId(options);
+  if (scopedCategoryId && !url.searchParams.has("category_id")) {
+    url.searchParams.set("category_id", String(scopedCategoryId));
   }
 
   if (!options.disableNativeFortniteSelectorParams && ENABLE_NATIVE_FORTNITE_SELECTOR_PARAMS) {
@@ -6238,7 +6267,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       const supplierPageStart = Math.max(1, (targetPage - 1) * supplierPageSpan + 1);
       const supplierPages = Array.from({ length: supplierPageSpan }, (_, index) => supplierPageStart + index);
 
-      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode;
+      const shouldUsePrimaryEndpoint = !hasBrowseScope || broadMode || explicitScope;
       const primary = shouldUsePrimaryEndpoint
         ? await fetchFromEndpointForQueries(
             endpoint,
@@ -6262,18 +6291,28 @@ export async function searchListings(query: string, options: SearchOptions = {})
           ? 1
           : SUPPLIER_MAX_CATEGORY_ENDPOINTS;
       const categoryEndpoints = buildCategoryEndpoints(endpoint, endpointScope).slice(0, categoryEndpointLimit);
-      const categoryResultsSettled = await Promise.allSettled(
-        categoryEndpoints.map((categoryEndpoint) =>
-          fetchFromEndpointForQueries(
-            categoryEndpoint,
-            pageOptions,
-            supplierQueries,
-            supplierPages,
-            queryLimit,
-            pageSpanLimit
+      const shouldFetchCategoryEndpoints =
+        categoryEndpoints.length > 0 &&
+        (
+          !explicitScope ||
+          broadMode ||
+          primary.length === 0
+        );
+
+      const categoryResultsSettled = shouldFetchCategoryEndpoints
+        ? await Promise.allSettled(
+            categoryEndpoints.map((categoryEndpoint) =>
+              fetchFromEndpointForQueries(
+                categoryEndpoint,
+                pageOptions,
+                supplierQueries,
+                supplierPages,
+                queryLimit,
+                pageSpanLimit
+              )
+            )
           )
-        )
-      );
+        : [];
       const categoryResults = categoryResultsSettled
         .filter(
           (entry): entry is PromiseFulfilledResult<MarketListing[]> =>
