@@ -6024,28 +6024,12 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
   }
 
   if (isFortniteScope && fortniteSelectedTermCount > 0) {
-    const prioritized = new Set<string>();
-    const push = (value: string) => {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        return;
-      }
-      prioritized.add(trimmed);
-    };
-
-    for (const term of fortniteSelectedTerms) {
-      push(term);
-      push(`fortnite ${term}`);
-      push(`${term} fortnite`);
+    // When Fortnite native selector params are present, avoid keyword-based narrowing.
+    // Let supplier-side selector params drive matching and keep one broad fallback query.
+    if (normalized) {
+      return [normalized, ""];
     }
-    push("fortnite");
-    if (normalized && normalized.toLowerCase() !== "fortnite") {
-      push(normalized);
-    }
-    const maxVariants = Math.max(2, SUPPLIER_MAX_QUERY_VARIANTS);
-    const prioritizedList = Array.from(prioritized).slice(0, maxVariants - 1);
-    // Always keep one broad query fallback to avoid false zero-results from strict term search.
-    return [...prioritizedList, ""];
+    return [""];
   }
 
   if (!normalized) {
@@ -6105,9 +6089,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
   ) {
     const resolution = await resolveFortniteSelectorFiltersWithMeta(resolvedSupplierFilters);
     resolvedSupplierFilters = resolution.filters;
-    // Use native selector params when lookup is available and fully resolved.
-    // Fall back to local matching only when lookup data is unavailable/incomplete.
-    if (!resolution.hadLookupData || !resolution.fullyResolved) {
+    // Keep native selector params whenever lookup data exists.
+    // Fallback only when lookup data is unavailable.
+    if (!resolution.hadLookupData) {
       disableNativeFortniteSelectorParams = true;
     }
   }

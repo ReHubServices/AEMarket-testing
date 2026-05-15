@@ -8,6 +8,11 @@ import {
 
 export const runtime = "nodejs";
 
+type FortniteSelectorOption = {
+  label: string;
+  value: string;
+};
+
 const selectorTypeMap: Record<string, string[]> = {
   fortnite_outfits: ["outfit", "character"],
   fortnite_pickaxes: ["pickaxe", "harvestingtool"],
@@ -23,15 +28,59 @@ function normalizeText(value: string) {
     .trim();
 }
 
-function looksLikeMachineCode(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return false;
+function normalizeCompact(value: string) {
+  return normalizeText(value).replace(/\s+/g, "");
+}
+
+function looksMachineLike(value: string) {
+  return /^(?:[a-z]+_[a-z0-9_]+|[a-z]+[0-9]{2,})$/i.test(value.trim());
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+function humanizeNativeOption(value: string) {
+  const original = value.trim();
+  if (!original) {
+    return "";
   }
-  return (
-    /^[a-z]+_[a-z0-9_]+$/i.test(trimmed) ||
-    /^[a-z]+[0-9]{2,}$/i.test(trimmed)
-  );
+  if (!looksMachineLike(original)) {
+    return original;
+  }
+
+  let normalized = original.toLowerCase();
+  normalized = normalized
+    .replace(/^cid_/, "")
+    .replace(/^eid_/, "")
+    .replace(/^glider_/, "")
+    .replace(/^character_/, "")
+    .replace(/^a_\d+_/, "")
+    .replace(/^\d+_/, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return original;
+  }
+  return toTitleCase(normalized);
+}
+
+function buildNativeCandidatesFromCosmeticId(rawId: string) {
+  const id = rawId.trim().toLowerCase();
+  if (!id) {
+    return [];
+  }
+  const candidates = new Set<string>();
+  candidates.add(id);
+  candidates.add(id.replace(/^cid_/, ""));
+  candidates.add(id.replace(/^eid_/, ""));
+  return Array.from(candidates).filter(Boolean);
 }
 
 function extractText(value: unknown) {
@@ -110,7 +159,7 @@ export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const selector = request.nextUrl.searchParams.get("selector")?.trim() ?? "";
   if (query.length < 2) {
-    return ok({ options: [] as string[] });
+    return ok({ options: [] as FortniteSelectorOption[] });
   }
   const knownSelectorKeys = new Set<FortniteSelectorKey>([
     "fortnite_outfits",
@@ -123,11 +172,46 @@ export async function GET(request: NextRequest) {
     : "fortnite_outfits";
 
   const lztOptions = await searchFortniteSelectorOptions(selectorKey, query, 220);
-  const mostlyMachineCodes =
-    lztOptions.length > 0 &&
-    lztOptions.filter((option) => looksLikeMachineCode(option)).length / lztOptions.length >= 0.7;
-  if (lztOptions.length > 0 && !mostlyMachineCodes) {
-    return ok({ options: lztOptions });
+  const lookupByNormalized = new Map<string, string>();
+  const lookupByCompact = new Map<string, string>();
+  for (const option of lztOptions) {
+    const normalized = normalizeText(option);
+    const compact = normalizeCompact(option);
+    if (normalized) {
+      lookupByNormalized.set(normalized, option);
+    }
+    if (compact) {
+      lookupByCompact.set(compact, option);
+    }
+  }
+  const resolvedOptions = new Map<string, { option: FortniteSelectorOption; score: number }>();
+  const addOption = (label: string, value: string, score: number) => {
+    const normalizedLabel = normalizeText(label);
+    const normalizedValue = value.trim();
+    if (!normalizedLabel || !normalizedValue) {
+      return;
+    }
+    const safeScore = score < 0 ? 9 : score;
+    const key = `${normalizedLabel}::${normalizedValue.toLowerCase()}`;
+    const existing = resolvedOptions.get(key);
+    if (!existing || safeScore < existing.score) {
+      resolvedOptions.set(key, {
+        option: {
+          label: label.trim(),
+          value: normalizedValue
+        },
+        score: safeScore
+      });
+    }
+  };
+
+  for (const option of lztOptions) {
+    const label = humanizeNativeOption(option);
+    const score = Math.min(
+      scoreCandidate(query, label) >= 0 ? scoreCandidate(query, label) : 9,
+      scoreCandidate(query, option) >= 0 ? scoreCandidate(query, option) : 9
+    );
+    addOption(label, option, score);
   }
 
   const baseUrl = (process.env.FORTNITE_API_BASE_URL ?? "https://fortnite-api.com")
@@ -151,46 +235,63 @@ export async function GET(request: NextRequest) {
 
     const payload = (await response.json()) as { data?: unknown };
     const rows = Array.isArray(payload.data) ? payload.data : [];
-    const unique = new Map<string, { value: string; score: number }>();
 
     for (const row of rows) {
       if (!row || typeof row !== "object") {
         continue;
       }
       const record = row as Record<string, unknown>;
-      if (!matchesSelectorType(record, selector)) {
+      if (!matchesSelectorType(record, selectorKey)) {
         continue;
       }
       const name = extractText(record.name);
       if (!name || name.length < 2 || name.length > 64) {
         continue;
       }
-      const score = scoreCandidate(query, name);
-      if (score < 0) {
+      let nativeValue = "";
+      const exactByName =
+        lookupByNormalized.get(normalizeText(name)) ??
+        lookupByCompact.get(normalizeCompact(name)) ??
+        "";
+      if (exactByName) {
+        nativeValue = exactByName;
+      } else {
+        const cosmeticId = extractText(record.id);
+        for (const candidate of buildNativeCandidatesFromCosmeticId(cosmeticId)) {
+          const matched =
+            lookupByNormalized.get(normalizeText(candidate)) ??
+            lookupByCompact.get(normalizeCompact(candidate));
+          if (matched) {
+            nativeValue = matched;
+            break;
+          }
+        }
+      }
+      if (!nativeValue) {
         continue;
       }
-      const key = normalizeText(name);
-      const existing = unique.get(key);
-      if (!existing || score < existing.score) {
-        unique.set(key, { value: name, score });
-      }
+      const score = scoreCandidate(query, name);
+      addOption(name, nativeValue, score >= 0 ? score : 4);
     }
-
-    const options = Array.from(unique.values())
-      .sort((a, b) => {
-        if (a.score !== b.score) {
-          return a.score - b.score;
-        }
-        if (a.value.length !== b.value.length) {
-          return a.value.length - b.value.length;
-        }
-        return a.value.localeCompare(b.value);
-      })
-      .slice(0, 220)
-      .map((entry) => entry.value);
-
-    return ok({ options });
   } catch {
-    return fail("Fortnite cosmetic lookup unavailable", 502);
+    // Fall through to available native options when Fortnite API lookup fails.
   }
+
+  const options = Array.from(resolvedOptions.values())
+    .sort((a, b) => {
+      if (a.score !== b.score) {
+        return a.score - b.score;
+      }
+      if (a.option.label.length !== b.option.label.length) {
+        return a.option.label.length - b.option.label.length;
+      }
+      return a.option.label.localeCompare(b.option.label);
+    })
+    .slice(0, 220)
+    .map((entry) => entry.option);
+
+  if (options.length > 0) {
+    return ok({ options });
+  }
+  return fail("Fortnite cosmetic lookup unavailable", 502);
 }

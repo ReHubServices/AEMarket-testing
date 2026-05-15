@@ -668,6 +668,11 @@ type FortniteSelectorConfig = {
   options: string[];
 };
 
+type FortniteSelectorApiOption = {
+  label: string;
+  value: string;
+};
+
 const FORTNITE_SELECTOR_CONFIG: FortniteSelectorConfig[] = [
   {
     key: "fortnite_outfits",
@@ -1316,6 +1321,49 @@ function normalizeSelectorTerm(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeSelectorSignature(value: string) {
+  return normalizeSelectorTerm(value).toLowerCase();
+}
+
+function isFortniteSelectorKey(value: string): value is FortniteSelectorKey {
+  return (
+    value === "fortnite_outfits" ||
+    value === "fortnite_pickaxes" ||
+    value === "fortnite_emotes" ||
+    value === "fortnite_gliders"
+  );
+}
+
+function parseFortniteSelectorApiOptions(payload: unknown): FortniteSelectorApiOption[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+  const unique = new Map<string, FortniteSelectorApiOption>();
+  for (const row of payload) {
+    let label = "";
+    let value = "";
+    if (typeof row === "string") {
+      const normalized = normalizeSelectorTerm(row);
+      label = normalized;
+      value = normalized;
+    } else if (row && typeof row === "object") {
+      const record = row as Record<string, unknown>;
+      const rawLabel = typeof record.label === "string" ? record.label : "";
+      const rawValue = typeof record.value === "string" ? record.value : "";
+      label = normalizeSelectorTerm(rawLabel || rawValue);
+      value = normalizeSelectorTerm(rawValue || rawLabel);
+    }
+    if (label.length < 2 || value.length < 2) {
+      continue;
+    }
+    const key = `${normalizeSelectorSignature(label)}::${value.toLowerCase()}`;
+    if (!unique.has(key)) {
+      unique.set(key, { label, value });
+    }
+  }
+  return Array.from(unique.values());
+}
+
 function shouldSendSupplierFilter(key: string, rawValue: string) {
   const value = rawValue.trim();
   if (!value) {
@@ -1506,6 +1554,14 @@ export function MarketSearch({
   const [fortniteSelectorSearch, setFortniteSelectorSearch] = useState("");
   const [fortniteSelectorDraft, setFortniteSelectorDraft] = useState<string[]>([]);
   const [fortniteSelectorRemoteOptions, setFortniteSelectorRemoteOptions] = useState<string[]>([]);
+  const [fortniteSelectorValueMap, setFortniteSelectorValueMap] = useState<
+    Record<FortniteSelectorKey, Record<string, string>>
+  >({
+    fortnite_outfits: {},
+    fortnite_pickaxes: {},
+    fortnite_emotes: {},
+    fortnite_gliders: {}
+  });
   const [fortniteSelectorRemoteLoading, setFortniteSelectorRemoteLoading] = useState(false);
   const [fortniteTypingSuggestions, setFortniteTypingSuggestions] = useState<string[]>([]);
   const [remoteTitleSuggestions, setRemoteTitleSuggestions] = useState<string[]>([]);
@@ -1771,13 +1827,26 @@ export function MarketSearch({
           setFortniteSelectorRemoteOptions([]);
           return;
         }
-        const payload = (await response.json()) as { options?: string[] };
-        const options = Array.isArray(payload.options)
-          ? payload.options
-              .map((value) => normalizeSelectorTerm(String(value ?? "")))
-              .filter((value) => value.length >= 2 && value.length <= 64)
-          : [];
-        setFortniteSelectorRemoteOptions(options);
+        const payload = (await response.json()) as { options?: unknown };
+        const options = parseFortniteSelectorApiOptions(payload.options);
+        setFortniteSelectorRemoteOptions(
+          options
+            .map((entry) => entry.label)
+            .filter((value) => value.length >= 2 && value.length <= 64)
+        );
+        setFortniteSelectorValueMap((previous) => {
+          if (!fortniteSelectorOpen) {
+            return previous;
+          }
+          const nextForSelector = { ...previous[fortniteSelectorOpen] };
+          for (const entry of options) {
+            nextForSelector[normalizeSelectorSignature(entry.label)] = entry.value;
+          }
+          return {
+            ...previous,
+            [fortniteSelectorOpen]: nextForSelector
+          };
+        });
       } catch {
         if (!controller.signal.aborted) {
           setFortniteSelectorRemoteOptions([]);
@@ -1816,14 +1885,24 @@ export function MarketSearch({
           setFortniteTypingSuggestions([]);
           return;
         }
-        const payload = (await response.json()) as { options?: string[] };
-        const options = Array.isArray(payload.options)
-          ? payload.options
-              .map((value) => normalizeSelectorTerm(String(value ?? "")))
-              .filter((value) => value.length >= 2 && value.length <= 64)
-              .slice(0, 160)
-          : [];
-        setFortniteTypingSuggestions(options);
+        const payload = (await response.json()) as { options?: unknown };
+        const options = parseFortniteSelectorApiOptions(payload.options);
+        setFortniteTypingSuggestions(
+          options
+            .map((entry) => entry.label)
+            .filter((value) => value.length >= 2 && value.length <= 64)
+            .slice(0, 160)
+        );
+        setFortniteSelectorValueMap((previous) => {
+          const nextForOutfits = { ...previous.fortnite_outfits };
+          for (const entry of options) {
+            nextForOutfits[normalizeSelectorSignature(entry.label)] = entry.value;
+          }
+          return {
+            ...previous,
+            fortnite_outfits: nextForOutfits
+          };
+        });
       } catch {
         if (!controller.signal.aborted) {
           setFortniteTypingSuggestions([]);
@@ -1991,7 +2070,16 @@ export function MarketSearch({
           if (!shouldSendSupplierFilter(key, normalizedValue)) {
             continue;
           }
-          supplierFilters[key] = normalizedValue;
+          let outgoingValue = normalizedValue;
+          if (isFortniteSelectorKey(key)) {
+            const selectedValues = parseSelectedValues(normalizedValue);
+            const mappedValues = selectedValues.map((entry) => {
+              const signature = normalizeSelectorSignature(entry);
+              return fortniteSelectorValueMap[key][signature] ?? entry;
+            });
+            outgoingValue = mappedValues.join(", ");
+          }
+          supplierFilters[key] = outgoingValue;
         }
         payload.supplierFilters = supplierFilters;
 
@@ -2045,6 +2133,7 @@ export function MarketSearch({
     minPrice,
     maxPrice,
     gameFilters,
+    fortniteSelectorValueMap,
     currentPage,
   ]);
 
