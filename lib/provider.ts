@@ -169,7 +169,34 @@ function getSearchEndpoint() {
   if (!configured) {
     return `${getLztBaseUrl()}/`;
   }
-  return `${normalizeSupplierBaseUrl(configured)}/`;
+  const normalized = normalizeSupplierBaseUrl(configured);
+  try {
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase();
+    const isOfficialLztHost =
+      host === "prod-api.lzt.market" ||
+      host.endsWith(".lzt.market") ||
+      host === "lzt.market" ||
+      host === "www.lzt.market" ||
+      host === "lolz.guru" ||
+      host === "www.lolz.guru" ||
+      host === "lolz.live" ||
+      host === "www.lolz.live";
+
+    // For LZT hosts, search endpoints should always start from host root.
+    // Path-scoped env values (e.g. .../fortnite) can accidentally produce
+    // broken scoped URLs like /fortnite/fortnite and return empty results.
+    if (isOfficialLztHost) {
+      parsed.pathname = "/";
+      parsed.search = "";
+      parsed.hash = "";
+      return normalizeEndpoint(parsed.toString());
+    }
+  } catch {
+    // Fall back to normalized value below.
+  }
+
+  return normalizeEndpoint(normalized);
 }
 
 function getItemEndpointBase() {
