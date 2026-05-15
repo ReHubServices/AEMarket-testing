@@ -2276,7 +2276,6 @@ async function fetchListingsFromEndpoint(input: {
 
   const data = (await response.json()) as unknown;
   return extractItems(data)
-    .filter((entry) => !hasBlockedMarketplaceLink(buildListingSource(entry)))
     .map((entry) =>
       mapRawListing(entry, endpointGameHint, SUPPLIER_CURRENCY.toUpperCase())
     )
@@ -2322,9 +2321,6 @@ async function fetchListingDetailFromApi(listingId: string, token: string) {
             ...fromArray[0]
           }
         : raw;
-      if (hasBlockedMarketplaceLink(buildListingSource(source))) {
-        throw new Error("BLOCKED_LISTING");
-      }
       const mapped = mapRawListing(
         source,
         inferEndpointGameHint(url),
@@ -2337,9 +2333,6 @@ async function fetchListingDetailFromApi(listingId: string, token: string) {
     }
     return null;
   } catch (error) {
-    if (error instanceof Error && error.message === "BLOCKED_LISTING") {
-      throw error;
-    }
     return null;
   }
 }
