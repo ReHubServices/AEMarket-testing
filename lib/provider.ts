@@ -6019,7 +6019,9 @@ function buildSupplierQueryVariants(query: string, options: SearchOptions = {}) 
     }
 
     if (!normalized && selectedTerms.length === 0) {
-      addVariant("fortnite");
+      // Fortnite category browse with no text query must stay broad.
+      // Forcing "fortnite" as keyword can collapse results to zero on supplier side.
+      return [""];
     }
   }
 
