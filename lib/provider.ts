@@ -40,6 +40,7 @@ const RUB_TO_USD_RATE_RAW = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
 const EUR_TO_USD_RATE_RAW = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
 const SUPPLIER_FETCH_TIMEOUT_MS = 9000;
+const SEARCH_EXECUTION_BUDGET_MS = 11_000;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
 const SUPPLIER_MAX_PAGE_SPAN = 2;
 const SUPPLIER_MAX_CATEGORY_ENDPOINTS = 4;
@@ -6230,6 +6231,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
   }
 
   const executeSearch = async (): Promise<SearchResult> => {
+    const deadlineAt = Date.now() + SEARCH_EXECUTION_BUDGET_MS;
+    const isOutOfBudget = () => Date.now() >= deadlineAt;
+    const remainingBudgetMs = () => Math.max(0, deadlineAt - Date.now());
     try {
     const normalizedScopeGame = (searchOptions.game ?? "").trim().toLowerCase();
     const normalizedScopeCategory = (searchOptions.category ?? "").trim().toLowerCase();
@@ -6281,6 +6285,9 @@ export async function searchListings(query: string, options: SearchOptions = {})
       broadMode = false,
       supplierQueries: string[] = [trimmedQuery]
     ) => {
+      if (isOutOfBudget()) {
+        return [] as MarketListing[];
+      }
       const pageOptions: SearchOptions = {
         ...normalizedOptions,
         page: targetPage
@@ -6491,7 +6498,11 @@ export async function searchListings(query: string, options: SearchOptions = {})
       : Math.max(page + 4, SUPPLIER_MAX_LOGICAL_PAGES);
     let consecutiveEmpty = 0;
 
-    while (logicalCursor <= maxLogicalPages && aggregated.length < requiredAggregatedSize) {
+    while (
+      logicalCursor <= maxLogicalPages &&
+      aggregated.length < requiredAggregatedSize &&
+      !isOutOfBudget()
+    ) {
       let chunk = preloadedByLogicalPage.get(logicalCursor);
       if (!chunk) {
         chunk = await loadFilteredPage(
@@ -6526,7 +6537,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     let hasMore = aggregated.length > targetEnd;
     if (!hasMore) {
       const probeLimit = hasStrictFortniteCountFilters ? 5 : hasNonSelectorSupplierFilters ? 1 : 2;
-      for (let probeOffset = 0; probeOffset < probeLimit; probeOffset += 1) {
+      for (let probeOffset = 0; probeOffset < probeLimit && !isOutOfBudget(); probeOffset += 1) {
         const probePage = logicalCursor + probeOffset;
         const probeChunk = await loadFilteredPage(
           probePage,
@@ -6577,7 +6588,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ? Math.min(640, Math.max(targetEnd + pageSize * 24, 260))
         : Math.max(targetEnd + 1, pageSize + 1);
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
-    const detailEnrichmentLimit = hasFortniteSelectorPriceAsc
+    const baseDetailEnrichmentLimit = hasFortniteSelectorPriceAsc
       ? Math.min(finalPassPool.length, 420)
       : hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 260)
@@ -6590,6 +6601,12 @@ export async function searchListings(query: string, options: SearchOptions = {})
       : needsDeepFilterFinalPass
         ? Math.min(finalPassPool.length, 140)
         : 24;
+    const detailEnrichmentLimit =
+      remainingBudgetMs() < 1200
+        ? Math.min(baseDetailEnrichmentLimit, 24)
+        : remainingBudgetMs() < 2500
+          ? Math.min(baseDetailEnrichmentLimit, 80)
+          : baseDetailEnrichmentLimit;
     const enriched = await enrichListingsWithDetails(
       finalPassPool,
       token,
@@ -6610,9 +6627,13 @@ export async function searchListings(query: string, options: SearchOptions = {})
       uniqueFinal.length > targetEnd ||
       (hasFortniteSelectorFilters && hasMore) ||
       (!needsDeepFilterFinalPass && hasMore && finalWindow.length >= pageSize);
-    const displayTranslated = await translateListingsToEnglish(finalWindow);
+    const displayTranslated =
+      remainingBudgetMs() < 900 ? finalWindow : await translateListingsToEnglish(finalWindow);
     const displayWithSharedImages = applySharedImageFallback(displayTranslated, trimmedQuery);
-    const displayWithFortniteApiImages = await enrichFortniteListingImages(displayWithSharedImages);
+    const displayWithFortniteApiImages =
+      remainingBudgetMs() < 700
+        ? displayWithSharedImages
+        : await enrichFortniteListingImages(displayWithSharedImages);
     const diversified = withFortniteImageDiversity(displayWithFortniteApiImages);
     const pagedListings = withMarkup(diversified, store.settings.markupPercent);
     const result: SearchResult = {
