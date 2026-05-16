@@ -6481,11 +6481,15 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const hasTextQuery = Boolean(trimmedQuery);
     const hasAscendingPriceSort = options.sort === "price_asc";
     const hasFortniteSelectorPriceAsc = hasFortniteSelectorFilters && hasAscendingPriceSort;
+    const hasLocalFortniteSelectorMatching =
+      hasFortniteSelectorFilters && Boolean(normalizedOptions.disableNativeFortniteSelectorParams);
     const requiresDeepCandidateScan =
       hasActiveSupplierFilters || hasLocalPriceFilter || hasTextQuery || hasAscendingPriceSort;
     const requiredAggregatedSize = requiresDeepCandidateScan
       ? isRobloxScope && hasRobloxFilters
         ? Math.min(5200, Math.max(targetEnd + pageSize * 180, 1800))
+        : hasLocalFortniteSelectorMatching
+          ? Math.min(7800, Math.max(targetEnd + pageSize * 260, 3200))
         : hasFortniteSelectorPriceAsc
           ? Math.min(2600, Math.max(targetEnd + pageSize * 110, 1200))
         : hasFortniteSelectorFilters
@@ -6521,6 +6525,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
         ? Math.max(page + 40, PRICE_FILTER_MAX_LOGICAL_PAGES)
         : isRobloxScope && hasRobloxFilters
           ? Math.max(page + 45, 80)
+        : hasLocalFortniteSelectorMatching
+          ? Math.max(page + 70, 120)
         : hasStrictFortniteCountFilters
           ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
@@ -6611,6 +6617,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasAscendingPriceSort;
     const finalPassPoolSize = hasFortniteSelectorPriceAsc
       ? Math.min(2600, Math.max(targetEnd + pageSize * 120, 1300))
+      : hasLocalFortniteSelectorMatching
+      ? Math.min(6200, Math.max(targetEnd + pageSize * 240, 2600))
       : hasFortniteSelectorFilters
       ? Math.min(1500, Math.max(targetEnd + pageSize * 50, 700))
       : hasStrictFortniteCountFilters
@@ -6625,6 +6633,8 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const finalPassPool = aggregated.slice(0, finalPassPoolSize);
     const baseDetailEnrichmentLimit = hasFortniteSelectorPriceAsc
       ? Math.min(finalPassPool.length, 420)
+      : hasLocalFortniteSelectorMatching
+      ? Math.min(finalPassPool.length, 1200)
       : hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 260)
       : hasStrictFortniteCountFilters
