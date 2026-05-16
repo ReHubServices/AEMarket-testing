@@ -2120,6 +2120,11 @@ function resolveScopedCategoryId(options: SearchOptions) {
 
 function buildSearchUrl(endpoint: string, query: string, options: SearchOptions) {
   const url = new URL(normalizeEndpoint(endpoint));
+  const endpointSegments = url.pathname
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const isPathScopedEndpoint = endpointSegments.length > 0;
   const normalizedQuery = query.trim();
   const supplierFilters = options.supplierFilters ?? {};
   const hasFortniteSelectorFilters = [
@@ -2235,7 +2240,7 @@ function buildSearchUrl(endpoint: string, query: string, options: SearchOptions)
   }
 
   const scopedCategoryId = resolveScopedCategoryId(options);
-  if (scopedCategoryId && !url.searchParams.has("category_id")) {
+  if (scopedCategoryId && !isPathScopedEndpoint && !url.searchParams.has("category_id")) {
     url.searchParams.set("category_id", String(scopedCategoryId));
   }
 
@@ -2650,7 +2655,7 @@ function buildCategoryEndpoints(baseEndpoint: string, options: SearchOptions) {
         ? preferred
         : `${root}${preferred}`;
     });
-    return Array.from(new Set(strictTargets));
+    return Array.from(new Set([...strictTargets, root]));
   }
 
   const narrowedCategories =
