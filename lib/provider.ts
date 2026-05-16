@@ -6153,6 +6153,23 @@ export async function searchListings(query: string, options: SearchOptions = {})
   ]);
   let resolvedSupplierFilters = { ...(effectiveOptions.supplierFilters ?? {}) };
   let disableNativeFortniteSelectorParams = Boolean(options.disableNativeFortniteSelectorParams);
+  const hasMultiValueWithinSameFortniteSelector = Object.entries(resolvedSupplierFilters).some(
+    ([key, value]) => {
+      if (!fortniteSelectorFilterKeys.has(key)) {
+        return false;
+      }
+      const terms = String(value ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      return terms.length > 1;
+    }
+  );
+  if (hasMultiValueWithinSameFortniteSelector) {
+    // Native supplier params can behave too strictly for multi-select in one selector key
+    // (e.g. multiple pickaxes), so use local matching for broader/expected results.
+    disableNativeFortniteSelectorParams = true;
+  }
   const hasFortniteSelectorInput = Object.entries(resolvedSupplierFilters).some(
     ([key, value]) =>
       fortniteSelectorFilterKeys.has(key) && String(value ?? "").trim().length > 0
