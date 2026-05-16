@@ -6730,8 +6730,33 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasFortniteSelectorFilters &&
       !Boolean(normalizedOptions.disableNativeFortniteSelectorParams)
     ) {
+      const strictSelectorWindow = applyLocalFilters(
+        finalWindow,
+        {
+          ...normalizedOptions,
+          disableNativeFortniteSelectorParams: true
+        },
+        trimmedQuery,
+        "final"
+      );
+      const strictSelectorIds = new Set(
+        strictSelectorWindow.map((item) => item.id.trim().toLowerCase()).filter(Boolean)
+      );
+      const selectorMatchedInWindow = finalWindow.filter((item) =>
+        strictSelectorIds.has(item.id.trim().toLowerCase())
+      ).length;
+      const selectorIntegrityRatio =
+        finalWindow.length > 0 ? selectorMatchedInWindow / finalWindow.length : 1;
+      const hasSelectorIntegrityFailure =
+        page <= 2 &&
+        finalWindow.length > 0 &&
+        (
+          strictSelectorWindow.length === 0 ||
+          selectorIntegrityRatio < 0.72
+        );
       const thinSelectorPageThreshold = Math.max(3, Math.floor(pageSize * 0.5));
       const shouldFallbackFromStrictNativeSelector =
+        hasSelectorIntegrityFailure ||
         result.listings.length === 0 ||
         (page <= 2 && result.listings.length < thinSelectorPageThreshold) ||
         (page === 1 &&
