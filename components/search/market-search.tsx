@@ -2880,16 +2880,17 @@ export function MarketSearch({
                 </a>
               </div>
             )}
-            <Link href={SUPPORT_HREF} className="w-full md:w-auto">
-              <Button
-                variant="ghost"
-                className="h-12 w-full gap-2 md:w-auto"
-                data-tour="support-button"
-              >
-                <MessageCircle size={16} />
-                Support
-              </Button>
-            </Link>
+            <div className="w-full md:w-auto" data-tour="support-button">
+              <Link href={SUPPORT_HREF} className="block w-full md:w-auto">
+                <Button
+                  variant="ghost"
+                  className="h-12 w-full gap-2 md:w-auto"
+                >
+                  <MessageCircle size={16} />
+                  Support
+                </Button>
+              </Link>
+            </div>
             <Button
               type="button"
               variant="ghost"
