@@ -968,14 +968,64 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
 }
 
 async function runSearchRequest(parsed: ParsedSearchRequest) {
+  const applyRequestedSort = (listings: MarketListing[]) => {
+    const sorted = listings.slice();
+    if (parsed.sort === "price_asc") {
+      sorted.sort((a, b) => a.price - b.price);
+    } else if (parsed.sort === "price_desc") {
+      sorted.sort((a, b) => b.price - a.price);
+    } else if (parsed.sort === "newest") {
+      sorted.sort((a, b) => b.id.localeCompare(a.id));
+    }
+    return sorted;
+  };
+
+  const runRelevanceFallbackForPriceSort = async () => {
+    if (parsed.sort !== "price_asc" && parsed.sort !== "price_desc") {
+      return null;
+    }
+    const fallbackResult = await searchListings(parsed.query, {
+      sort: "relevance",
+      minPrice: parsed.minPrice,
+      maxPrice: parsed.maxPrice,
+      page: parsed.page,
+      pageSize: parsed.pageSize,
+      game: parsed.game || null,
+      category: parsed.category || null,
+      hasImage: parsed.hasImage,
+      hasDescription: parsed.hasDescription,
+      hasSpecs: parsed.hasSpecs,
+      supplierFilters: parsed.supplierFilters
+    });
+    const fallbackFortniteScoped = applyHardFortniteFilters(
+      fallbackResult.listings,
+      parsed.supplierFilters
+    );
+    const fallbackPriceFiltered = applyHardPriceFilters(
+      fallbackFortniteScoped,
+      parsed.minPrice,
+      parsed.maxPrice
+    );
+    const fallbackListings = applyRequestedSort(fallbackPriceFiltered);
+    return {
+      listings: fallbackListings,
+      pagination: {
+        page: fallbackResult.page,
+        pageSize: fallbackResult.pageSize,
+        hasMore: fallbackListings.length > 0 && fallbackResult.hasMore
+      }
+    };
+  };
+
   try {
     const buildPayload = (result: Awaited<ReturnType<typeof searchListings>>) => {
       const fortniteScoped = applyHardFortniteFilters(result.listings, parsed.supplierFilters);
-      const listings = applyHardPriceFilters(
+      const priceFiltered = applyHardPriceFilters(
         fortniteScoped,
         parsed.minPrice,
         parsed.maxPrice
       );
+      const listings = applyRequestedSort(priceFiltered);
       return {
         listings,
         pagination: {
@@ -1066,13 +1116,20 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
       }
 
       payload = {
-        listings: mergedListings,
+        listings: applyRequestedSort(mergedListings),
         pagination: {
           page: parsed.page,
           pageSize: parsed.pageSize,
           hasMore
         }
       };
+    }
+
+    if (payload.listings.length === 0) {
+      const fallbackPayload = await runRelevanceFallbackForPriceSort();
+      if (fallbackPayload && fallbackPayload.listings.length > 0) {
+        payload = fallbackPayload;
+      }
     }
 
     return ok(payload);
@@ -1083,6 +1140,14 @@ async function runSearchRequest(parsed: ParsedSearchRequest) {
     }
     if (message === "LZT_AUTH_FAILED") {
       return fail("Search provider authorization failed", 401);
+    }
+    try {
+      const fallbackPayload = await runRelevanceFallbackForPriceSort();
+      if (fallbackPayload && fallbackPayload.listings.length > 0) {
+        return ok(fallbackPayload);
+      }
+    } catch {
+      // Fall through to existing error response.
     }
     return fail("Search unavailable", 502);
   }
