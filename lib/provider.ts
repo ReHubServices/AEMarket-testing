@@ -1749,13 +1749,52 @@ function extractSpecsFromObject(source: Record<string, unknown>, output: MarketL
     ""
   );
 
-  if (label || value) {
-    if (!label && value.includes(":")) {
-      pushSpec(output, parseInlineSpec(value));
-    } else {
-      pushSpec(output, buildSpec(label, value));
+  const rawType = extractText(source.type, "").toLowerCase();
+  const cosmeticTitle = extractText(source.title ?? source.name, "");
+  const cosmeticId = extractText(source.id ?? source.code ?? source.item_id, "");
+  const isFortniteCosmetic =
+    rawType.includes("outfit") ||
+    rawType.includes("skin") ||
+    rawType.includes("pickaxe") ||
+    rawType.includes("emote") ||
+    rawType.includes("dance") ||
+    rawType.includes("glider");
+
+  if (isFortniteCosmetic && (cosmeticTitle || cosmeticId)) {
+    let cosmeticLabel = "fortnite cosmetic";
+    if (rawType.includes("pickaxe")) {
+      cosmeticLabel = "fortnite pickaxe";
+    } else if (rawType.includes("emote") || rawType.includes("dance")) {
+      cosmeticLabel = "fortnite emote";
+    } else if (rawType.includes("glider")) {
+      cosmeticLabel = "fortnite glider";
+    } else if (rawType.includes("outfit") || rawType.includes("skin")) {
+      cosmeticLabel = "fortnite outfit";
     }
+
+    const cosmeticValue = [cosmeticTitle, cosmeticId].filter(Boolean).join(" | ");
+    pushSpec(output, buildSpec(cosmeticLabel, cosmeticValue));
     return;
+  }
+
+  if (label || value) {
+    let pushed = false;
+    if (!label && value.includes(":")) {
+      const parsed = parseInlineSpec(value);
+      if (parsed) {
+        pushSpec(output, parsed);
+        pushed = true;
+      }
+    } else {
+      const built = buildSpec(label, value);
+      if (built) {
+        pushSpec(output, built);
+        pushed = true;
+      }
+    }
+    if (pushed) {
+      return;
+    }
   }
 
   collectNestedSelectorSpecs(source, output);
@@ -6691,8 +6730,10 @@ export async function searchListings(query: string, options: SearchOptions = {})
       hasFortniteSelectorFilters &&
       !Boolean(normalizedOptions.disableNativeFortniteSelectorParams)
     ) {
+      const thinSelectorPageThreshold = Math.max(3, Math.floor(pageSize * 0.5));
       const shouldFallbackFromStrictNativeSelector =
         result.listings.length === 0 ||
+        (page <= 2 && result.listings.length < thinSelectorPageThreshold) ||
         (page === 1 &&
           !result.hasMore &&
           result.listings.length < Math.min(pageSize, 5));
