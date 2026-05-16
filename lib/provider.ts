@@ -39,7 +39,7 @@ const SEARCH_RESULT_STALE_TTL_MS = Number(
 const RUB_TO_USD_RATE_RAW = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
 const EUR_TO_USD_RATE_RAW = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
-const SUPPLIER_FETCH_TIMEOUT_MS = 4500;
+const SUPPLIER_FETCH_TIMEOUT_MS = 9000;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
 const SUPPLIER_MAX_PAGE_SPAN = 2;
 const SUPPLIER_MAX_CATEGORY_ENDPOINTS = 4;
@@ -6143,11 +6143,23 @@ export async function searchListings(query: string, options: SearchOptions = {})
     !disableNativeFortniteSelectorParams &&
     hasFortniteSelectorInput
   ) {
-    const resolution = await resolveFortniteSelectorFiltersWithMeta(resolvedSupplierFilters);
-    resolvedSupplierFilters = resolution.filters;
+    let resolution:
+      | {
+          filters: Record<string, string>;
+          hadLookupData: boolean;
+        }
+      | null = null;
+    try {
+      resolution = await resolveFortniteSelectorFiltersWithMeta(resolvedSupplierFilters);
+    } catch {
+      resolution = null;
+    }
+    if (resolution) {
+      resolvedSupplierFilters = resolution.filters;
+    }
     // Keep native selector params whenever lookup data exists.
-    // Fallback only when lookup data is unavailable.
-    if (!resolution.hadLookupData) {
+    // Fallback when lookup data is unavailable or lookup failed.
+    if (!resolution || !resolution.hadLookupData) {
       disableNativeFortniteSelectorParams = true;
     }
   }
@@ -6615,8 +6627,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     ) {
       const shouldFallbackFromStrictNativeSelector =
         result.listings.length === 0 ||
-        (options.sort === "price_asc" &&
-          page === 1 &&
+        (page === 1 &&
           !result.hasMore &&
           result.listings.length < Math.min(pageSize, 5));
 

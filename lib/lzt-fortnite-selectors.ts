@@ -274,20 +274,26 @@ async function fetchSelectorOptionsFromApi(): Promise<SelectorOptions> {
   }
 
   const url = `${getLztBaseUrl()}/fortnite/params`;
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json"
-    },
-    cache: "no-store"
-  });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return emptySelectorOptions();
+    }
+
+    const payload = (await response.json()) as unknown;
+    return parseSelectorOptions(payload);
+  } catch {
+    // Never hard-fail marketplace search when selector lookup is flaky.
+    // Caller can safely fall back to broad/local selector matching.
     return emptySelectorOptions();
   }
-
-  const payload = (await response.json()) as unknown;
-  return parseSelectorOptions(payload);
 }
 
 async function getAllSelectorOptions(): Promise<SelectorOptions> {
