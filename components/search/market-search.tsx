@@ -1664,17 +1664,41 @@ export function MarketSearch({
     if (!activeSpotlight) {
       return null;
     }
-    if (tourStepId === "listings") {
-      const loadingElement = document.querySelector("[data-tour='listings-loading']") as HTMLElement | null;
-      if (loadingElement) {
-        return loadingElement;
+    const resolveBestBySelector = (selector: string) => {
+      const elements = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+      const visible = elements.filter((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          style.opacity !== "0"
+        );
+      });
+      if (visible.length === 0) {
+        return null;
       }
+      return visible
+        .sort((a, b) => {
+          const aRect = a.getBoundingClientRect();
+          const bRect = b.getBoundingClientRect();
+          return bRect.width * bRect.height - aRect.width * aRect.height;
+        })
+        .at(0) ?? null;
+    };
+    if (tourStepId === "listings") {
       const firstCard = document.querySelector("[data-tour='listing-card-primary']") as HTMLElement | null;
       if (firstCard) {
         return firstCard;
       }
+      const loadingElement = document.querySelector("[data-tour='listings-loading']") as HTMLElement | null;
+      if (loadingElement) {
+        return loadingElement;
+      }
     }
-    return document.querySelector(activeSpotlight.selector) as HTMLElement | null;
+    return resolveBestBySelector(activeSpotlight.selector);
   }
 
   function refreshTourSpotlightRect() {
@@ -2609,8 +2633,9 @@ export function MarketSearch({
     const top = placeAbove
       ? Math.max(12, spotlightFrame.top - 220 - gap)
       : Math.min(viewportHeight - 232, preferredTop);
+    const spotlightCenterX = spotlightFrame.left + spotlightFrame.width / 2;
     const left = Math.min(
-      Math.max(12, spotlightFrame.left),
+      Math.max(12, spotlightCenterX - cardWidth / 2),
       Math.max(12, viewportWidth - cardWidth - 12)
     );
     return { top: `${top}px`, left: `${left}px`, width: `${cardWidth}px` };
@@ -2855,8 +2880,12 @@ export function MarketSearch({
                 </a>
               </div>
             )}
-            <Link href={SUPPORT_HREF} className="w-full md:w-auto" data-tour="support-button">
-              <Button variant="ghost" className="h-12 w-full gap-2 md:w-auto">
+            <Link href={SUPPORT_HREF} className="w-full md:w-auto">
+              <Button
+                variant="ghost"
+                className="h-12 w-full gap-2 md:w-auto"
+                data-tour="support-button"
+              >
                 <MessageCircle size={16} />
                 Support
               </Button>
