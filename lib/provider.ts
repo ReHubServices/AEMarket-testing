@@ -3155,6 +3155,19 @@ function applyLocalFilters(
     fortnitePickaxes.length > 0 ||
     fortniteEmotes.length > 0 ||
     fortniteGliders.length > 0;
+  const hasFortniteCountFilters =
+    (Number.isFinite(fortniteSkinCountMin) && fortniteSkinCountMin > 0) ||
+    (Number.isFinite(fortniteSkinCountMax) && fortniteSkinCountMax > 0) ||
+    (Number.isFinite(fortnitePickaxeCountMin) && fortnitePickaxeCountMin > 0) ||
+    (Number.isFinite(fortnitePickaxeCountMax) && fortnitePickaxeCountMax > 0) ||
+    (Number.isFinite(fortniteEmoteCountMin) && fortniteEmoteCountMin > 0) ||
+    (Number.isFinite(fortniteEmoteCountMax) && fortniteEmoteCountMax > 0) ||
+    (Number.isFinite(fortniteGliderCountMin) && fortniteGliderCountMin > 0) ||
+    (Number.isFinite(fortniteGliderCountMax) && fortniteGliderCountMax > 0);
+  const trustNativeFortniteCountFiltering =
+    hasFortniteCountFilters &&
+    !hasFortniteSelectorFilters &&
+    !hasKeywordQuery;
   const useNativeFortniteSelectorParams =
     hasFortniteSelectorFilters &&
     !Boolean(options.disableNativeFortniteSelectorParams) &&
@@ -4077,6 +4090,11 @@ function applyLocalFilters(
     max: number,
     mode: "core" | "paid"
   ) => {
+    if (trustNativeFortniteCountFiltering) {
+      // Supplier already receives native Fortnite count params (smin/pickaxe_min/dmin/gmin etc).
+      // Avoid over-pruning here when local parsing is incomplete.
+      return;
+    }
     if (phase === "pre") {
       return;
     }
