@@ -40,7 +40,7 @@ const RUB_TO_USD_RATE_RAW = Number(process.env.RUB_TO_USD_RATE ?? 0.013);
 const EUR_TO_USD_RATE_RAW = Number(process.env.EUR_TO_USD_RATE ?? 1.08);
 const DEFAULT_LZT_API_BASE_URL = "https://prod-api.lzt.market";
 const SUPPLIER_FETCH_TIMEOUT_MS = 9000;
-const SEARCH_EXECUTION_BUDGET_MS = 11_000;
+const SEARCH_EXECUTION_BUDGET_MS = 20_000;
 const SUPPLIER_MAX_QUERY_VARIANTS = 8;
 const SUPPLIER_MAX_PAGE_SPAN = 2;
 const SUPPLIER_MAX_CATEGORY_ENDPOINTS = 4;
@@ -6528,7 +6528,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
       ? isRobloxScope && hasRobloxFilters
         ? Math.min(5200, Math.max(targetEnd + pageSize * 180, 1800))
         : hasLocalFortniteSelectorMatching
-          ? Math.min(7800, Math.max(targetEnd + pageSize * 260, 3200))
+          ? Math.min(14000, Math.max(targetEnd + pageSize * 420, 6000))
         : hasFortniteSelectorPriceAsc
           ? Math.min(2600, Math.max(targetEnd + pageSize * 110, 1200))
         : hasFortniteSelectorFilters
@@ -6565,7 +6565,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
         : isRobloxScope && hasRobloxFilters
           ? Math.max(page + 45, 80)
         : hasLocalFortniteSelectorMatching
-          ? Math.max(page + 70, 120)
+          ? Math.max(page + 140, 220)
         : hasStrictFortniteCountFilters
           ? Math.max(page + 90, 160)
         : hasNonSelectorSupplierFilters
@@ -6657,7 +6657,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const finalPassPoolSize = hasFortniteSelectorPriceAsc
       ? Math.min(2600, Math.max(targetEnd + pageSize * 120, 1300))
       : hasLocalFortniteSelectorMatching
-      ? Math.min(6200, Math.max(targetEnd + pageSize * 240, 2600))
+      ? Math.min(12000, Math.max(targetEnd + pageSize * 380, 5200))
       : hasFortniteSelectorFilters
       ? Math.min(1500, Math.max(targetEnd + pageSize * 50, 700))
       : hasStrictFortniteCountFilters
@@ -6673,7 +6673,7 @@ export async function searchListings(query: string, options: SearchOptions = {})
     const baseDetailEnrichmentLimit = hasFortniteSelectorPriceAsc
       ? Math.min(finalPassPool.length, 420)
       : hasLocalFortniteSelectorMatching
-      ? Math.min(finalPassPool.length, 1200)
+      ? Math.min(finalPassPool.length, 3600)
       : hasFortniteSelectorFilters
       ? Math.min(finalPassPool.length, 260)
       : hasStrictFortniteCountFilters
