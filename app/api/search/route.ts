@@ -729,6 +729,33 @@ function isRobloxScopedRequest(game: string, category: string) {
   return normalized.includes("roblox");
 }
 
+function isFortniteScopedRequest(
+  game: string,
+  category: string,
+  supplierFilters: Record<string, string>
+) {
+  const normalized = normalizeText(`${game} ${category}`);
+  if (normalized.includes("fortnite")) {
+    return true;
+  }
+  return FORTNITE_SELECTOR_FILTER_KEYS.some((key) => Boolean(supplierFilters[key]?.trim()));
+}
+
+function applyFortniteDefaultFilters(
+  supplierFilters: Record<string, string>,
+  game: string,
+  category: string
+) {
+  if (!isFortniteScopedRequest(game, category, supplierFilters)) {
+    return;
+  }
+  const hasExplicitMin = Boolean(supplierFilters.fortnite_skin_count_min?.trim());
+  const hasExplicitMax = Boolean(supplierFilters.fortnite_skin_count_max?.trim());
+  if (!hasExplicitMin && !hasExplicitMax) {
+    supplierFilters.fortnite_skin_count_min = "1";
+  }
+}
+
 function applyHardRobloxScopeFilters(listings: MarketListing[]) {
   const strongRobloxSignals = ["roblox", "rbx", "robux", "headless", "korblox", "limited"];
   const wrongVerticalSignals = ["telegram", "discord", "instagram", "tiktok"];
@@ -884,6 +911,7 @@ function parseSearchRequestFromParams(params: URLSearchParams): ParsedSearchRequ
       supplierFilters[key] = value;
     }
   }
+  applyFortniteDefaultFilters(supplierFilters, game, category);
   const implicitFallback = applyImplicitQueryFallbacks({
     query,
     game,
@@ -940,6 +968,7 @@ function parseSearchRequestFromBody(rawBody: unknown): ParsedSearchRequest {
       supplierFilters[key] = value;
     }
   }
+  applyFortniteDefaultFilters(supplierFilters, game, category);
   const implicitFallback = applyImplicitQueryFallbacks({
     query,
     game,
