@@ -156,7 +156,7 @@ const TOUR_STEPS: Array<{ id: TourStepId; spotlight?: TourSpotlight }> = [
   {
     id: "checkout",
     spotlight: {
-      selector: "[data-tour='buy-button']",
+      selector: "[data-tour='checkout-actions']",
       title: "Secure Checkout",
       message: "Secure checkout with instant delivery after purchase."
     }
@@ -2880,9 +2880,10 @@ export function MarketSearch({
                 </a>
               </div>
             )}
-            <div className="w-full md:w-auto" data-tour="support-button">
+            <div className="w-full md:w-auto">
               <Link href={SUPPORT_HREF} className="block w-full md:w-auto">
                 <Button
+                  data-tour="support-button"
                   variant="ghost"
                   className="h-12 w-full gap-2 md:w-auto"
                 >
